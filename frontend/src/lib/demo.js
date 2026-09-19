@@ -26,6 +26,17 @@ export const DEMO = {
     { id: 'tally', name: 'Tally Prime', icon: 'tally', status: 'available', description: 'Two-way sync with your existing accounting' },
     { id: 'razorpay', name: 'Razorpay', icon: 'razorpay', status: 'available', description: 'Payment links inside reminders' },
   ],
+  tasks: [
+    { id: 'task-1', title: 'Chase INV-0029 — Sharma Motors ₹38.4K overdue', agent: 'vasool', col: 'in_progress', priority: 'high', due: 'Today', tags: ['invoice', 'collections'] },
+    { id: 'task-2', title: 'WhatsApp reminder draft — INV-0035 Delhi Fleet', agent: 'vasool', col: 'approval', priority: 'high', due: 'Today', tags: ['whatsapp', 'reminder'] },
+    { id: 'task-3', title: 'Track ORD-1042 — SafeRoad, Ludhiana → Faridabad', agent: 'logistics-agent', col: 'in_progress', priority: 'med', due: 'Tomorrow', tags: ['shipment'] },
+    { id: 'task-4', title: '90-day terms call — Khanna Industries ₹2L order', agent: 'khata', col: 'todo', priority: 'high', due: 'Wed', tags: ['cash-flow'] },
+    { id: 'task-5', title: 'Publish 12 products to IndiaMART', agent: 'presence-agent', col: 'todo', priority: 'med', due: 'Fri', tags: ['catalog', 'indiamart'] },
+    { id: 'task-6', title: 'Reorder fasteners before Diwali stock-out', agent: 'festival-stock', col: 'todo', priority: 'med', due: 'Oct 2', tags: ['inventory'] },
+    { id: 'task-7', title: 'Compare steel rod quotes — 3 suppliers', agent: 'sourcer', col: 'done', priority: 'med', due: 'Yesterday', tags: ['procurement'] },
+    { id: 'task-8', title: 'Aging report shared with accountant', agent: 'vasool', col: 'done', priority: 'low', due: 'Mon', tags: ['report'] },
+    { id: 'task-9', title: 'Approve storefront theme for Shopify draft', agent: 'presence-agent', col: 'approval', priority: 'low', due: 'Thu', tags: ['storefront'] },
+  ],
   artifacts: [
     {
       id: 'art-1042', title: 'Tracking — ORD-1042', template: 'tracking_page',
@@ -78,6 +89,23 @@ export const demo = {
       return { id, status: connect ? 'connected' : 'available' }
     },
   },
+  tasks: {
+    list: () => DEMO.tasks,
+    // real /tasks rows use {status, agent_id, due: ISO} — merge with demo extras
+    merge: (real) => {
+      const have = new Set((real || []).map(t => t.id))
+      return [...(real || []), ...DEMO.tasks.filter(t => !have.has(t.id))]
+    },
+    add: (title, col = 'todo', agent = 'sahayak') => {
+      const t = { id: uid(), title, agent, col, priority: 'med', due: '—', tags: [] }
+      DEMO.tasks.push(t); return t
+    },
+    update: (id, patch) => {
+      const t = DEMO.tasks.find(x => x.id === id)
+      if (t) Object.assign(t, patch)
+      return t
+    },
+  },
   artifacts: {
     list: () => DEMO.artifacts,
     get: (id) => {
@@ -112,7 +140,8 @@ export async function demoSearch(q, api) {
         .map(c => ({ id: c.id, title: c.name, meta: `${c.route} · ₹${c.rate_per_kg}/kg`, ref: '#/app' })),
       agents: agents.filter(a => hit(a.name, a.goal, a.description))
         .map(a => ({ id: a.id, title: a.name, meta: a.description || a.goal, ref: '#/app' })),
-      tasks: [],
+      tasks: DEMO.tasks.filter(t => hit(t.title, t.agent, ...(t.tags || [])))
+        .map(t => ({ id: t.id, title: t.title, meta: `task · ${t.col.replace('_', ' ')} · ${t.agent}`, ref: '#/tasks' })),
       memories: DEMO.memories.filter(m => hit(m.text))
         .map(m => ({ id: m.id, title: m.text, meta: `memory · ${m.source}`, ref: '#/settings' })),
       documents: [

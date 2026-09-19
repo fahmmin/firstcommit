@@ -23,7 +23,7 @@ import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
   Braces, Server, ScrollText, Paperclip, Globe, MessageSquare, Telescope, ImageIcon,
-  Moon, Sun, Volume2, Square, Command, Users, Send,
+  Moon, Sun, Volume2, Square, Command, Users, Send, ListTodo,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -221,6 +221,10 @@ export default function Workspace() {
           <a href="#/calendar"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <CalendarDays size={11} /> Calendar
+          </a>
+          <a href="#/tasks"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <ListTodo size={11} /> Tasks
           </a>
           <a href="#/notifications"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">

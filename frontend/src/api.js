@@ -75,4 +75,13 @@ export const api = {
     return req('/import/excel', { method: 'POST', body: fd }).catch(() => demo.importExcel(file?.name))
   },
   calendarEvents: () => req(`/calendar/events?tenant_id=${TENANT}`).catch(() => []),
+  tasks: () =>
+    req(`/tasks?tenant_id=${TENANT}`).then(demo.tasks.merge).catch(() => demo.tasks.list()),
+  addTask: (title, col = 'todo', agent = 'sahayak') =>
+    req('/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tenant_id: TENANT, title, col, agent }) })
+      .catch(() => demo.tasks.add(title, col, agent)),
+  updateTask: (id, patch) =>
+    req(`/tasks/${id}?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+      .catch(() => demo.tasks.update(id, patch)),
 }
