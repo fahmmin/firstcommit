@@ -1,110 +1,122 @@
 # Sahayak AI — your AI back-office that hires its own staff
 
-> Built during **First Commit** (AWS hackathon). Team: **Fahmin** + **Ayush**.
+> Built during **First Commit** (AWS hackathon). Team: **Fahmin** (frontend) + **Ayush** (backend + AWS).
 
-An SMB owner chats with **Sahayak** in plain words (Hinglish fine). An orchestrator
-routes to specialists — **Vasool** (invoices/payments), **Sourcer** (suppliers/MOQ/trust),
-**Khata** (cash-flow/90-day-terms) — and when a problem has no specialist, **Nirmata**
-interviews the owner and *hires a new agent live*. Every outbound action is draft-only
-until the owner approves it.
+An SMB owner logs in, sees a dashboard, and chats with **Sahayak** in plain words
+(Hinglish fine). An orchestrator routes to specialists — **Vasool** (invoices/payments),
+**Sourcer** (suppliers/MOQ/trust), **Khata** (cash-flow/90-day-terms) — and when a
+problem has no specialist, **Nirmata** interviews the owner and *hires a new agent
+live*. Tasks can be assigned to agents, dues/reminders land on a calendar and in a
+notifications feed (all outbound actions are draft-only until the owner approves),
+and connectors pull in existing tools (Google Calendar, Airtable, WhatsApp…).
 
 **Demo moments:** photo → parsed ledger row · agent materializes mid-conversation ·
-overnight alerts awaiting approval.
+overnight alerts awaiting approval · "it works while you sleep".
 
 ## Quickstart
 
 ```bash
-# backend — works TODAY with zero AWS (USE_AWS=0: LocalStore + ConsoleNotifier + MockModel)
 cd backend && pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000     # works TODAY, zero AWS (USE_AWS=0)
 
-# frontend
-cd frontend && npm install && npm run dev          # → http://localhost:5173
+cd frontend && npm install && npm run dev     # → http://localhost:5173
 
-# tests + the demo-as-a-test
-cd backend && pytest tests -v
-python simulation/simulate_demo.py                 # must print 14/14
+cd backend && pytest tests -v                 # 39 green
+python simulation/simulate_demo.py            # must print 14/14
 ```
 
-When Ayush's `.env` arrives: `USE_AWS=1` + `AWS_PROFILE=hackathon` → same commands,
-real DynamoDB/SES/Bedrock-Nova. No code changes.
+`USE_AWS=0` = LocalStore + ConsoleNotifier + MockModel (deterministic, offline).
+`USE_AWS=1` + `.env` from Ayush = DynamoDB + SES + Bedrock Nova. Same code, same API.
 
-## File map — what exists & what's needed
+## The app (frontend flow — see contract.json for endpoint detail)
+
+`/login` → `/onboarding` → `/dashboard` (KPI tiles, aging + cashflow charts, activity)
+→ `/agents` grid (incl. AI-hired cards) → `/agents/:id` (persona, tools, stats,
+activity + **contextual sidebar**: Vasool → invoice summary + capital locked;
+Logistics Agent → carriers/bookings) → `/tasks` (assign work to an agent, watch it run)
+→ `/calendar` (dues + alerts + tasks) → `/notifications` (approve/send) →
+`/connectors` (GCal, Airtable, WhatsApp, Tally, Razorpay) → `/settings` → `/chat`.
+
+## File map
 
 ```
-✅ DONE          backend/app/store.py         Store iface + LocalStore ✓ + DynamoStore skeleton
-🔧 AYUSH         backend/app/store.py         DynamoStore → pass test_store_parity on AWS
-✅ DONE          backend/app/notifier.py      Notifier iface + Console ✓ + SES skeleton
-🔧 AYUSH         backend/app/notifier.py      SESNotifier → send a real email
-✅ DONE          backend/app/models.py        MockModel ⇄ BedrockModel(Nova) auto-select
-✅ DONE          backend/app/agents/          orchestrator, vasool, sourcer, khata,
-                 nirmata(factory), registry, specs, mock_rules — tests green
-✅ DONE          backend/app/tools/           17 tools across invoices/suppliers/cashflow/
-                 logistics/comms
-✅ DONE          backend/app/main.py          all endpoints + Mangum handler
-✅ DONE          backend/app/scheduler.py     thread scheduler (promotes due alerts)
-🔧 AYUSH         EventBridge mapping          same run_once logic via schedule rule (stretch)
-✅ DONE          backend/app/seed/seed.json   demo tenant data (tables mirror this)
-✅ DONE          backend/tests/               unit + routing evals + contract + store-parity
-✅ DONE          simulation/simulate_demo.py  judge walkthrough as assertions (14 checks)
-🟡 SCAFFOLD      frontend/src/                working chat + agent roster + alert approve
-🔧 FAHMIN        frontend/src/                landing, onboarding, invoice/aging + cashflow
-                                              charts (recharts installed), agent-hiring
-                                              animation (framer-motion installed),
-                                              low-confidence parse confirm UI, polish
-🔒 FROZEN        frontend/mocks/contract.json API contract — single source of truth
-✅ DONE          .env.example, .gitignore, AYUSH.md, DESIGN.md (palette ref)
+✅ DONE       backend/app/store.py       Store iface + LocalStore ✓ + DynamoStore skeleton
+✅ DONE       backend/app/notifier.py    Notifier iface + Console ✓ + SES skeleton
+✅ DONE       backend/app/models.py      MockModel ⇄ BedrockModel(Nova) auto-select
+✅ DONE       backend/app/agents/        orchestrator, vasool, sourcer, khata,
+              nirmata (factory), registry, specs, mock_rules
+✅ DONE       backend/app/tools/         17 tools: invoices/suppliers/cashflow/logistics/comms
+✅ DONE       backend/app/main.py        [EXISTS] endpoints + Mangum handler
+✅ DONE       backend/app/scheduler.py   thread scheduler (EventBridge mapping = Ayush stretch)
+✅ DONE       backend/app/seed/seed.json demo data (+ Ayush adds tasks/notifications/connectors rows)
+✅ DONE       backend/tests/             unit + routing evals + contract + store-parity
+✅ DONE       simulation/simulate_demo.py demo-as-a-test (14 checks)
+🟡 SCAFFOLD   frontend/src/              working chat + roster + alert approve
+� FROZEN     frontend/mocks/contract.json full API + frontend_flow — single source of truth
+✅ DONE       .env.example, .gitignore, AYUSH.md, DESIGN.md (palette)
 ```
 
-## The contract (both of you code to this)
+## Work split — equal halves, one seam (contract.json)
 
-`frontend/mocks/contract.json` — every endpoint's request/response shape.
-Backend contract tests enforce it; frontend builds against it. To change a
-shape: agree, edit contract.json first, then code.
+### Ayush — backend (`backend/` is yours, edit freely)
 
-Chat extras: response `actions[]` tells the UI what changed
-(`invoice_created`, `reminder_drafted`, `agent_created`, `alert_scheduled` →
-refresh that panel); `trace` shows routing for the badge.
+| # | Task | Notes |
+|---|------|-------|
+| 1 | AWS console + `.env` → Fahmin | runbook in AYUSH.md §2 |
+| 2 | DynamoStore → parity green | `USE_AWS=1 pytest tests/unit/test_store_parity.py` |
+| 3 | SESNotifier → real email | sandbox: verify sender + recipient |
+| 4 | `dashboard/summary` + `notifications` endpoints | compose existing stores |
+| 5 | `tasks` + `tasks/{id}/run` | run pushes task through assigned agent |
+| 6 | `agents/{id}` + `agents/{id}/context` | contextual sidebar payloads |
+| 7 | `calendar/events` | unify invoice dues + alerts + tasks |
+| 8 | `connectors` | GCal + Airtable real-ish; others stub ok |
+| 9 | `settings` + `auth/login` | persistence + demo token |
+| 10 | Contract tests + sim steps for new endpoints | keep 14/14 growing |
+| 11 | Deploy (stretch): Amplify + Lambda/App Runner + EventBridge | only if sim green |
 
-## Work split + dependencies
+### Fahmin — frontend (`frontend/src/` is yours)
 
-**Fahmin** — `frontend/src/` everything, Hinglish UX polish, demo script +
-video + submission text. Works entirely against `USE_AWS=0`; once `.env`
-arrives, re-run sim on `USE_AWS=1` and film the AWS bits.
+| # | Task | Notes |
+|---|------|-------|
+| 1 | Login page | `POST /auth/login` — demo token, no real auth |
+| 2 | Onboarding wizard | business line/city/"what eats your time" → dashboard |
+| 3 | Dashboard | tiles, aging + cashflow charts (recharts installed), activity feed |
+| 4 | Subagents grid | agent cards; "HIRED BY AI" badge; hire-agent button |
+| 5 | Agent detail + contextual sidebar | per-agent panels (invoice summary, capital locked…) |
+| 6 | Chat polish | routing badges, agent pinning, action toasts (exists — upgrade) |
+| 7 | Create-task flow | assign → run → result view |
+| 8 | Calendar view | month grid over `/calendar/events` |
+| 9 | Notifications feed | action_required → approve → sent |
+| 10 | Connectors page | cards w/ connect → syncing → items_synced |
+| 11 | Settings page | profile + prefs |
+| 12 | Factory-hiring animation + confetti | framer-motion installed — THE judge moment |
+| 13 | Landing page | pitch + demo GIF + "Powered by AWS" strip |
+| 14 | Demo video + submission text | ~3 min; show AWS visibly |
 
-**Ayush** — `AYUSH.md` has his runbook: AWS console, DynamoStore, SESNotifier,
-EventBridge, deploy. Give him the repo + tell him to read AYUSH.md first.
+## Dependencies
 
-| Fahmin waits on Ayush for | Ayush waits on Fahmin for |
+| Fahmin waits on Ayush | Ayush waits on Fahmin |
 |---|---|
-| `.env` values (to test + film `USE_AWS=1`) | interfaces + contract + seed schema — **already committed, he's unblocked NOW** |
-| deployed URL (stretch) | a stable demo path — keep `simulate_demo.py` green |
+| `.env` (test + film `USE_AWS=1`) | nothing to start — contract is frozen |
+| `[TODO]` endpoints (mock till then) | stable demo path (keep sim green) for deploy |
 | SES-verified demo inbox | — |
 
-Nothing in Fahmin's list blocks Fahmin; nothing in Ayush's list blocks Ayush.
-Fully parallel.
+Fully parallel: Fahmin builds against contract.json mocks; Ayush builds to contract.
 
-## Guardrails (already enforced — mention in pitch)
+## Guardrails (pitch these)
 
-tool allowlist per agent · spec validation (unknown tools rejected) ·
-human-approval for all outbound sends · parse-confidence gate ·
-`tenant_id` isolation (tested) · uploads never enter system prompts
-Stretch: Bedrock Guardrails on the orchestrator (one flag on `BedrockModel`).
+tool allowlist per agent · spec validation · human-approval for all outbound ·
+parse-confidence gate · tenant isolation (tested) · uploads never in system prompts
+Stretch: Bedrock Guardrails (one flag on `BedrockModel`).
 
 ## Git
 
-- `main` protected by habit: commit gate = `pytest` + `simulate_demo.py` green
-- Branches `fahmin/*`, `ayush/*` → squash-merge PRs; conventional commits
-- `.env` and AWS keys never committed (`.gitignore` covers; verify `git status`)
-- Milestones tagged: `scaffold` → `core-loop` → `ui-demo` → `aws-live` → `ship`
+- Merge gate: `pytest` + `simulate_demo.py` green (both modes where relevant)
+- Branches `fahmin/*`, `ayush/*` → squash-merge; conventional commits
+- `.env`/keys never committed. Tags: `scaffold` `core-loop` `ui-demo` `aws-live` `ship`
 
 ## Demo script (== simulate_demo.py)
 
-1. `POST /demo/reset` → fresh tenant
-2. "show my overdue invoices" → routes to Vasool → aging numbers
-3. Upload invoice photo → parsed → ledger row appears
-4. "draft a reminder" → pending_approval → click Approve → sent
-5. "mera transporter nahi aaya" → Nirmata interviews → confirm → **Logistics Agent appears in roster** → ask it "cheapest pickup to ludhiana?"
-6. Alerts panel → scheduled reminders; cashflow → the 90-day gap callout
-
-Run `python simulation/simulate_demo.py` before recording — if 14/14, demo's green.
+reset → "show my overdue invoices" → upload invoice photo → draft reminder →
+approve → sent → "mera transporter nahi aaya" → Nirmata interviews → confirm →
+**Logistics Agent appears** → "cheapest pickup to ludhiana?" → alerts/cashflow views.

@@ -1,81 +1,207 @@
 {
-  "$comment": "SINGLE SOURCE OF TRUTH for API shapes. Frontend builds against these; backend contract tests enforce them. If you change a shape, change it HERE first.",
+  "$comment": "SINGLE SOURCE OF TRUTH — full API surface + frontend flow. Fahmin builds ALL UI against these shapes (never waits on Ayush). Ayush implements until every response matches (contract tests + sim must stay green). Shapes marked [EXISTS] already work; [TODO] are Ayush's build list. To change a shape: BOTH agree, edit here first, then code.",
   "base_url": "http://localhost:8000",
+  "auth": "Demo login only — POST /auth/login returns a token; send as Authorization: Bearer or ignore it. NO real auth (post-hackathon).",
+
+  "frontend_flow": {
+    "$comment": "Every page, the route, and which endpoints feed it. Ayush: this is your endpoint build list.",
+    "/login": { "desc": "Business login (name + business name → demo token)", "uses": ["POST /auth/login"] },
+    "/onboarding": { "desc": "First-run wizard — business line, city, 'what eats your time' chips → lands on dashboard", "uses": ["PATCH /settings"] },
+    "/dashboard": { "desc": "Home: KPI tiles (receivables, capital locked, pending approvals), aging + cashflow charts, activity feed, agent strip", "uses": ["GET /dashboard/summary", "GET /agents", "GET /alerts"] },
+    "/agents": { "desc": "Subagents view — grid of all agents incl. AI-hired ones; 'hire agent' button opens factory wizard", "uses": ["GET /agents", "POST /agents/preview", "POST /agents"] },
+    "/agents/:id": { "desc": "Agent detail — persona, tools, stats, activity log. RIGHT SIDEBAR is contextual per agent (vasool → invoice summary + capital locked; logistics agent → carriers/bookings)", "uses": ["GET /agents/{id}", "GET /agents/{id}/context", "POST /chat (agent_id)"] },
+    "/tasks": { "desc": "Create task → assign to an agent → watch it run → result", "uses": ["GET /tasks", "POST /tasks", "POST /tasks/{id}/run"] },
+    "/calendar": { "desc": "Month view — invoice dues, scheduled alerts, task deadlines", "uses": ["GET /calendar/events"] },
+    "/notifications": { "desc": "Feed — drafted reminders awaiting approval, sent messages, agent-hired events, scheduler promotions", "uses": ["GET /notifications", "POST /alerts/{id}/approve"] },
+    "/chat": { "desc": "Full chat view — orchestrator routing badges, agent pinning, action toasts", "uses": ["POST /chat"] },
+    "/connectors": { "desc": "Connect existing services — Google Calendar, Airtable, WhatsApp, Tally, Razorpay. connect → syncing → items_synced", "uses": ["GET /connectors", "POST /connectors/{id}/connect", "POST /connectors/{id}/disconnect", "GET /connectors/{id}/sync"] },
+    "/settings": { "desc": "Business profile, reminder cadence, approval mode, language, notify email", "uses": ["GET /settings", "PATCH /settings"] }
+  },
+
   "endpoints": {
-    "GET /health": {
-      "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" }
+    "POST /auth/login [TODO]": {
+      "request": { "name": "Ramesh Gupta", "business": "Ramesh Auto Components" },
+      "response": {
+        "token": "demo-tok-ramesh",
+        "tenant_id": "ramesh_auto",
+        "user": { "name": "Ramesh Gupta", "business": "Ramesh Auto Components", "city": "Faridabad", "line": "auto components" }
+      }
     },
-    "POST /chat": {
+
+    "GET /dashboard/summary [TODO]": {
+      "response": {
+        "receivables": { "total": 623900, "overdue_count": 4, "overdue_total": 190400, "due_soon_total": 180500 },
+        "capital_locked_long_terms": 88700,
+        "payables_due_30d": 94400,
+        "pending_approvals": 2,
+        "agents": { "total": 4, "ai_hired": 1 },
+        "alerts_unread": 3,
+        "recent_activity": [
+          { "ts": "2026-09-19T02:10:00Z", "kind": "agent_created", "text": "Nirmata hired 'Logistics Agent' for you" },
+          { "ts": "2026-09-19T01:44:00Z", "kind": "reminder_sent", "text": "Reminder sent to Sharma Motors (INV-0031)" },
+          { "ts": "2026-09-18T22:30:00Z", "kind": "invoice_parsed", "text": "Invoice INV-0045 parsed from photo → ledger" }
+        ]
+      }
+    },
+
+    "POST /chat [EXISTS]": {
       "request": { "tenant_id": "ramesh_auto", "text": "Show my overdue invoices", "agent_id": null },
       "response": {
-        "reply": "You have 4 overdue invoices totalling ₹2,14,500...",
+        "reply": "You have 4 overdue invoices totalling ₹1,90,400...",
         "agent_name": "vasool",
         "agent_tagline": "पैसा वसूलने वाला",
         "actions": [{ "type": "invoices_listed", "data": {} }],
-        "trace": ["orchestrator", "vasool"]
+        "trace": ["sahayak", "vasool"]
       }
     },
-    "GET /agents": {
+
+    "GET /agents [EXISTS]": {
       "response": [{
-        "id": "vasool",
-        "name": "Vasool",
-        "hindi_tagline": "पैसा वसूलने वाला",
+        "id": "vasool", "name": "Vasool", "hindi_tagline": "पैसा वसूलने वाला",
         "description": "Tracks invoices and chases payments",
-        "tools": ["parse_document", "list_overdue", "aging_report", "draft_reminder"],
-        "status": "active",
-        "created_by": "builtin",
-        "icon": "receipt"
+        "tools": ["list_overdue", "aging_report", "draft_reminder"],
+        "status": "active", "created_by": "builtin", "icon": "receipt",
+        "stats": { "runs": 14, "last_active": "2026-09-19T02:00:00Z" }
       }]
     },
-    "POST /agents/preview": {
+
+    "GET /agents/{id} [TODO]": {
+      "response": {
+        "id": "agent-l7x2", "name": "Logistics Agent", "hindi_tagline": "सामान पहुँचाने वाला",
+        "goal": "Find backup transport and book pickups when scheduled carriers fail",
+        "persona_prompt": "...", "tools": ["list_carriers", "quote_pickup", "book_pickup"],
+        "created_by": "factory", "status": "active", "created_at": "2026-09-19T02:10:00Z",
+        "stats": { "runs": 3, "actions_taken": 1, "last_active": "2026-09-19T02:15:00Z" }
+      }
+    },
+
+    "GET /agents/{id}/context [TODO]": {
+      "$comment": "CONTEXTUAL right-sidebar payload — shape varies by agent. Frontend renders keys it knows; unknown keys → generic card.",
+      "response_for_vasool": {
+        "invoice_summary": { "total_outstanding": 623900, "overdue_total": 190400, "oldest_overdue_days": 111 },
+        "capital_locked_90d": 88700,
+        "top_defaulters": [{ "buyer": "Om Sai Traders", "amount": 28700, "days": 111 }],
+        "recent_invoices": []
+      },
+      "response_for_logistics": {
+        "carriers_available": 6, "cheapest_route": { "name": "SafeRoad Carriers", "rate_per_kg": 3.9 },
+        "pending_bookings": 1, "recent_bookings": []
+      },
+      "response_generic": { "tools": [], "recent_actions": [] }
+    },
+
+    "POST /agents/preview [EXISTS]": {
       "request": { "name": "Logistics Agent", "goal": "Find backup transport when pickups fail", "tools": ["list_carriers", "quote_pickup", "book_pickup"] },
       "response": { "valid": true, "spec": {}, "warnings": [] }
     },
-    "POST /agents": {
-      "request": { "name": "Logistics Agent", "goal": "Find backup transport when pickups fail", "tools": ["list_carriers", "quote_pickup", "book_pickup"], "tenant_id": "ramesh_auto" },
+
+    "POST /agents [EXISTS]": {
+      "request": { "tenant_id": "ramesh_auto", "name": "Logistics Agent", "goal": "...", "tools": ["list_carriers"] },
       "response": { "id": "agent-abc123", "status": "active", "created_by": "factory" }
     },
-    "POST /upload": {
+
+    "GET /tasks [TODO]": {
+      "response": [{ "id": "task-1", "title": "Chase all invoices >30 days", "agent_id": "vasool", "status": "done", "due": "2026-09-20", "result": "Drafted 3 reminders", "created_at": "2026-09-19T01:00:00Z" }]
+    },
+    "POST /tasks [TODO]": {
+      "request": { "tenant_id": "ramesh_auto", "title": "Get steel quotes under ₹65", "agent_id": "sourcer", "due": "2026-09-21", "details": "raw steel coils" },
+      "response": { "id": "task-9", "status": "todo" }
+    },
+    "POST /tasks/{id}/run [TODO]": {
+      "$comment": "Runs the task through the assigned agent — returns chat-shaped result",
+      "response": { "task_id": "task-9", "status": "done", "agent_name": "sourcer", "result": "Balaji Steel at ₹62/unit...", "actions": [] }
+    },
+
+    "GET /calendar/events?from=&to= [TODO]": {
+      "$comment": "Unified feed: invoice due_dates + scheduled alerts + task dues",
+      "response": [
+        { "id": "ev-1", "date": "2026-09-24", "title": "INV-0041 due (₹56,000 — Khanna Industries)", "kind": "invoice_due", "ref_id": "inv-007" },
+        { "id": "ev-2", "date": "2026-09-26", "title": "Reminder fires: INV-0035", "kind": "alert", "ref_id": "alert-1" },
+        { "id": "ev-3", "date": "2026-09-21", "title": "Task: Get steel quotes", "kind": "task", "ref_id": "task-9" }
+      ]
+    },
+
+    "GET /notifications [TODO]": {
+      "response": [
+        { "id": "n-1", "kind": "action_required", "title": "Reminder ready to send: INV-0031", "body": "Namaste Sharma ji...", "ref_id": "alert-x", "created_at": "2026-09-19T02:00:00Z", "status": "unread" },
+        { "id": "n-2", "kind": "info", "title": "Logistics Agent hired", "body": "Nirmata created it after your transporter issue", "created_at": "2026-09-19T02:10:00Z", "status": "unread" },
+        { "id": "n-3", "kind": "warning", "title": "₹58,000 cash gap next week", "body": "Payables due before receivables arrive", "created_at": "2026-09-18T06:00:00Z", "status": "read" }
+      ]
+    },
+    "POST /notifications/{id}/read [TODO]": {
+      "response": { "id": "n-1", "status": "read" }
+    },
+
+    "GET /connectors [TODO]": {
+      "response": [
+        { "id": "google_calendar", "name": "Google Calendar", "icon": "calendar", "status": "available", "description": "Push invoice dues + reminders to your calendar", "items_synced": 0 },
+        { "id": "airtable", "name": "Airtable", "icon": "table", "status": "connected", "connected_at": "2026-09-18T10:00:00Z", "last_sync": "2026-09-19T01:00:00Z", "items_synced": 32, "description": "Sync ledger + suppliers to your base" },
+        { "id": "whatsapp", "name": "WhatsApp", "icon": "message", "status": "available", "description": "Send payment reminders via wa.me deep links" },
+        { "id": "tally", "name": "Tally", "icon": "ledger", "status": "available", "description": "Import existing invoices" },
+        { "id": "razorpay", "name": "Razorpay", "icon": "rupee", "status": "available", "description": "Payment links in reminders" }
+      ]
+    },
+    "POST /connectors/{id}/connect [TODO]": {
+      "request": { "tenant_id": "ramesh_auto" },
+      "response": { "id": "google_calendar", "status": "connected", "connected_at": "2026-09-19T03:00:00Z" }
+    },
+    "POST /connectors/{id}/disconnect [TODO]": {
+      "response": { "id": "airtable", "status": "available" }
+    },
+    "GET /connectors/{id}/sync [TODO]": {
+      "response": { "id": "airtable", "last_sync": "2026-09-19T01:00:00Z", "items_synced": 32, "state": "ok" }
+    },
+
+    "GET /settings [TODO]": {
+      "response": {
+        "business": { "name": "Ramesh Auto Components", "owner": "Ramesh Gupta", "city": "Faridabad", "line": "auto components" },
+        "prefs": { "reminder_cadence_days": 7, "auto_draft_reminders": true, "approval_mode": "manual", "language": "hinglish", "notify_email": "ramesh@rameshauto.in" }
+      }
+    },
+    "PATCH /settings [TODO]": {
+      "request": { "prefs": { "reminder_cadence_days": 5 } },
+      "response": { "status": "saved" }
+    },
+
+    "POST /upload [EXISTS]": {
       "request": "multipart/form-data: file=<image|pdf>, tenant_id",
       "response": {
-        "file_id": "f-001",
-        "filename": "invoice_0042.jpg",
-        "parsed": {
-          "invoice_no": "INV-0042", "buyer": "Sharma Motors", "amount": 45200,
-          "gst": 8136, "due_date": "2025-10-05", "items": "Brake pads x200", "confidence": 0.93
-        },
+        "file_id": "f-001", "filename": "invoice_0042.jpg",
+        "parsed": { "invoice_no": "INV-0042", "buyer": "Sharma Motors", "amount": 45200, "gst": 8136, "due_date": "2026-10-05", "items": "Brake pads x200", "confidence": 0.93 },
         "low_confidence_fields": []
       }
     },
-    "GET /invoices?tenant_id=": {
-      "response": [{ "id": "inv-001", "invoice_no": "INV-0038", "buyer": "Sharma Motors", "amount": 45200, "due_date": "2025-09-10", "status": "overdue", "days_overdue": 9 }]
+
+    "GET /invoices?tenant_id=&status= [EXISTS]": {
+      "response": [{ "id": "inv-001", "invoice_no": "INV-0038", "buyer": "Sharma Motors", "amount": 45200, "due_date": "2026-09-10", "status": "overdue", "days_overdue": 9 }]
     },
-    "POST /invoices/{id}/reminder": {
-      "request": { "channel": "email" },
-      "response": { "draft_id": "draft-1", "status": "draft", "body": "Namaste Sharma ji, ...", "requires_approval": true }
+    "POST /invoices/{id}/reminder [EXISTS]": {
+      "response": { "draft_id": "draft-1", "status": "draft", "body": "Namaste Sharma ji...", "requires_approval": true }
     },
-    "POST /alerts/{id}/approve": {
+    "POST /alerts/{id}/approve [EXISTS]": {
       "response": { "id": "alert-1", "status": "sent", "via": "console|ses" }
     },
-    "GET /suppliers?tenant_id=&q=": {
+    "GET /suppliers?tenant_id=&q= [EXISTS]": {
       "response": [{ "id": "sup-1", "name": "Balaji Steel", "category": "raw steel", "trust_score": 4.2, "moq": 500, "price_per_unit": 62, "stock": "in_stock", "lead_days": 4 }]
     },
-    "GET /carriers?tenant_id=&to=": {
+    "GET /carriers?tenant_id=&to= [EXISTS]": {
       "response": [{ "id": "car-1", "name": "VRL Logistics", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.5, "next_slot": "tomorrow 7am", "reliability": 4.6 }]
     },
-    "GET /alerts?tenant_id=": {
-      "response": [{ "id": "alert-1", "kind": "reminder", "title": "INV-0038 due in 3 days", "status": "pending_approval|sent|scheduled", "fires_at": "2025-09-19T06:00:00Z", "body": "..." }]
+    "GET /alerts?tenant_id=&status= [EXISTS]": {
+      "response": [{ "id": "alert-1", "kind": "reminder", "title": "INV-0038 due in 3 days", "status": "pending_approval", "fires_at": "2026-09-19T06:00:00Z", "body": "..." }]
     },
-    "GET /cashflow?tenant_id=": {
+    "GET /cashflow?tenant_id= [EXISTS]": {
       "response": {
-        "receivables": [{ "buyer": "Sharma Motors", "amount": 45200, "expected": "2025-10-05" }],
-        "payables": [{ "vendor": "Balaji Steel", "amount": 31000, "due": "2025-09-25" }],
+        "receivables": [{ "buyer": "Sharma Motors", "amount": 45200, "expected": "2026-10-05" }],
+        "payables": [{ "vendor": "Balaji Steel", "amount": 31000, "due": "2026-09-25" }],
         "gaps": [{ "period": "Oct wk1", "shortfall": 58000, "reason": "90-day buyer terms vs 30-day supplier terms" }]
       }
     },
-    "POST /demo/reset": {
-      "response": { "status": "reseeded", "tenants": ["ramesh_auto"] }
-    }
+    "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
+    "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
+    "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },
+    "GET /health [EXISTS]": { "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" } }
   },
-  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report"]
+
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced"]
 }
