@@ -6,9 +6,16 @@ this registry so `MockModel` stays decoupled from app wiring.
 from __future__ import annotations
 
 import contextvars
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from .notifier import Notifier
 from .store import Store
+
+# everything reads os.environ lazily — load repo-root .env once here so
+# uvicorn, the scheduler, and the sim all see the same config
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 store: Store | None = None
 notifier: Notifier | None = None
