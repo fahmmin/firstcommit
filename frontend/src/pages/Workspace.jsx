@@ -13,11 +13,16 @@ import { NavIndicator } from '../components/rui/NavIndicator.jsx'
 import { BrandIcon } from '../components/BrandIcon.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import { a11y } from '../lib/a11y.js'
+import { toast } from '../lib/toast.js'
+import { CommandPalette } from '../components/CommandPalette.jsx'
+import { ApprovalsDrawer, ApprovalBell } from '../components/ApprovalsDrawer.jsx'
+import { Digest } from '../components/Digest.jsx'
+import { SetupChecklist } from '../components/SetupChecklist.jsx'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
   Braces, Server, ScrollText, Paperclip, Globe, MessageSquare, Telescope, ImageIcon,
-  Moon, Sun,
+  Moon, Sun, Volume2, Square, Command,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -54,6 +59,27 @@ export default function Workspace() {
   const [files, setFiles] = useState([])             // composer attachments
   const attachRef = useRef(null)
   const [dark, setDark] = useState(() => a11y.get().theme === 'dark')
+  const [palette, setPalette] = useState(false)
+  const [approvals, setApprovals] = useState(false)
+  const [speaking, setSpeaking] = useState(-1)
+  const [memList, setMemList] = useState([])
+
+  // ⌘K / Ctrl+K opens the command palette
+  useEffect(() => {
+    const h = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setPalette(v => !v) } }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
+
+  const speak = (text, i) => {
+    if (speaking === i) { speechSynthesis.cancel(); setSpeaking(-1); return }
+    speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(text.replace(/[*#_`₹]/g, m => m === '₹' ? 'rupees ' : ''))
+    u.lang = /[\u0900-\u097F]/.test(text) ? 'hi-IN' : 'en-IN'
+    u.onend = () => setSpeaking(-1)
+    speechSynthesis.speak(u)
+    setSpeaking(i)
+  }
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const msgRefs = useRef([])
@@ -91,10 +117,11 @@ export default function Workspace() {
   const active = agents.find(a => a.id === activeAgent)
 
   const refresh = async () => {
-    const [ag, al, cn, st] = await Promise.all([
+    const [ag, al, cn, st, mm] = await Promise.all([
       api.agents(), api.alerts(), api.connectors().catch(() => []), api.settings().catch(() => null),
+      api.memories().catch(() => []),
     ])
-    setAgents(ag); setAlerts(al); setConnectors(cn); setSettings(st)
+    setAgents(ag); setAlerts(al); setConnectors(cn); setSettings(st); setMemList(mm)
   }
   useEffect(() => {
     refresh().catch(console.error)
@@ -149,7 +176,7 @@ export default function Workspace() {
     }
   }
 
-  const approve = async (id) => { await api.approveAlert(id); refresh() }
+  const approve = async (id) => { await api.approveAlert(id); toast.push('Approved — sending to customer'); refresh() }
 
   const groups = GROUP_ORDER.map(([label, match]) => [label, agents.filter(match)]).filter(([, l]) => l.length)
 
@@ -202,6 +229,10 @@ export default function Workspace() {
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <Brain size={11} /> Business context
           </a>
+          <a href="#/artifacts"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <FileText size={11} /> Artifacts
+          </a>
           <a href="#/marketplace"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <Store size={11} /> Marketplace
@@ -245,6 +276,11 @@ export default function Workspace() {
             <Search size={11} className="text-slate-400 shrink-0" />
             <input name="q" placeholder="Search workspace…" className="w-full text-[11px] focus:outline-none bg-transparent" />
           </form>
+          <ApprovalBell alerts={alerts} onClick={() => setApprovals(true)} />
+          <button onClick={() => setPalette(true)} title="Command palette (⌘K)"
+            className="mt-1 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+            <Command size={13} />
+          </button>
           <button onClick={() => setDark(a11y.toggleTheme() === 'dark')} title="Toggle dark mode"
             className="mt-1 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
             {dark ? <Sun size={13} /> : <Moon size={13} />}
@@ -287,6 +323,12 @@ export default function Workspace() {
                 )}
                 {m.role === 'agent' && extractUrls(m.text)[0] && <LinkPreviewCard url={extractUrls(m.text)[0]} />}
                 {m.role === 'agent' && m.agent && m.agent !== 'system' && <SourceChips trace={m.trace} actions={m.actions} />}
+                {m.role === 'agent' && m.agent !== 'system' && (
+                  <button onClick={() => speak(m.text, i)} title={speaking === i ? 'Stop' : 'Read aloud'}
+                    className="mt-1.5 flex items-center gap-1 text-[9px] font-medium text-slate-400 hover:text-ink transition">
+                    {speaking === i ? <><Square size={9} /> Stop</> : <><Volume2 size={10} /> Listen</>}
+                  </button>
+                )}
                 {m.actions?.some(a => a.type === 'agent_created') && (
                   <div className="mt-2.5 text-[11px] bg-magenta/10 text-magenta rounded-lg px-2.5 py-1.5 font-medium">
                     ✨ New agent joined your team — check the sidebar
@@ -383,6 +425,11 @@ export default function Workspace() {
               </div>
             </div>
           )}
+          {messages.length === 1 && !busy && (
+            <div className="mb-3">
+              <Digest onAction={(a) => a === 'approvals' ? setApprovals(true) : send(a)} />
+            </div>
+          )}
           <div className="flex gap-2 flex-wrap mb-3 items-center">
             <button onClick={() => setShowTemplates(v => !v)}
               className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition flex items-center gap-1.5
@@ -445,6 +492,7 @@ export default function Workspace() {
 
         {tab === 'agent' && (
           <div className="p-4 space-y-5">
+            <SetupChecklist connectors={connectors} memories={memList} agents={agents} />
             <section>
               <div className="text-[10px] font-semibold text-slate-500 mb-2">Agent Preferences</div>
               <div className="rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] text-slate-600 flex items-center justify-between">
@@ -511,6 +559,11 @@ export default function Workspace() {
           </div>
         )}
       </aside>
+
+      <CommandPalette open={palette} onClose={() => setPalette(false)}
+        onSelectAgent={id => setActiveAgent(id)} onSend={t => send(t)} />
+      <ApprovalsDrawer open={approvals} onClose={() => setApprovals(false)}
+        alerts={alerts} onChanged={refresh} />
     </div>
   )
 }

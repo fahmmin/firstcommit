@@ -12,6 +12,8 @@ import Context from './pages/Context.jsx'
 import Templates from './pages/Templates.jsx'
 import Calendar from './pages/Calendar.jsx'
 import Logs from './pages/Logs.jsx'
+import Artifacts from './pages/Artifacts.jsx'
+import { Toasts } from './components/Toasts.jsx'
 import { isAuthed } from './lib/auth.js'
 
 // hash router — no deps, works on any static host (Amplify, S3+CF, file://)
@@ -19,6 +21,7 @@ const routes = {
   '': Landing, docs: Docs, app: Workspace, settings: Settings,
   login: Login, onboarding: Onboarding, search: Search, a: ArtifactView,
   marketplace: Marketplace, context: Context, templates: Templates, calendar: Calendar, logs: Logs,
+  artifacts: Artifacts,
 }
 
 export default function App() {
@@ -36,5 +39,5 @@ export default function App() {
     return null
   }
   const Page = routes[key] || Landing
-  return <Page param={param} />
+  return <><Page param={param} /><Toasts /></>
 }

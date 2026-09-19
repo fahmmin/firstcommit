@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { BrandIcon } from '../components/BrandIcon.jsx'
+import { toast } from '../lib/toast.js'
 import {
   ArrowLeft, Server, Braces, Download, Check, Search, TrendingUp,
 } from 'lucide-react'
@@ -54,11 +55,13 @@ export default function Marketplace() {
       await api.updateSettings({ mcp_servers: next }).catch(() => {})
       setSettings(s => ({ ...s, mcp_servers: next }))
       setInstalled(p => new Set(p).add(item.id))
+      toast.push(`${item.name} installed — agents can use it now`)
     } else {
       const next = [...(settings?.prefs?.installed_skills || []), item.name]
       await api.updateSettings({ prefs: { installed_skills: next } }).catch(() => {})
       setSettings(s => ({ ...s, prefs: { ...s?.prefs, installed_skills: next } }))
       setInstalled(p => new Set(p).add(item.name))
+      toast.push(`${item.name} installed — agents can use it now`)
     }
   }
 
