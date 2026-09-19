@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { BrandIcon } from '../components/BrandIcon.jsx'
 import { toast } from '../lib/toast.js'
+import { AppShell } from '../components/AppShell.jsx'
 import {
-  ArrowLeft, Server, Braces, Download, Check, Search, TrendingUp,
+  Server, Braces, Download, Check, Search, TrendingUp,
 } from 'lucide-react'
 
 const MCP_CATALOG = [
@@ -69,18 +70,9 @@ export default function Marketplace() {
     .filter(x => !q || `${x.name} ${x.desc} ${x.tag}`.toLowerCase().includes(q.toLowerCase()))
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-4xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink">Marketplace</div>
-          <span className="text-[11px] text-slate-400">{TENANT}</span>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
           <div>
             <h1 className="text-[24px] font-semibold tracking-tight text-ink">Extend your agents</h1>
@@ -135,8 +127,9 @@ export default function Marketplace() {
         <p className="text-[10px] text-slate-400 mt-6 text-center">
           Registry compatible with skills.sh — install any community MCP server or skill by URL.
         </p>
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }
 

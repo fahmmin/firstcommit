@@ -2,7 +2,8 @@
 // mark-all-read (session), action items deep-link to the approvals drawer.
 import { useEffect, useState } from 'react'
 import { api, TENANT } from '../api.js'
-import { ArrowLeft, Bell, ShieldCheck, AlertTriangle, Info, CheckCheck, Inbox } from 'lucide-react'
+import { AppShell } from '../components/AppShell.jsx'
+import { Bell, ShieldCheck, AlertTriangle, Info, CheckCheck, Inbox } from 'lucide-react'
 
 const KIND_META = {
   action_required: { icon: ShieldCheck, tint: 'text-amber-600 bg-amber-50', label: 'needs you' },
@@ -31,23 +32,18 @@ export default function Notifications() {
   const sorted = [...items].sort((a, b) => (isRead(a) ? 1 : 0) - (isRead(b) ? 1 : 0) || new Date(b.created_at) - new Date(a.created_at))
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-2xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink flex items-center gap-2">
-            Notifications
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <h1 className="text-[24px] font-semibold tracking-tight text-ink">Notifications</h1>
             {unread > 0 && <span className="text-[9px] font-bold bg-rose-500 text-white rounded-full px-1.5 py-0.5 animate-popIn">{unread} new</span>}
           </div>
           <button onClick={markAll} className="text-[11px] text-slate-400 hover:text-ink flex items-center gap-1 transition">
             <CheckCheck size={12} /> Mark all read
           </button>
         </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-6 py-8">
         <div className="space-y-2">
           {sorted.map((n, i) => {
             const meta = KIND_META[n.kind] || KIND_META.info
@@ -91,7 +87,8 @@ export default function Notifications() {
             </div>
           )}
         </div>
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }

@@ -7,8 +7,9 @@ import { Can } from '../components/rui/Can.jsx'
 import { AccessRings } from '../components/rui/Circles.jsx'
 import { useRole, role, ROLES } from '../lib/role.js'
 import { a11y } from '../lib/a11y.js'
+import { AppShell } from '../components/AppShell.jsx'
 import {
-  ArrowLeft, Building2, SlidersHorizontal, PlugZap, Braces, Server,
+  Building2, SlidersHorizontal, PlugZap, Braces, Server,
   CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store, ShieldCheck,
   Sun, Moon, Accessibility, Contrast, Zap, Type,
 } from 'lucide-react'
@@ -81,18 +82,9 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-4xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink">Settings</div>
-          <span className="text-[11px] text-slate-400">{TENANT}</span>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
 
         {/* accessibility & appearance */}
         <section>
@@ -379,8 +371,9 @@ export default function Settings() {
             </div>
           </div>
         </section>
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }
 

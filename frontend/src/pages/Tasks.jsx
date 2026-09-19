@@ -3,7 +3,8 @@ import { api } from '../api.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { Can } from '../components/rui/Can.jsx'
 import { toast } from '../lib/toast.js'
-import { ArrowLeft, Plus, CheckCheck, Clock, GripVertical } from 'lucide-react'
+import { AppShell } from '../components/AppShell.jsx'
+import { Plus, CheckCheck, Clock, GripVertical } from 'lucide-react'
 
 const COLS = [
   { id: 'todo',        label: 'To do',          accent: 'bg-slate-400' },
@@ -57,18 +58,9 @@ export default function Tasks() {
   const counts = Object.fromEntries(COLS.map(c => [c.id, tasks.filter(t => t.col === c.id).length]))
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink">Tasks</div>
-          <span className="w-16" />
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
           <div>
             <h1 className="text-[26px] font-semibold tracking-tight text-ink">Agent work board</h1>
@@ -145,7 +137,8 @@ export default function Tasks() {
             </div>
           ))}
         </div>
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }

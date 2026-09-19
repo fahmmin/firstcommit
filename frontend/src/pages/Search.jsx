@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { AppShell } from '../components/AppShell.jsx'
 import {
-  ArrowLeft, Search as SearchIcon, Receipt, Store, Truck, Bot,
+  Search as SearchIcon, Receipt, Store, Truck, Bot,
   ClipboardList, Brain, FileText,
 } from 'lucide-react'
 
@@ -31,20 +32,15 @@ export default function Search({ param }) {
   const groups = GROUPS.map(([k, l, I]) => [k, l, I, res?.results?.[k] || []]).filter(([, , , rows]) => rows.length)
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-3xl mx-auto px-6 h-[52px] flex items-center gap-4">
-          <a href="#/app" className="text-slate-400 hover:text-ink transition"><ArrowLeft size={15} /></a>
-          <form onSubmit={go} className="flex-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 focus-within:border-ink transition">
-            <SearchIcon size={14} className="text-slate-400" />
-            <input value={input} onChange={e => setInput(e.target.value)} autoFocus
-              placeholder="Search invoices, suppliers, agents, memory…"
-              className="flex-1 text-[13px] focus:outline-none bg-transparent" />
-          </form>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-6 py-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-3xl mx-auto px-6 py-8">
+        <form onSubmit={go} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-ink transition mb-6">
+          <SearchIcon size={14} className="text-slate-400" />
+          <input value={input} onChange={e => setInput(e.target.value)} autoFocus
+            placeholder="Search invoices, suppliers, agents, memory…"
+            className="flex-1 text-[13px] focus:outline-none bg-transparent" />
+        </form>
         {loading && <div className="text-[12px] text-slate-400 animate-pulse">Searching…</div>}
         {!loading && q && res && groups.length === 0 &&
           <div className="text-center py-16">
@@ -78,8 +74,9 @@ export default function Search({ param }) {
           </section>
         ))}
         {!q && <BrowseCategories />}
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }
 

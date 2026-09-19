@@ -8,8 +8,9 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   ResponsiveContainer, Tooltip,
 } from 'recharts'
+import { AppShell } from '../components/AppShell.jsx'
 import {
-  ArrowLeft, FileWarning, Landmark, Wallet, Lock, ShieldCheck, IndianRupee,
+  FileWarning, Landmark, Wallet, Lock, ShieldCheck, IndianRupee,
   TrendingUp, Activity, PlugZap, Bot,
 } from 'lucide-react'
 
@@ -77,18 +78,9 @@ export default function Analytics() {
   ] : []
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-5xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink">Analytics</div>
-          <span className="text-[11px] text-slate-400">{TENANT}</span>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-6 py-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-5xl mx-auto px-6 py-8">
         <h1 className="text-[24px] font-semibold tracking-tight text-ink">The business, in numbers</h1>
         <p className="text-[12px] text-slate-500 mt-1 mb-6">Live from your ledgers — updated every time an agent touches an invoice.</p>
 
@@ -209,8 +201,9 @@ export default function Analytics() {
             </div>
           </Card>
         </div>
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }
 

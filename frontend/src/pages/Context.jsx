@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { contextStore } from '../lib/context.js'
+import { AppShell } from '../components/AppShell.jsx'
 import {
-  ArrowLeft, Brain, Plus, Trash2, Sparkles, CheckCircle2, UploadCloud,
+  Brain, Plus, Trash2, Sparkles, CheckCircle2, UploadCloud,
   FileText, FileSpreadsheet, Image as ImageIcon, File as FileIcon, StickyNote, Tag,
 } from 'lucide-react'
 
@@ -51,18 +52,9 @@ export default function Context() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-3xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink">Business context</div>
-          <span className="text-[11px] text-slate-400">{TENANT}</span>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-6 py-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-3xl mx-auto px-6 py-8">
         <div className="flex items-start gap-3 mb-6">
           <div className="w-10 h-10 rounded-2xl bg-accent/10 text-accent grid place-items-center shrink-0"><Brain size={18} /></div>
           <div>
@@ -167,7 +159,8 @@ export default function Context() {
             ))}
           </div>
         </div>
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }

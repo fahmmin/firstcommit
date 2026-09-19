@@ -1,7 +1,8 @@
 import { api } from '../api.js'
 import { TEMPLATES } from '../lib/templates.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
-import { ArrowLeft, ArrowRight, Search, Sparkles } from 'lucide-react'
+import { AppShell } from '../components/AppShell.jsx'
+import { ArrowRight, Search, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 
 const CATS = ['All', 'Money', 'Procurement', 'Logistics', 'New agent', 'Presence']
@@ -37,18 +38,9 @@ export default function Templates() {
   )
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink">Templates</div>
-          <span className="w-16" />
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-6 py-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="flex items-end justify-between flex-wrap gap-3 mb-5">
           <div>
             <h1 className="text-[26px] font-semibold tracking-tight text-ink">Start from a template</h1>
@@ -126,7 +118,8 @@ export default function Templates() {
         {list.length === 0 && !featured && (
           <div className="text-center py-16 text-slate-400 text-sm">No templates match “{q}”.</div>
         )}
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }

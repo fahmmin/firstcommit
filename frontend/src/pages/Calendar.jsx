@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { FractionalSlider } from '../components/rui/FractionalSlider.jsx'
+import { AppShell } from '../components/AppShell.jsx'
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, Bell, Receipt, Truck, Sparkles,
+  ChevronLeft, ChevronRight, CalendarDays, Bell, Receipt, Truck, Sparkles,
 } from 'lucide-react'
 
 const START_H = 8, END_H = 20, ROW_PX = 56
@@ -94,18 +95,9 @@ export default function Calendar() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-4xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink flex items-center gap-2"><CalendarDays size={14} /> Calendar</div>
-          <span className="text-[11px] text-slate-400">invoice dues · reminders · pickups</span>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-6">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-4xl mx-auto px-6 py-6">
         {/* controls row */}
         <div className="flex items-end justify-between gap-8 mb-5 flex-wrap">
           <div className="flex items-center gap-3">
@@ -184,7 +176,8 @@ export default function Calendar() {
             <span className="ml-auto">Cursor snaps to {granularity} min</span>
           </div>
         </div>
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }

@@ -1,20 +1,13 @@
 // Logs — agent activity stream page (logs-explorer recreation).
 import { LogsExplorer } from '../components/rui/LogsExplorer.jsx'
-import { ArrowLeft, ScrollText } from 'lucide-react'
+import { AppShell } from '../components/AppShell.jsx'
+import { ScrollText } from 'lucide-react'
 
 export default function Logs() {
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-4xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink flex items-center gap-2"><ScrollText size={14} /> Logs</div>
-          <span className="text-[11px] text-slate-400">every tool call, approval & sync</span>
-        </div>
-      </header>
-      <main className="max-w-4xl mx-auto px-6 py-6 space-y-4">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-4xl mx-auto px-6 py-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-[20px] font-semibold tracking-tight text-ink">Agent activity</h1>
@@ -29,7 +22,8 @@ export default function Logs() {
           </div>
         </div>
         <LogsExplorer maxRows={80} />
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }

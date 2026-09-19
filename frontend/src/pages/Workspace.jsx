@@ -19,17 +19,13 @@ import { ApprovalsDrawer, ApprovalBell } from '../components/ApprovalsDrawer.jsx
 import { Digest } from '../components/Digest.jsx'
 import { SetupChecklist } from '../components/SetupChecklist.jsx'
 import { SpinPlus, TypingDots } from '../components/anim/index.jsx'
+import { AppShell } from '../components/AppShell.jsx'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
   Braces, Server, ScrollText, Paperclip, Globe, MessageSquare, Telescope, ImageIcon,
   Moon, Sun, Volume2, Square, Command, Users, Send, ListTodo,
 } from 'lucide-react'
-const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
-                     ['Procurement', a => a.id === 'sourcer'],
-                     ['Hired by AI', a => a.created_by === 'factory'],
-                     ['Other', () => true]]
-
 const SUGGESTIONS = [
   'Show my overdue invoices',
   'Draft a reminder for the pending bill',
@@ -128,6 +124,8 @@ export default function Workspace() {
     refresh().catch(console.error)
     const pre = localStorage.getItem('prefill_prompt')
     if (pre) { localStorage.removeItem('prefill_prompt'); setInput(pre); setTimeout(() => inputRef.current?.focus(), 50) }
+    const oa = localStorage.getItem('open_agent')
+    if (oa !== null) { localStorage.removeItem('open_agent'); if (oa) setActiveAgent(oa) }
   }, [])
   useEffect(() => {
     if (!activeAgent) { setContext(null); return }
@@ -179,96 +177,11 @@ export default function Workspace() {
 
   const approve = async (id) => { await api.approveAlert(id); toast.push('Approved — sending to customer'); refresh() }
 
-  const groups = GROUP_ORDER.map(([label, match]) => [label, agents.filter(match)]).filter(([, l]) => l.length)
-
   return (
-    <div className="h-screen flex bg-white font-sans">
-      {/* ── left sidebar ── */}
-      <aside className="w-[190px] shrink-0 border-r border-slate-100 bg-[#fbfbfd] flex flex-col">
-        <a href="#/" className="flex items-center gap-2 px-4 h-[52px] border-b border-slate-100">
-          <span className="w-6 h-6 rounded-lg bg-ink text-white grid place-items-center text-[10px] font-bold">स</span>
-          <span className="font-semibold text-[14px] tracking-tight text-ink">Sahayak</span>
-        </a>
-        <div className="p-3">
-          <button onClick={() => { setActiveAgent(null); setMessages(m => m.slice(0, 1)) }}
-            className="plus-hover w-full text-[12px] font-medium border border-slate-200 bg-white rounded-lg py-2 text-slate-600 hover:border-slate-300 transition flex items-center justify-center gap-1.5">
-            <SpinPlus size={12} /> New Chat
-          </button>
-        </div>
-        <nav className="flex-1 overflow-y-auto scroll-thin px-3 pb-3 space-y-4">
-          {groups.map(([label, items]) => (
-            <div key={label}>
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-1">{label}</div>
-              {items.map(a => (
-                <button key={a.id} onClick={() => setActiveAgent(activeAgent === a.id ? null : a.id)}
-                  className={`w-full text-left text-[12px] rounded-lg px-2 py-1.5 mb-0.5 flex items-center gap-2 transition
-                    ${activeAgent === a.id ? 'bg-ink text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
-                  <AgentAvatar seed={a.id} size={18} className="rounded" />
-                  <span className="truncate">{a.name}</span>
-                  {a.created_by === 'factory' && activeAgent !== a.id &&
-                    <span className="ml-auto text-[8px] font-bold text-magenta">AI</span>}
-                </button>
-              ))}
-            </div>
-          ))}
-        </nav>
-        <div className="p-3 border-t border-slate-100 space-y-1">
-          <div className="text-[10px] text-slate-400 px-1">{TENANT}</div>
-          <a href="#/templates"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <LayoutTemplate size={11} /> Templates
-          </a>
-          <a href="#/calendar"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <CalendarDays size={11} /> Calendar
-          </a>
-          <a href="#/tasks"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <ListTodo size={11} /> Tasks
-          </a>
-          <a href="#/notifications"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <Activity size={11} /> Notifications
-          </a>
-          <a href="#/people"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <Users size={11} /> People
-          </a>
-          <a href="#/analytics"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <Activity size={11} /> Analytics
-          </a>
-          <a href="#/logs"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <ScrollText size={11} /> Logs
-          </a>
-          <a href="#/context"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <Brain size={11} /> Business context
-          </a>
-          <a href="#/artifacts"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <FileText size={11} /> Artifacts
-          </a>
-          <a href="#/marketplace"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <Store size={11} /> Marketplace
-          </a>
-          <a href="#/settings"
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <Settings2 size={11} /> Settings
-          </a>
-          <button onClick={async () => { await api.resetDemo(); refresh() }}
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <RotateCcw size={11} /> Reset data
-          </button>
-          <button onClick={() => { session.clear(); location.hash = '#/login' }}
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <LogOut size={11} /> Sign out
-          </button>
-        </div>
-      </aside>
-
+    <AppShell agents={agents} activeAgent={activeAgent}
+      onAgentClick={(a) => setActiveAgent(activeAgent === a.id ? null : a.id)}
+      onNewChat={() => { setActiveAgent(null); setMessages(m => m.slice(0, 1)) }}
+      onReset={async () => { await api.resetDemo(); refresh() }}>
       {/* ── center ── */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* agent header */}
@@ -583,7 +496,7 @@ export default function Workspace() {
         onSelectAgent={id => setActiveAgent(id)} onSend={t => send(t)} />
       <ApprovalsDrawer open={approvals} onClose={() => setApprovals(false)}
         alerts={alerts} onChanged={refresh} />
-    </div>
+    </AppShell>
   )
 }
 

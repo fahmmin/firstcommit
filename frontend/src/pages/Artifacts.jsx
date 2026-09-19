@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
-import { ArrowLeft, FileText, ExternalLink, Copy, MapPin, Receipt, Store, IndianRupee } from 'lucide-react'
+import { FileText, ExternalLink, Copy, MapPin, Receipt, Store, IndianRupee } from 'lucide-react'
+import { AppShell } from '../components/AppShell.jsx'
 import { toast } from '../lib/toast.js'
 
 const TEMPLATE_META = {
@@ -23,18 +24,9 @@ export default function Artifacts() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfd] font-sans">
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-100">
-        <div className="max-w-4xl mx-auto px-6 h-[52px] flex items-center justify-between">
-          <a href="#/app" className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-ink transition">
-            <ArrowLeft size={14} /> Back to app
-          </a>
-          <div className="text-[13px] font-semibold text-ink">Artifacts</div>
-          <span className="text-[11px] text-slate-400">{TENANT}</span>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-8">
+    <AppShell>
+      <main className="flex-1 overflow-y-auto bg-[#fbfbfd]">
+        <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="mb-6">
           <h1 className="text-[24px] font-semibold tracking-tight text-ink">Shareable pages your agents made</h1>
           <p className="text-[12px] text-slate-500 mt-1">
@@ -78,7 +70,8 @@ export default function Artifacts() {
             <div className="text-[11px] text-slate-400 mt-1">Ask an agent to create one — try "make a tracking page for ORD-1042".</div>
           </div>
         )}
+        </div>
       </main>
-    </div>
+    </AppShell>
   )
 }
