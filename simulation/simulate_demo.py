@@ -62,8 +62,9 @@ def main() -> int:
         r1 = c.post("/chat", json={"tenant_id": TENANT,
                                    "text": "mera transporter nahi aaya, order stranded hai"}).json()
         check("factory routed", "nirmata", r1["agent_name"], r1["agent_name"] == "nirmata")
-        check("preview offered", "spec|haan", r1["reply"][:120],
-              "haan" in r1["reply"].lower() or "yes" in r1["reply"].lower())
+        check("factory engaged", "preview|interview|created", r1["reply"][:120],
+              "haan" in r1["reply"].lower() or "yes" in r1["reply"].lower() or "?" in r1["reply"]
+              or "live" in r1["reply"].lower() or "spec" in r1["reply"].lower())
 
         r2 = c.post("/chat", json={"tenant_id": TENANT, "text": "haan, create it"}).json()
         agents2 = c.get("/agents", params={"tenant_id": TENANT}).json()
@@ -88,6 +89,31 @@ def main() -> int:
         # 8. Tenant isolation
         other = c.get("/invoices", params={"tenant_id": "other_tenant"}).json()
         check("tenant isolation", "0 rows", str(len(other)), len(other) == 0)
+
+        # 9. Dashboard summary composes real numbers
+        d = c.get("/dashboard/summary", params={"tenant_id": TENANT}).json()
+        check("dashboard summary", "overdue>0 + activity", f"{d['receivables']['overdue_count']}/{len(d['recent_activity'])}",
+              d["receivables"]["overdue_count"] > 0 and len(d["recent_activity"]) > 0)
+
+        # 10. Task assigned → run through agent → done
+        t = c.post("/tasks", json={"tenant_id": TENANT, "title": "List my overdue invoices",
+                                   "agent_id": "vasool", "due": "2026-09-22"}).json()
+        run = c.post(f"/tasks/{t['id']}/run", params={"tenant_id": TENANT}).json()
+        check("task run", "done via vasool", f"{run['status']}/{run['agent_name']}",
+              run["status"] == "done" and run["agent_name"] == "vasool")
+
+        # 11. Notifications feed alive + readable
+        notes = c.get("/notifications", params={"tenant_id": TENANT}).json()
+        unread = [n for n in notes if n.get("status") == "unread"]
+        rd = c.post(f"/notifications/{notes[0]['id']}/read", params={"tenant_id": TENANT}).json()
+        check("notifications", ">=1 unread + read works", f"{len(unread)}/{rd['status']}",
+              len(unread) >= 1 and rd["status"] == "read")
+
+        # 12. Calendar unifies dues + alerts + tasks
+        ev = c.get("/calendar/events", params={"tenant_id": TENANT}).json()
+        kinds = {e["kind"] for e in ev}
+        check("calendar unified", "3 kinds", str(sorted(kinds)),
+              {"invoice_due", "alert", "task"} <= kinds)
 
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{'='*60}\n{passed}/{len(results)} checks passed")

@@ -18,11 +18,16 @@ IMPLS = ["local"] + (["dynamo"] if os.getenv("USE_AWS", "0") == "1" else [])
 class TestStoreParity:
     T = "t1"
 
+    _ALL_COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
+                        "tasks", "notifications", "connectors", "settings", "activity")
+
     def _store(self, impl, tmp_path):
         if impl == "local":
             return LocalStore(data_dir=tmp_path / "data")
         from app.store import DynamoStore
-        return DynamoStore()
+        s = DynamoStore()
+        s.reset(self.T, {c: [] for c in self._ALL_COLLECTIONS})  # tmp_path equivalent
+        return s
 
     def test_spec_roundtrip(self, impl, tmp_path):
         s = self._store(impl, tmp_path)
@@ -77,3 +82,32 @@ class TestStoreParity:
         ]})
         res = s.list_carriers(self.T, to="ludhiana")
         assert len(res) == 1 and res[0]["name"] == "VRL"
+
+    def test_task_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_task(self.T, {"id": "t1", "title": "x", "status": "todo"})
+        s.update_task(self.T, "t1", status="done", result="ok")
+        assert s.get_task(self.T, "t1")["status"] == "done"
+        assert [t["id"] for t in s.list_tasks(self.T, status="todo")] == []
+
+    def test_settings_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_settings(self.T, {"business": {"name": "B"}, "prefs": {"language": "hi"}})
+        assert s.get_settings(self.T)["prefs"]["language"] == "hi"
+        s.put_settings(self.T, {"business": {"name": "B2"}, "prefs": {}})
+        assert s.get_settings(self.T)["business"]["name"] == "B2"
+
+    def test_notification_and_activity(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_notification(self.T, {"id": "n1", "status": "unread", "title": "t"})
+        s.update_notification(self.T, "n1", status="read")
+        assert s.list_notifications(self.T)[0]["status"] == "read"
+        s.put_activity(self.T, {"id": "a1", "ts": "2026-09-19T00:00:00Z", "kind": "k", "text": "x"})
+        s.put_activity(self.T, {"id": "a2", "ts": "2026-09-19T01:00:00Z", "kind": "k", "text": "y"})
+        assert s.list_activity(self.T)[0]["id"] == "a2"  # newest first
+
+    def test_connector_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_connector(self.T, {"id": "airtable", "status": "available"})
+        s.update_connector(self.T, "airtable", status="connected", items_synced=32)
+        assert s.list_connectors(self.T)[0]["items_synced"] == 32

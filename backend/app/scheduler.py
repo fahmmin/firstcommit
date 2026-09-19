@@ -25,6 +25,9 @@ def run_once(tenant_id: str) -> int:
     for a in deps.store.list_alerts(tenant_id, status="scheduled"):
         if a.get("fires_at", "9999") <= now:
             deps.store.update_alert(tenant_id, a["id"], status="pending_approval")
+            deps.log_activity(tenant_id, "alert_due", f"Scheduled alert due: {a['title']}")
+            deps.notify(tenant_id, "action_required", f"Ready to send: {a['title']}",
+                        body=a.get("body", ""), ref_id=a["id"])
             moved += 1
     return moved
 

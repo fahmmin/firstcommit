@@ -44,6 +44,7 @@ class AgentSpec(BaseModel):
     alerts: list[dict] = []
     schedule: str | None = None
     created_by: str = "factory"
+    created_at: str = ""
     status: str = "active"
     icon: str = "bot"
     guardrails: dict = {}

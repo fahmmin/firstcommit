@@ -25,10 +25,18 @@ def _keys(obj):
     return set(obj.keys()) if isinstance(obj, dict) else set()
 
 
+def _ep(name: str) -> dict:
+    """contract keys carry a ' [EXISTS]'/' [TODO]' tag — strip it for lookup."""
+    eps = CONTRACT["endpoints"]
+    key = next((k for k in eps if k == name or k.startswith(name + " ")), None)
+    assert key, f"endpoint {name} not in contract.json"
+    return eps[key]
+
+
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert _keys(r.json()) >= _keys(CONTRACT["endpoints"]["GET /health"]["response"])
+    assert _keys(r.json()) >= _keys(_ep("GET /health")["response"])
 
 
 def test_agents_shape(client):
@@ -36,14 +44,14 @@ def test_agents_shape(client):
     assert r.status_code == 200
     body = r.json()
     assert isinstance(body, list) and len(body) >= 3
-    expected = _keys(CONTRACT["endpoints"]["GET /agents"]["response"][0])
+    expected = _keys(_ep("GET /agents")["response"][0])
     assert _keys(body[0]) >= expected
 
 
 def test_chat_shape(client):
     r = client.post("/chat", json={"tenant_id": "ramesh_auto", "text": "show overdue invoices"})
     assert r.status_code == 200
-    expected = _keys(CONTRACT["endpoints"]["POST /chat"]["response"])
+    expected = _keys(_ep("POST /chat")["response"])
     assert _keys(r.json()) >= expected
 
 
@@ -102,3 +110,85 @@ def test_reminder_requires_approval(client):
     # approve → sent
     r2 = client.post(f"/alerts/{draft_id}/approve")
     assert r2.status_code == 200 and r2.json()["status"] == "sent"
+
+
+# ---------- [TODO] endpoints ----------
+
+def test_login(client):
+    r = client.post("/auth/login", json={"name": "Ramesh Gupta", "business": "Ramesh Auto Components"})
+    assert r.status_code == 200
+    assert _keys(r.json()) >= _keys(_ep("POST /auth/login")["response"])
+
+
+def test_dashboard_summary(client):
+    r = client.get("/dashboard/summary", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    assert _keys(r.json()) >= _keys(_ep("GET /dashboard/summary")["response"])
+    assert _keys(r.json()["receivables"]) >= {"total", "overdue_count", "overdue_total", "due_soon_total"}
+
+
+def test_notifications_lifecycle(client):
+    r = client.get("/notifications", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    rows = r.json()
+    assert isinstance(rows, list) and len(rows) >= 1
+    assert _keys(rows[0]) >= _keys(_ep("GET /notifications")["response"][0])
+    n = next(n for n in rows if n["status"] == "unread")
+    r2 = client.post(f"/notifications/{n['id']}/read", params={"tenant_id": "ramesh_auto"})
+    assert r2.status_code == 200 and r2.json()["status"] == "read"
+
+
+def test_tasks_lifecycle(client):
+    r = client.get("/tasks", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200 and isinstance(r.json(), list)
+    assert _keys(r.json()[0]) >= _keys(_ep("GET /tasks")["response"][0])
+    c = client.post("/tasks", json={"tenant_id": "ramesh_auto", "title": "List overdue invoices",
+                                    "agent_id": "vasool", "due": "2026-09-22"})
+    assert c.status_code == 200
+    tid = c.json()["id"]
+    run = client.post(f"/tasks/{tid}/run", params={"tenant_id": "ramesh_auto"})
+    assert run.status_code == 200
+    assert _keys(run.json()) >= _keys(_ep("POST /tasks/{id}/run")["response"])
+    assert run.json()["status"] == "done" and run.json()["agent_name"] == "vasool"
+
+
+def test_agent_detail_and_context(client):
+    d = client.get("/agents/vasool", params={"tenant_id": "ramesh_auto"})
+    assert d.status_code == 200
+    assert _keys(d.json()) >= _keys(_ep("GET /agents/{id}")["response"])
+    ctx = client.get("/agents/vasool/context", params={"tenant_id": "ramesh_auto"})
+    assert ctx.status_code == 200
+    assert "invoice_summary" in ctx.json() and "top_defaulters" in ctx.json()
+
+
+def test_calendar_events(client):
+    r = client.get("/calendar/events", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    rows = r.json()
+    assert isinstance(rows, list) and len(rows) >= 1
+    assert _keys(rows[0]) >= _keys(_ep("GET /calendar/events?from=&to=")["response"][0])
+    assert {e["kind"] for e in rows} >= {"invoice_due", "alert", "task"}
+
+
+def test_connectors_flow(client):
+    r = client.get("/connectors", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    rows = r.json()
+    assert _keys(rows[0]) >= _keys(_ep("GET /connectors")["response"][0])
+    c = client.post("/connectors/google_calendar/connect", params={"tenant_id": "ramesh_auto"})
+    assert c.status_code == 200 and c.json()["status"] == "connected"
+    s = client.get("/connectors/airtable/sync", params={"tenant_id": "ramesh_auto"})
+    assert s.status_code == 200 and s.json()["state"] == "ok"
+    d = client.post("/connectors/google_calendar/disconnect", params={"tenant_id": "ramesh_auto"})
+    assert d.status_code == 200 and d.json()["status"] == "available"
+
+
+def test_settings_roundtrip(client):
+    g = client.get("/settings", params={"tenant_id": "ramesh_auto"})
+    assert g.status_code == 200
+    assert _keys(g.json()) >= _keys(_ep("GET /settings")["response"])
+    p = client.patch("/settings", json={"tenant_id": "ramesh_auto",
+                                        "prefs": {"reminder_cadence_days": 5}})
+    assert p.status_code == 200 and p.json()["status"] == "saved"
+    g2 = client.get("/settings", params={"tenant_id": "ramesh_auto"})
+    assert g2.json()["prefs"]["reminder_cadence_days"] == 5

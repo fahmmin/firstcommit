@@ -59,7 +59,34 @@
   "alerts": [
     { "id": "alert-1", "kind": "reminder", "title": "INV-0035 (₹1,24,500) due in 10 days", "status": "scheduled", "fires_at": "2026-09-26T06:00:00Z", "invoice_id": "inv-003" },
     { "id": "alert-2", "kind": "reminder", "title": "INV-0041 (₹56,000) due in 5 days", "status": "scheduled", "fires_at": "2026-09-21T06:00:00Z", "invoice_id": "inv-007" },
-    { "id": "alert-3", "kind": "warning", "title": "Cash gap ~₹58,000 expected first week of Oct", "status": "sent", "fires_at": "2026-09-18T06:00:00Z", "body": "Payables of ₹94,400 fall due before receivables arrive — Khanna Industries pays on 90-day terms." }
+    { "id": "alert-3", "kind": "warning", "title": "Cash gap ~₹58,000 expected first week of Oct", "status": "sent", "fires_at": "2026-09-18T06:00:00Z", "body": "Payables of ₹94,400 fall due before receivables arrive — Khanna Industries pays on 90-day terms." },
+    { "id": "alert-4", "kind": "reminder", "title": "Reminder: INV-0026 (Om Sai Traders)", "status": "pending_approval", "fires_at": "2026-09-19T08:00:00Z", "invoice_id": "inv-006", "channel": "email", "to": "accounts@omsaitraders.in", "subject": "Payment reminder — INV-0026", "body": "Namaste Om Sai Traders ji,\n\nThis is a gentle reminder that invoice INV-0026 for ₹28,700 was due on 2026-05-31 (111 days ago).\n\nKindly release the payment at your earliest convenience.\n— Ramesh Auto Components" }
+  ],
+  "tasks": [
+    { "id": "task-1", "title": "Chase all invoices >30 days overdue", "agent_id": "vasool", "status": "done", "due": "2026-09-19", "result": "Drafted reminders for the 2 oldest invoices", "created_at": "2026-09-18T09:00:00Z" },
+    { "id": "task-2", "title": "Get steel quotes under ₹62/unit", "agent_id": "sourcer", "status": "todo", "due": "2026-09-21", "details": "raw steel coils, ~800 kg", "created_at": "2026-09-19T01:00:00Z" }
+  ],
+  "notifications": [
+    { "id": "n-1", "kind": "action_required", "title": "Reminder ready to send: INV-0026", "body": "Oldest overdue invoice — Om Sai Traders, ₹28,700 (111 days)", "ref_id": "alert-4", "created_at": "2026-09-19T08:00:00Z", "status": "unread" },
+    { "id": "n-2", "kind": "warning", "title": "₹58,000 cash gap first week of Oct", "body": "Payables due before receivables arrive — see cashflow", "created_at": "2026-09-18T06:00:00Z", "status": "read" },
+    { "id": "n-3", "kind": "info", "title": "5 invoices overdue, ₹2.6L stuck", "body": "Vasool can draft reminders for all of them", "created_at": "2026-09-18T09:00:00Z", "status": "unread" }
+  ],
+  "connectors": [
+    { "id": "google_calendar", "name": "Google Calendar", "icon": "calendar", "status": "available", "description": "Push invoice dues + reminders to your calendar", "items_synced": 0 },
+    { "id": "airtable", "name": "Airtable", "icon": "table", "status": "connected", "connected_at": "2026-09-18T10:00:00Z", "last_sync": "2026-09-19T01:00:00Z", "items_synced": 32, "description": "Sync ledger + suppliers to your base" },
+    { "id": "whatsapp", "name": "WhatsApp", "icon": "message", "status": "available", "description": "Send payment reminders via wa.me deep links", "items_synced": 0 },
+    { "id": "tally", "name": "Tally", "icon": "ledger", "status": "available", "description": "Import existing invoices", "items_synced": 0 },
+    { "id": "razorpay", "name": "Razorpay", "icon": "rupee", "status": "available", "description": "Payment links in reminders", "items_synced": 0 }
+  ],
+  "settings": [
+    { "id": "settings",
+      "business": { "name": "Ramesh Auto Components", "owner": "Ramesh Gupta", "city": "Faridabad", "line": "auto components" },
+      "prefs": { "reminder_cadence_days": 7, "auto_draft_reminders": true, "approval_mode": "manual", "language": "hinglish", "notify_email": "ramesh@rameshauto.in" } }
+  ],
+  "activity": [
+    { "id": "act-1", "ts": "2026-09-19T01:44:00Z", "kind": "reminder_sent", "text": "Reminder sent to Sharma Motors (INV-0031)" },
+    { "id": "act-2", "ts": "2026-09-18T22:30:00Z", "kind": "invoice_parsed", "text": "Invoice INV-0043 parsed from photo → ledger" },
+    { "id": "act-3", "ts": "2026-09-18T09:05:00Z", "kind": "task_completed", "text": "Vasool finished 'Chase all invoices >30 days overdue'" }
   ],
   "specs": []
 }

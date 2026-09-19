@@ -37,7 +37,11 @@ def _days_overdue(due: str) -> int:
 def parse_invoice_file(file_path: str) -> dict:
     """Vision-parse an invoice photo/PDF into structured fields."""
     if os.getenv("USE_AWS", "0") == "1":
-        return _parse_via_bedrock(file_path)
+        try:
+            return _parse_via_bedrock(file_path)
+        except Exception as e:  # Bedrock hiccup must never kill the demo
+            print(f"[invoices] bedrock parse failed ({type(e).__name__}): {e} — using fixture")
+            return dict(PARSE_FIXTURE)
     return dict(PARSE_FIXTURE)
 
 
@@ -53,7 +57,7 @@ def _parse_via_bedrock(file_path: str) -> dict:
     with open(file_path, "rb") as f:
         img_bytes = f.read()
     resp = client.converse(
-        modelId=os.getenv("WORKER_MODEL", "us.amazon.nova-lite-v1:0"),
+        modelId=os.getenv("WORKER_MODEL", "apac.amazon.nova-lite-v1:0"),
         messages=[{
             "role": "user",
             "content": [
@@ -103,6 +107,10 @@ def draft_reminder_impl(tenant_id: str, invoice_id: str = "", buyer: str = "") -
         "fires_at": datetime.now(timezone.utc).isoformat(),
     })
     deps.record_action("reminder_drafted", {"alert_id": alert["id"], "invoice_id": inv["id"]})
+    deps.log_activity(tenant_id, "reminder_drafted", f"Reminder drafted for {inv['buyer']} ({inv['invoice_no']}, ₹{inv['amount']:,})")
+    deps.notify(tenant_id, "action_required", f"Reminder ready to send: {inv['invoice_no']}",
+                body=f"{inv['buyer']} — ₹{inv['amount']:,} overdue {inv.get('days_overdue', 0)} days",
+                ref_id=alert["id"])
     return {
         "draft": alert, "invoice": inv, "requires_approval": True,
         "reply": f"Drafted a reminder for {inv['invoice_no']} ({inv['buyer']}, ₹{inv['amount']:,}). "

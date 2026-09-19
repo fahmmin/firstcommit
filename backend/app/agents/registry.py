@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from strands import Agent
@@ -41,9 +42,30 @@ class AgentRegistry:
     # ---- specs ----
 
     def specs(self) -> list[dict]:
-        builtin = [{**s, "status": s.get("status", "active")} for s in BUILTIN_SPECS]
-        stored = deps.store.list_specs(self.tenant_id)
+        tasks = deps.store.list_tasks(self.tenant_id)
+
+        def _stats(s: dict) -> dict:
+            done_runs = sum(1 for t in tasks if t.get("agent_id") == s["id"] and t.get("status") == "done")
+            base = s.get("stats") or {}
+            return {"runs": base.get("runs", 0) + done_runs,
+                    "actions_taken": base.get("actions_taken", 0) + done_runs,
+                    "last_active": base.get("last_active") or s.get("created_at", "")}
+
+        builtin = [{**s, "status": s.get("status", "active"),
+                    "created_at": s.get("created_at", ""), "stats": _stats(s)} for s in BUILTIN_SPECS]
+        stored = [{**s, "stats": _stats(s)} for s in deps.store.list_specs(self.tenant_id)]
         return builtin + stored
+
+    def bump_stats(self, spec_id: str) -> None:
+        """Increment runs/last_active on a stored spec (factory agents only — builtins aren't persisted)."""
+        raw = deps.store.get_spec(self.tenant_id, spec_id)
+        if not raw:
+            return
+        stats = raw.get("stats") or {}
+        stats["runs"] = stats.get("runs", 0) + 1
+        stats["actions_taken"] = stats.get("actions_taken", 0) + 1
+        stats["last_active"] = datetime.now(timezone.utc).isoformat()
+        deps.store.put_spec(self.tenant_id, {**raw, "stats": stats})
 
     def get_spec(self, spec_id: str) -> dict | None:
         return next((s for s in self.specs() if s["id"] == spec_id), None)
@@ -62,11 +84,16 @@ class AgentRegistry:
                 "for real data, never invent figures."
             ),
             created_by="factory",
+            created_at=datetime.now(timezone.utc).isoformat(),
             icon="sparkles",
             guardrails={"allowed_tools": tools, "max_action": "draft_only"},
         )
         stored = deps.store.put_spec(self.tenant_id, spec.model_dump())
         self.get_agent(spec.id)  # warm
+        deps.log_activity(self.tenant_id, "agent_created", f"Nirmata hired '{spec.name}' for you")
+        deps.notify(self.tenant_id, "info", f"{spec.name} hired",
+                    body="Nirmata created this specialist from your description",
+                    ref_id=spec.id)
         return stored
 
     # ---- agent instantiation ----
@@ -144,9 +171,12 @@ class AgentRegistry:
             system_prompt=(
                 "You are Nirmata (निर्माता — 'the maker'), the agent who hires other agents. "
                 "When the owner describes a recurring problem your current team can't cover, "
-                "interview them briefly (what's the problem, what should the agent do day-to-day), "
-                "then preview_spec to show what you'd build, and create_agent once they confirm. "
-                "Only use tools from list_available_tools. Keep it to 2-3 questions max."
+                "ALWAYS interview them briefly FIRST (what's the problem, what should the agent do "
+                "day-to-day) — never create the agent in the first turn. "
+                "Then preview_spec to show what you'd build, and create_agent once they confirm. "
+                "Only use tools from list_available_tools. Keep it to 2-3 questions max. "
+                "When the owner confirms (haan/yes/ok/do it), you MUST call create_agent in that "
+                "same turn — NEVER claim an agent is live or 'done' unless create_agent succeeded."
             ),
             tools=[list_available_tools, preview_spec, create_agent],
             session_manager=_session_manager(f"{self.tenant_id}-nirmata"),
@@ -179,8 +209,9 @@ class AgentRegistry:
                 "- Suppliers, prices, stock, MOQ, buying → sourcer\n"
                 "- Cash flow, payment terms, 'should I take this order' → khata\n"
                 "- New agent requests, or a problem no specialist covers → nirmata\n"
-                "If unsure, ask one short clarifying question. Reply in the owner's language "
-                "(English/Hinglish), short and concrete."
+                "Always call a specialist tool for any business-data question — never answer "
+                "from memory. If unsure, ask one short clarifying question. Reply in the "
+                "owner's language (English/Hinglish), short and concrete."
             ),
             tools=subs,
             session_manager=_session_manager(f"{self.tenant_id}-orchestrator"),

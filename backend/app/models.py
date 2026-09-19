@@ -190,7 +190,7 @@ def make_model(rules: list[MockRule] | None = None, *, role: str = "worker", fal
         from strands.models import BedrockModel
         model_id = os.getenv(
             "ORCHESTRATOR_MODEL" if role in ("orchestrator", "factory") else "WORKER_MODEL",
-            "us.amazon.nova-lite-v1:0",
+            "apac.amazon.nova-lite-v1:0",
         )
         return BedrockModel(model_id=model_id, temperature=0)
     return MockModel(rules or [], fallback=fallback)

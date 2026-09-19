@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-os.environ["USE_AWS"] = "0"
+os.environ.setdefault("USE_AWS", "0")  # USE_AWS=1 in env → parity suite also runs DynamoStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

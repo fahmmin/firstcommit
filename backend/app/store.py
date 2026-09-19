@@ -57,6 +57,44 @@ class Store(ABC):
     @abstractmethod
     def list_payables(self, tenant_id: str) -> list[dict]: ...
 
+    # tasks
+    @abstractmethod
+    def list_tasks(self, tenant_id: str, status: str | None = None) -> list[dict]: ...
+    @abstractmethod
+    def get_task(self, tenant_id: str, task_id: str) -> dict | None: ...
+    @abstractmethod
+    def put_task(self, tenant_id: str, task: dict) -> dict: ...
+    @abstractmethod
+    def update_task(self, tenant_id: str, task_id: str, **fields) -> dict | None: ...
+
+    # notifications
+    @abstractmethod
+    def list_notifications(self, tenant_id: str) -> list[dict]: ...
+    @abstractmethod
+    def put_notification(self, tenant_id: str, note: dict) -> dict: ...
+    @abstractmethod
+    def update_notification(self, tenant_id: str, note_id: str, **fields) -> dict | None: ...
+
+    # connectors
+    @abstractmethod
+    def list_connectors(self, tenant_id: str) -> list[dict]: ...
+    @abstractmethod
+    def put_connector(self, tenant_id: str, conn: dict) -> dict: ...
+    @abstractmethod
+    def update_connector(self, tenant_id: str, conn_id: str, **fields) -> dict | None: ...
+
+    # settings (single row per tenant, id="settings")
+    @abstractmethod
+    def get_settings(self, tenant_id: str) -> dict | None: ...
+    @abstractmethod
+    def put_settings(self, tenant_id: str, settings: dict) -> dict: ...
+
+    # activity feed (dashboard "recent activity")
+    @abstractmethod
+    def list_activity(self, tenant_id: str, limit: int = 20) -> list[dict]: ...
+    @abstractmethod
+    def put_activity(self, tenant_id: str, event: dict) -> dict: ...
+
     # seed/reset
     @abstractmethod
     def reset(self, tenant_id: str, seed: dict) -> None: ...
@@ -65,7 +103,8 @@ class Store(ABC):
 class LocalStore(Store):
     """One JSON file per collection under backend/data/, shaped {tenant_id: [rows]}."""
 
-    _COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables")
+    _COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
+                    "tasks", "notifications", "connectors", "settings", "activity")
 
     def __init__(self, data_dir: Path | None = None):
         self.dir = data_dir or DATA_DIR
@@ -167,12 +206,86 @@ class LocalStore(Store):
     def list_payables(self, tenant_id):
         return self._rows("payables", tenant_id)
 
+    # tasks
+    def list_tasks(self, tenant_id, status=None):
+        rows = self._rows("tasks", tenant_id)
+        return [r for r in rows if status is None or r.get("status") == status]
+
+    def get_task(self, tenant_id, task_id):
+        return next((t for t in self.list_tasks(tenant_id) if t["id"] == task_id), None)
+
+    def put_task(self, tenant_id, task):
+        return self._put("tasks", tenant_id, task)
+
+    def update_task(self, tenant_id, task_id, **fields):
+        return self._update("tasks", tenant_id, task_id, **fields)
+
+    # notifications
+    def list_notifications(self, tenant_id):
+        return self._rows("notifications", tenant_id)
+
+    def put_notification(self, tenant_id, note):
+        return self._put("notifications", tenant_id, note)
+
+    def update_notification(self, tenant_id, note_id, **fields):
+        return self._update("notifications", tenant_id, note_id, **fields)
+
+    # connectors
+    def list_connectors(self, tenant_id):
+        return self._rows("connectors", tenant_id)
+
+    def put_connector(self, tenant_id, conn):
+        return self._put("connectors", tenant_id, conn)
+
+    def update_connector(self, tenant_id, conn_id, **fields):
+        return self._update("connectors", tenant_id, conn_id, **fields)
+
+    # settings
+    def get_settings(self, tenant_id):
+        return next((r for r in self._rows("settings", tenant_id) if r.get("id") == "settings"), None)
+
+    def put_settings(self, tenant_id, settings):
+        return self._put("settings", tenant_id, {**settings, "id": "settings"})
+
+    # activity
+    def list_activity(self, tenant_id, limit=20):
+        rows = self._rows("activity", tenant_id)
+        rows.sort(key=lambda r: r.get("ts", ""), reverse=True)
+        return rows[:limit]
+
+    def put_activity(self, tenant_id, event):
+        return self._put("activity", tenant_id, event)
+
     def reset(self, tenant_id, seed):
         for coll in self._COLLECTIONS:
             if coll in seed:
                 data = self._read(coll)
                 data[tenant_id] = copy.deepcopy(seed[coll])
                 self._write(coll, data)
+
+
+def _to_ddb(v):
+    """DynamoDB rejects floats — serialize to Decimal (recursively)."""
+    from decimal import Decimal
+    if isinstance(v, float):
+        return Decimal(str(v))
+    if isinstance(v, dict):
+        return {k: _to_ddb(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_to_ddb(x) for x in v]
+    return v
+
+
+def _from_ddb(v):
+    """Reads come back as Decimal — restore plain JSON types to match LocalStore."""
+    from decimal import Decimal
+    if isinstance(v, Decimal):
+        return int(v) if v % 1 == 0 else float(v)
+    if isinstance(v, dict):
+        return {k: _from_ddb(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_from_ddb(x) for x in v]
+    return v
 
 
 class DynamoStore(Store):
@@ -185,6 +298,11 @@ class DynamoStore(Store):
         "carriers": "DDB_TABLE_CARRIERS",
         "alerts": "DDB_TABLE_ALERTS",
         "payables": "DDB_TABLE_PAYABLES",
+        "tasks": "DDB_TABLE_TASKS",
+        "notifications": "DDB_TABLE_NOTIFICATIONS",
+        "connectors": "DDB_TABLE_CONNECTORS",
+        "settings": "DDB_TABLE_SETTINGS",
+        "activity": "DDB_TABLE_ACTIVITY",
     }
 
     def __init__(self, region: str | None = None):
@@ -199,11 +317,13 @@ class DynamoStore(Store):
         self.tables = {coll: ddb.Table(os.getenv(env, f"sahayak-{coll}")) for coll, env in self._TABLES.items()}
 
     def _all(self, coll: str, tenant_id: str) -> list[dict]:
-        resp = self.tables[coll].query(KeyConditionExpression=self._key("tenant_id").eq(tenant_id))
-        return resp.get("Items", [])
+        # ConsistentRead: demo code does read-your-writes (create agent → GET /agents)
+        resp = self.tables[coll].query(KeyConditionExpression=self._key("tenant_id").eq(tenant_id),
+                                       ConsistentRead=True)
+        return [_from_ddb(i) for i in resp.get("Items", [])]
 
     def _put(self, coll: str, tenant_id: str, row: dict) -> dict:
-        self.tables[coll].put_item(Item={**row, "tenant_id": tenant_id})
+        self.tables[coll].put_item(Item=_to_ddb({**row, "tenant_id": tenant_id}))
         return row
 
     def _update(self, coll: str, tenant_id: str, row_id: str, **fields) -> dict | None:
@@ -214,13 +334,14 @@ class DynamoStore(Store):
             Key={"tenant_id": tenant_id, "id": row_id},
             UpdateExpression=expr,
             ExpressionAttributeNames={f"#{k}": k for k in fields},
-            ExpressionAttributeValues={f":{k}": v for k, v in fields.items()},
+            ExpressionAttributeValues={f":{k}": _to_ddb(v) for k, v in fields.items()},
         )
         return self._put_get(coll, tenant_id, row_id)
 
     def _put_get(self, coll, tenant_id, row_id):
         resp = self.tables[coll].get_item(Key={"tenant_id": tenant_id, "id": row_id})
-        return resp.get("Item")
+        item = resp.get("Item")
+        return _from_ddb(item) if item else None
 
     def list_specs(self, tenant_id):
         return self._all("specs", tenant_id)
@@ -270,7 +391,62 @@ class DynamoStore(Store):
     def list_payables(self, tenant_id):
         return self._all("payables", tenant_id)
 
+    # tasks
+    def list_tasks(self, tenant_id, status=None):
+        rows = self._all("tasks", tenant_id)
+        return [r for r in rows if status is None or r.get("status") == status]
+
+    def get_task(self, tenant_id, task_id):
+        return self._put_get("tasks", tenant_id, task_id)
+
+    def put_task(self, tenant_id, task):
+        return self._put("tasks", tenant_id, task)
+
+    def update_task(self, tenant_id, task_id, **fields):
+        return self._update("tasks", tenant_id, task_id, **fields)
+
+    # notifications
+    def list_notifications(self, tenant_id):
+        return self._all("notifications", tenant_id)
+
+    def put_notification(self, tenant_id, note):
+        return self._put("notifications", tenant_id, note)
+
+    def update_notification(self, tenant_id, note_id, **fields):
+        return self._update("notifications", tenant_id, note_id, **fields)
+
+    # connectors
+    def list_connectors(self, tenant_id):
+        return self._all("connectors", tenant_id)
+
+    def put_connector(self, tenant_id, conn):
+        return self._put("connectors", tenant_id, conn)
+
+    def update_connector(self, tenant_id, conn_id, **fields):
+        return self._update("connectors", tenant_id, conn_id, **fields)
+
+    # settings
+    def get_settings(self, tenant_id):
+        return self._put_get("settings", tenant_id, "settings")
+
+    def put_settings(self, tenant_id, settings):
+        return self._put("settings", tenant_id, {**settings, "id": "settings"})
+
+    # activity
+    def list_activity(self, tenant_id, limit=20):
+        rows = self._all("activity", tenant_id)
+        rows.sort(key=lambda r: r.get("ts", ""), reverse=True)
+        return rows[:limit]
+
+    def put_activity(self, tenant_id, event):
+        return self._put("activity", tenant_id, event)
+
     def reset(self, tenant_id, seed):
+        # clear every existing row for the tenant first — a spec-free seed
+        # must also remove previously factory-created specs (parity w/ LocalStore)
+        for coll in self.tables:
+            for row in self._all(coll, tenant_id):
+                self.tables[coll].delete_item(Key={"tenant_id": tenant_id, "id": row["id"]})
         for coll, rows in seed.items():
             if coll in self.tables:
                 for row in rows:

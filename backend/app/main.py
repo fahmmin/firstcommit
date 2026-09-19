@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import uuid
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -63,6 +65,16 @@ def health():
     return {"status": "ok", "use_aws": os.getenv("USE_AWS", "0") == "1", "model": model}
 
 
+def _invoke(agent, text: str):
+    """Nova occasionally emits an invalid ToolUse stream — one retry absorbs it."""
+    try:
+        return agent(text)
+    except Exception as e:
+        if "ToolUse" in str(e) or "modelStreamError" in type(e).__name__:
+            return agent(text)
+        raise
+
+
 @app.post("/chat")
 def chat(req: ChatReq):
     registry = reg.get_registry(req.tenant_id)
@@ -73,11 +85,12 @@ def chat(req: ChatReq):
             agent = registry.get_agent(req.agent_id)
             if not agent:
                 raise HTTPException(404, f"unknown agent {req.agent_id}")
-            result = agent(req.text)
+            result = _invoke(agent, req.text)
             agent_name = req.agent_id
+            registry.bump_stats(req.agent_id)
         else:
             agent = registry.orchestrator()
-            result = agent(req.text)
+            result = _invoke(agent, req.text)
             tool_names = list(result.metrics.tool_metrics.keys()) if result.metrics else []
             agent_name = tool_names[-1] if tool_names else "sahayak"
     finally:
@@ -85,8 +98,9 @@ def chat(req: ChatReq):
 
     spec = registry.get_spec(agent_name) or {}
     trace = ["sahayak"] + ([agent_name] if agent_name != "sahayak" else [])
+    reply = re.sub(r"</?(thinking|response)>.*?</(thinking|response)>|</?(thinking|response)>", "", str(result), flags=re.DOTALL).strip()
     return {
-        "reply": str(result),
+        "reply": reply,
         "agent_name": agent_name,
         "agent_tagline": spec.get("hindi_tagline", ""),
         "actions": actions,
@@ -135,6 +149,8 @@ async def upload(file: UploadFile = File(...), tenant_id: str = Form("ramesh_aut
         due_date=parsed["due_date"], items=parsed.get("items", ""),
         invoice_no=parsed.get("invoice_no", ""), gst=parsed.get("gst"),
     )
+    deps.log_activity(tenant_id, "invoice_parsed",
+                      f"Invoice {inv['invoice_no']} parsed from photo → ledger")
     return {
         "file_id": file_id, "filename": file.filename, "parsed": parsed,
         "invoice": inv, "low_confidence_fields": parsed.get("low_confidence_fields", []),
@@ -218,8 +234,286 @@ def demo_reset(tenant_id: str = "ramesh_auto"):
     sessions = DATA_DIR / "sessions"
     if sessions.exists():
         shutil.rmtree(sessions)
+    if os.getenv("USE_AWS", "0") == "1":
+        try:
+            import boto3
+            s3 = boto3.Session(
+                profile_name=os.getenv("AWS_PROFILE") or None,
+                region_name=os.getenv("AWS_REGION", "us-east-1"),
+            ).client("s3")
+            bucket = os.getenv("S3_BUCKET", "sahayak-sessions")
+            objs = s3.list_objects_v2(Bucket=bucket).get("Contents", [])
+            if objs:
+                s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": o["Key"]} for o in objs]})
+        except Exception as e:
+            print(f"[demo/reset] S3 session wipe failed: {e}")
     reg.reset_registries()
     return {"status": "reseeded", "tenants": [tenant_id]}
+
+
+# ================= [TODO] surface — contract.json-tagged endpoints =================
+
+
+class LoginReq(BaseModel):
+    name: str = "Ramesh Gupta"
+    business: str = "Ramesh Auto Components"
+
+
+@app.post("/auth/login")
+def login(req: LoginReq):
+    """Demo login — no real auth, returns a token + tenant."""
+    biz = (deps.store.get_settings("ramesh_auto") or {}).get("business", {})
+    slug = re.sub(r"[^a-z0-9]+", "", req.name.lower())[:12] or "user"
+    return {
+        "token": f"demo-tok-{slug}",
+        "tenant_id": "ramesh_auto",
+        "user": {"name": req.name, "business": req.business,
+                 "city": biz.get("city", ""), "line": biz.get("line", "")},
+    }
+
+
+@app.get("/dashboard/summary")
+def dashboard_summary(tenant_id: str = "ramesh_auto"):
+    invoices = deps.store.list_invoices(tenant_id)
+    open_inv = [i for i in invoices if i.get("status") in ("sent", "due_soon", "overdue")]
+    overdue = [i for i in invoices if i.get("status") == "overdue"]
+    due_soon = [i for i in invoices if i.get("status") == "due_soon"]
+    horizon = (date.today() + timedelta(days=30)).isoformat()
+    payables = deps.store.list_payables(tenant_id)
+    specs = reg.get_registry(tenant_id).specs()
+    return {
+        "receivables": {
+            "total": sum(i["amount"] for i in open_inv),
+            "overdue_count": len(overdue),
+            "overdue_total": sum(i["amount"] for i in overdue),
+            "due_soon_total": sum(i["amount"] for i in due_soon),
+        },
+        "capital_locked_long_terms": sum(i["amount"] for i in open_inv if i.get("terms_days", 30) >= 60),
+        "payables_due_30d": sum(p["amount"] for p in payables if p.get("due", "9999") <= horizon),
+        "pending_approvals": len(deps.store.list_alerts(tenant_id, status="pending_approval")),
+        "agents": {"total": len(specs),
+                   "ai_hired": sum(1 for s in specs if s.get("created_by") == "factory")},
+        "alerts_unread": sum(1 for n in deps.store.list_notifications(tenant_id)
+                             if n.get("status") == "unread"),
+        "recent_activity": deps.store.list_activity(tenant_id, limit=10),
+    }
+
+
+@app.get("/notifications")
+def notifications(tenant_id: str = "ramesh_auto"):
+    rows = deps.store.list_notifications(tenant_id)
+    rows.sort(key=lambda n: n.get("created_at", ""), reverse=True)
+    return rows
+
+
+@app.post("/notifications/{note_id}/read")
+def read_notification(note_id: str, tenant_id: str = "ramesh_auto"):
+    n = deps.store.update_notification(tenant_id, note_id, status="read")
+    if not n:
+        raise HTTPException(404, "no such notification")
+    return {"id": note_id, "status": "read"}
+
+
+class TaskReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    title: str
+    agent_id: str = ""
+    due: str = ""
+    details: str = ""
+
+
+@app.get("/tasks")
+def tasks(tenant_id: str = "ramesh_auto", status: str | None = None):
+    return deps.store.list_tasks(tenant_id, status=status)
+
+
+@app.post("/tasks")
+def create_task(req: TaskReq):
+    t = deps.store.put_task(req.tenant_id, {
+        "id": f"task-{uuid.uuid4().hex[:6]}", "title": req.title,
+        "agent_id": req.agent_id, "status": "todo", "due": req.due,
+        "details": req.details,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"id": t["id"], "status": t["status"]}
+
+
+@app.post("/tasks/{task_id}/run")
+def run_task(task_id: str, tenant_id: str = "ramesh_auto"):
+    t = deps.store.get_task(tenant_id, task_id)
+    if not t:
+        raise HTTPException(404, "no such task")
+    registry = reg.get_registry(tenant_id)
+    agent_id = t.get("agent_id") or "sahayak"
+    agent = registry.orchestrator() if agent_id == "sahayak" else registry.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(404, f"unknown agent {agent_id}")
+    actions: list[dict] = []
+    token = deps.current_actions.set(actions)
+    try:
+        prompt = f"Task for you: {t['title']}."
+        if t.get("details"):
+            prompt += f" Details: {t['details']}."
+        result = _invoke(agent, prompt)
+        reply = re.sub(r"</?(thinking|response)>.*?</(thinking|response)>|</?(thinking|response)>", "", str(result), flags=re.DOTALL).strip()
+    finally:
+        deps.current_actions.reset(token)
+    deps.store.update_task(tenant_id, task_id, status="done", result=reply)
+    registry.bump_stats(agent_id)
+    deps.log_activity(tenant_id, "task_completed", f"{agent_id} finished '{t['title']}'")
+    return {"task_id": task_id, "status": "done", "agent_name": agent_id,
+            "result": reply, "actions": actions}
+
+
+@app.get("/agents/{agent_id}")
+def agent_detail(agent_id: str, tenant_id: str = "ramesh_auto"):
+    spec = reg.get_registry(tenant_id).get_spec(agent_id)
+    if not spec:
+        raise HTTPException(404, "unknown agent")
+    return spec
+
+
+@app.get("/agents/{agent_id}/context")
+def agent_context(agent_id: str, tenant_id: str = "ramesh_auto"):
+    """Contextual right-sidebar payload — shape varies by the agent's tool set."""
+    spec = reg.get_registry(tenant_id).get_spec(agent_id)
+    if not spec:
+        raise HTTPException(404, "unknown agent")
+    tools = spec.get("tools", [])
+    if "list_overdue" in tools:  # receivables specialist (vasool et al.)
+        invoices = deps.store.list_invoices(tenant_id)
+        open_inv = [i for i in invoices if i.get("status") in ("sent", "due_soon", "overdue")]
+        overdue = sorted((i for i in invoices if i.get("status") == "overdue"),
+                         key=lambda r: r.get("days_overdue", 0), reverse=True)
+        return {
+            "invoice_summary": {
+                "total_outstanding": sum(i["amount"] for i in open_inv),
+                "overdue_total": sum(i["amount"] for i in overdue),
+                "oldest_overdue_days": overdue[0].get("days_overdue", 0) if overdue else 0,
+            },
+            "capital_locked_90d": sum(i["amount"] for i in open_inv if i.get("terms_days", 30) >= 60),
+            "top_defaulters": [{"buyer": i["buyer"], "amount": i["amount"],
+                                "days": i.get("days_overdue", 0)} for i in overdue[:3]],
+            "recent_invoices": sorted(invoices, key=lambda r: r.get("issue_date", ""),
+                                      reverse=True)[:5],
+        }
+    if "list_carriers" in tools:  # logistics-type (factory-hired)
+        carriers = deps.store.list_carriers(tenant_id)
+        cheapest = min(carriers, key=lambda c: c["rate_per_kg"], default=None)
+        bookings = [a for a in deps.store.list_alerts(tenant_id) if a.get("kind") == "booking"]
+        return {
+            "carriers_available": len(carriers),
+            "cheapest_route": {"name": cheapest["name"], "rate_per_kg": cheapest["rate_per_kg"]}
+                              if cheapest else None,
+            "pending_bookings": sum(1 for b in bookings if b.get("status") == "pending_approval"),
+            "recent_bookings": bookings[:5],
+        }
+    return {"tools": tools, "recent_actions": deps.store.list_activity(tenant_id, limit=5)}
+
+
+@app.get("/calendar/events")
+def calendar_events(tenant_id: str = "ramesh_auto",
+                    start: str | None = Query(None, alias="from"),
+                    end: str | None = Query(None, alias="to")):
+    """Unified feed: open invoice dues + scheduled alerts + task deadlines."""
+    events: list[dict] = []
+    for i in deps.store.list_invoices(tenant_id):
+        if i.get("status") in ("sent", "due_soon", "overdue") and i.get("due_date"):
+            events.append({"id": f"ev-inv-{i['id']}", "date": i["due_date"],
+                           "title": f"{i['invoice_no']} due (₹{i['amount']:,} — {i['buyer']})",
+                           "kind": "invoice_due", "ref_id": i["id"]})
+    for a in deps.store.list_alerts(tenant_id):
+        if a.get("status") in ("scheduled", "pending_approval") and a.get("fires_at"):
+            events.append({"id": f"ev-alert-{a['id']}", "date": a["fires_at"][:10],
+                           "title": f"Reminder fires: {a['title']}",
+                           "kind": "alert", "ref_id": a["id"]})
+    for t in deps.store.list_tasks(tenant_id):
+        if t.get("due"):
+            events.append({"id": f"ev-task-{t['id']}", "date": t["due"],
+                           "title": f"Task: {t['title']}", "kind": "task", "ref_id": t["id"]})
+    if start:
+        events = [e for e in events if e["date"] >= start]
+    if end:
+        events = [e for e in events if e["date"] <= end]
+    events.sort(key=lambda e: e["date"])
+    return events
+
+
+_CONNECTOR_STUBS = {"whatsapp", "tally", "razorpay"}  # real OAuth post-demo
+
+
+def _connector(tenant_id: str, conn_id: str) -> dict:
+    c = next((x for x in deps.store.list_connectors(tenant_id) if x["id"] == conn_id), None)
+    if not c:
+        raise HTTPException(404, "unknown connector")
+    return c
+
+
+@app.get("/connectors")
+def connectors(tenant_id: str = "ramesh_auto"):
+    return deps.store.list_connectors(tenant_id)
+
+
+@app.post("/connectors/{conn_id}/connect")
+def connect_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
+    c = _connector(tenant_id, conn_id)
+    if conn_id in _CONNECTOR_STUBS:
+        return {"id": conn_id, "status": "coming_soon",
+                "note": f"{c['name']} integration ships post-demo"}
+    now = datetime.now(timezone.utc).isoformat()
+    deps.store.update_connector(tenant_id, conn_id, status="connected",
+                                connected_at=now, last_sync=now)
+    deps.log_activity(tenant_id, "connector_synced", f"{c['name']} connected")
+    return {"id": conn_id, "status": "connected", "connected_at": now}
+
+
+@app.post("/connectors/{conn_id}/disconnect")
+def disconnect_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
+    _connector(tenant_id, conn_id)
+    deps.store.update_connector(tenant_id, conn_id, status="available", items_synced=0)
+    return {"id": conn_id, "status": "available"}
+
+
+@app.get("/connectors/{conn_id}/sync")
+def sync_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
+    c = _connector(tenant_id, conn_id)
+    if c.get("status") != "connected":
+        return {"id": conn_id, "state": "not_connected",
+                "items_synced": c.get("items_synced", 0), "last_sync": c.get("last_sync")}
+    if conn_id == "airtable":
+        count = len(deps.store.list_invoices(tenant_id)) + len(deps.store.list_suppliers(tenant_id))
+    elif conn_id == "google_calendar":
+        count = len(calendar_events(tenant_id))
+    else:
+        count = c.get("items_synced", 0)
+    now = datetime.now(timezone.utc).isoformat()
+    deps.store.update_connector(tenant_id, conn_id, last_sync=now, items_synced=count)
+    deps.log_activity(tenant_id, "connector_synced", f"{c['name']} synced — {count} items")
+    return {"id": conn_id, "last_sync": now, "items_synced": count, "state": "ok"}
+
+
+@app.get("/settings")
+def settings(tenant_id: str = "ramesh_auto"):
+    s = deps.store.get_settings(tenant_id)
+    if not s:
+        raise HTTPException(404, "no settings seeded")
+    return {"business": s.get("business", {}), "prefs": s.get("prefs", {})}
+
+
+class SettingsPatch(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    business: dict | None = None
+    prefs: dict | None = None
+
+
+@app.patch("/settings")
+def patch_settings(req: SettingsPatch):
+    cur = deps.store.get_settings(req.tenant_id) or {}
+    deps.store.put_settings(req.tenant_id, {
+        "business": {**cur.get("business", {}), **(req.business or {})},
+        "prefs": {**cur.get("prefs", {}), **(req.prefs or {})},
+    })
+    return {"status": "saved"}
 
 
 handler = None

@@ -22,6 +22,11 @@ def send_alert_impl(tenant_id: str, alert_id: str) -> dict:
         return {"reply": "Already sent."}
     msg = deps.notifier.send(a.get("to", ""), a.get("subject", a["title"]), a.get("body", ""), a.get("channel", "email"))
     deps.store.update_alert(tenant_id, a["id"], status="sent", sent_at=msg["sent_at"], via=msg["via"])
+    deps.log_activity(tenant_id, "reminder_sent", f"{a['title']} — sent to {a.get('to', '')}")
+    # resolve the matching 'action_required' notification
+    for n in deps.store.list_notifications(tenant_id):
+        if n.get("ref_id") == a["id"] and n.get("status") == "unread":
+            deps.store.update_notification(tenant_id, n["id"], status="read")
     return {"reply": f"Sent to {a.get('to', '')} via {msg['via']}.", "message": msg}
 
 
