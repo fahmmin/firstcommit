@@ -38,6 +38,12 @@ export const api = {
   suppliers: (q) => req(`/suppliers?tenant_id=${TENANT}${q ? `&q=${q}` : ''}`),
   carriers: (to) => req(`/carriers?tenant_id=${TENANT}${to ? `&to=${to}` : ''}`),
   cashflow: () => req(`/cashflow?tenant_id=${TENANT}`),
+  agentDetail: (id) => req(`/agents/${id}?tenant_id=${TENANT}`),
+  agentContext: (id) => req(`/agents/${id}/context?tenant_id=${TENANT}`),
+  notifications: () => req(`/notifications?tenant_id=${TENANT}`),
+  connectors: () => req(`/connectors?tenant_id=${TENANT}`),
+  settings: () => req(`/settings?tenant_id=${TENANT}`),
+  dashboard: () => req(`/dashboard/summary?tenant_id=${TENANT}`),
   runScheduler: () => req(`/scheduler/run?tenant_id=${TENANT}`, { method: 'POST' }),
   resetDemo: () => req(`/demo/reset?tenant_id=${TENANT}`, { method: 'POST' }),
 }

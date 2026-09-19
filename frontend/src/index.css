@@ -1,24 +1,32 @@
 @import "tailwindcss";
 
 @theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --color-brand: #06427d;
   --color-accent: #3494f4;
   --color-sky: #a9daf5;
   --color-muted: #adb6d0;
   --color-cream: #f6f9fd;
+  --color-ink: #141311;
+  --color-ink-2: #1d1c19;
+  --color-magenta: #d4428f;
 }
 
-body { @apply bg-cream text-slate-800 antialiased; }
+body { @apply bg-cream text-slate-800 antialiased font-sans; }
 
 html { scroll-behavior: smooth; }
 ::selection { background: var(--color-sky); }
 
 /* gumloop-style floating ring shadow */
-.shadow-float { box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 1px -.5px rgb(0 0 0 / .02), 0 6px 6px -3px rgb(0 0 0 / .02), 0 24px 24px -12px rgb(0 0 0 / .03); }
-.shadow-float-lg { box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 12px 24px -8px rgb(6 66 125 / .12), 0 32px 64px -16px rgb(6 66 125 / .10); }
+.shadow-float { box-shadow: 0 0 0 1px rgb(0 0 0 / .05), 0 1px 1px -.5px rgb(0 0 0 / .02), 0 6px 6px -3px rgb(0 0 0 / .02), 0 24px 24px -12px rgb(0 0 0 / .03); }
+.shadow-float-lg { box-shadow: 0 0 0 1px rgb(0 0 0 / .05), 0 12px 24px -8px rgb(20 19 17 / .10), 0 32px 64px -16px rgb(20 19 17 / .08); }
 
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .animate-marquee { animation: marquee 28s linear infinite; }
 
 @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 .animate-floaty { animation: floaty 6s ease-in-out infinite; }
+
+/* thin scrollbars for app panes */
+.scroll-thin::-webkit-scrollbar { width: 5px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #d5d9e2; border-radius: 4px; }

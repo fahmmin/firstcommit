@@ -1,234 +1,388 @@
 import { motion } from 'framer-motion'
 import {
-  Bot, Receipt, Package, Wallet, Factory, Bell, Camera, ShieldCheck,
-  ArrowRight, Sparkles, Users, CalendarClock, PlugZap, CheckCircle2,
+  Receipt, Package, Wallet, Factory, Bell, Camera, ShieldCheck,
+  ArrowRight, Sparkles, CalendarClock, PlugZap, CheckCircle2, X,
+  Zap, Puzzle, FileText, Repeat2, BrainCircuit, TrendingUp, Lock, Eye, Layers,
 } from 'lucide-react'
+import { LineChart, Line, ResponsiveContainer } from 'recharts'
 
-const CONNECTORS = ['Google Calendar', 'Airtable', 'WhatsApp', 'Tally', 'Razorpay', 'UPI', 'GST Portal', 'Vyapar']
+/* ── blobs: the 4-color mark, gumloop-style ── */
+const Blobs = ({ size = 'md' }) => {
+  const s = size === 'lg' ? 'w-6 h-6' : 'w-4 h-4'
+  return (
+    <div className="flex items-end gap-1">
+      <span className={`${s} rounded-full bg-[#a325fc]`} />
+      <span className={`${s} rounded-full rounded-bl-md bg-[#1aaf50]`} />
+      <span className={`${s} rounded-md rotate-12 bg-[#86cefc]`} />
+      <span className={`${s} rounded-full rounded-tr-md bg-[#d4428f]`} />
+    </div>
+  )
+}
 
-const AGENTS = [
-  { icon: Receipt, name: 'Vasool', tag: 'पैसा वसूलने वाला', desc: 'Tracks every invoice, flags who owes what, drafts payment reminders.', tools: 'aging report · reminders · ledger' },
-  { icon: Package, name: 'Sourcer', tag: 'सही दाम पे सामान', desc: 'Compares supplier prices, checks trust scores, pools MOQs.', tools: 'catalog · stock · trust score' },
-  { icon: Wallet, name: 'Khata', tag: 'कैश का हिसाब', desc: 'Watches the 90-day-terms trap — receivables vs payables, gap alerts.', tools: 'timeline · term gap · advisor' },
-  { icon: Factory, name: 'Nirmata', tag: 'एजेंट बनाने वाला', desc: 'The factory. Describe a recurring problem — it hires a new specialist for it.', tools: 'interview · preview · hire' },
+const spend = [
+  { m: 'Jul 12', v: 12 }, { m: 'Jul 19', v: 18 }, { m: 'Jul 26', v: 15 }, { m: 'Aug 2', v: 24 },
+  { m: 'Aug 9', v: 31 }, { m: 'Aug 16', v: 28 }, { m: 'Aug 23', v: 38 }, { m: 'Aug 30', v: 44 },
+  { m: 'Sep 6', v: 52 }, { m: 'Sep 13', v: 61 }, { m: 'Sep 19', v: 74 },
 ]
 
-const FEATURES = [
-  { icon: Bot, title: 'Talk to your business', desc: 'One chat. Ask in English or Hinglish — "kitna paisa aana hai?" just works. Sahayak routes to the right specialist.' },
-  { icon: Sparkles, title: 'It hires its own staff', desc: 'Problem nobody covers? Nirmata interviews you, drafts a specialist, shows a preview — you confirm, it joins the team.', big: true },
-  { icon: ShieldCheck, title: 'Draft-only by default', desc: 'Agents propose, you approve. No reminder is sent, no order placed, until you say haan.' },
-  { icon: Bell, title: 'Works while you sleep', desc: 'Scheduled checks turn due dates into ready-to-send reminders. Wake up to approvals, not surprises.' },
-  { icon: Camera, title: 'Photo → ledger', desc: 'Snap a paper invoice. Nova vision parses it into your books — buyer, GST, due date, amount.' },
-  { icon: Users, title: 'Real numbers only', desc: 'Agents answer from your actual invoices and suppliers — never invented figures. Tenant-isolated per business.' },
-]
-
-const STEPS = [
-  { n: '01', title: 'Tell it a problem', desc: '"Mera transporter nahi aaya" — plain words, no forms, no training.' },
-  { n: '02', title: 'Sahayak routes — or hires', desc: 'Known domain → the right specialist answers. New problem → Nirmata hires a specialist live.' },
-  { n: '03', title: 'You approve, it acts', desc: 'Drafts, reminders, bookings land in your notifications. One tap sends them.' },
-]
-
-const FAQ = [
-  { q: 'Do I need to know technology?', a: 'No. If you can send a WhatsApp message, you can run Sahayak. Everything is plain chat — Hinglish included.' },
-  { q: 'Will it send messages on my behalf?', a: 'Never without approval. Every outward action is a draft until you tap approve.' },
-  { q: 'What does it connect to?', a: 'Google Calendar, Airtable, WhatsApp today — Tally and Razorpay connectors are on the roadmap.' },
-  { q: 'Who built this?', a: 'Fahmin (product/frontend) and Ayush (backend/AWS) — for the First Commit AWS hackathon. Runs on Bedrock Nova + Strands Agents.' },
-]
+/* ── the product mockup (pure CSS — mirrors the real workspace) ── */
+function AppMockup() {
+  return (
+    <div className="rounded-2xl shadow-float-lg bg-white border border-slate-200/80 overflow-hidden text-left">
+      <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
+        <span className="w-2.5 h-2.5 rounded-full bg-[#f96a5f]" /><span className="w-2.5 h-2.5 rounded-full bg-[#fcbd2e]" /><span className="w-2.5 h-2.5 rounded-full bg-[#33c648]" />
+        <span className="ml-3 text-[11px] text-slate-400 bg-white border border-slate-200 rounded-md px-2.5 py-0.5">sahayak.ai/app</span>
+      </div>
+      <div className="grid grid-cols-[150px_1fr_210px] min-h-[380px]">
+        {/* sidebar */}
+        <div className="border-r border-slate-100 bg-[#fbfbfd] p-3 space-y-4">
+          <button className="w-full text-[11px] font-medium border border-slate-200 bg-white rounded-lg py-1.5 text-slate-600">+ New Chat</button>
+          {[['Money', ['Vasool', 'Khata']], ['Procurement', ['Sourcer']], ['Hired by AI', ['Logistics Agent']]].map(([g, items]) => (
+            <div key={g}>
+              <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{g}</div>
+              {items.map(i => (
+                <div key={i} className={`text-[11px] rounded-md px-2 py-1.5 mb-0.5 flex items-center gap-1.5
+                  ${i === 'Vasool' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
+                  <span className={`w-3 h-3 rounded ${i === 'Logistics Agent' ? 'bg-[#d4428f]' : 'bg-[#a325fc]'}`} />
+                  {i}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        {/* center */}
+        <div className="p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 grid place-items-center"><Receipt size={18} className="text-white" /></div>
+            <div>
+              <div className="font-semibold text-[15px] text-slate-900">Vasool</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Receivables, reminders and payment chasing across the ledger.</div>
+              <div className="text-[10px] text-slate-400 mt-1">Used by Ramesh · 31 tasks this month</div>
+            </div>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-150 border-slate-200 p-3">
+              <div className="text-[10px] font-medium text-slate-500 flex justify-between">Money recovered <span className="text-slate-400">Sep · ₹74.2K</span></div>
+              <div className="h-14 mt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={spend}><Line type="monotone" dataKey="v" stroke="#1aaf50" strokeWidth={1.5} dot={false} /></LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="text-[10px] font-medium text-slate-500">Adoption</div>
+              <div className="mt-2 flex -space-x-1.5">
+                {['R', 'S', 'K', 'O'].map((c, i) => (
+                  <span key={c} className={`w-6 h-6 rounded-full text-[9px] font-bold text-white grid place-items-center border-2 border-white ${['bg-[#a325fc]', 'bg-[#1aaf50]', 'bg-[#86cefc]', 'bg-[#d4428f]'][i]}`}>{c}</span>
+                ))}
+              </div>
+              <div className="text-[9px] text-slate-400 mt-1.5">4 people · 74 tasks run</div>
+            </div>
+          </div>
+          <div className="mt-3 rounded-xl border border-slate-200 p-3">
+            <div className="text-[10px] font-medium text-slate-500 mb-2">Recent runs</div>
+            {[['Drafted reminder for INV-0031', '2m'], ['Flagged Om Sai Traders · 111 days', '1h'], ['Aging report requested', '3h']].map(([t, w]) => (
+              <div key={t} className="flex items-center justify-between text-[10px] text-slate-500 py-1 border-t border-slate-50 first:border-0">
+                <span className="flex items-center gap-1.5"><CheckCircle2 size={10} className="text-emerald-500" />{t}</span><span className="text-slate-300">{w}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* right rail */}
+        <div className="border-l border-slate-100 bg-white p-3.5">
+          <div className="flex gap-3 text-[11px] font-medium border-b border-slate-100 pb-2 mb-3">
+            <span className="text-slate-900 border-b-2 border-slate-900 pb-1.5 -mb-2">Agent</span>
+            <span className="text-slate-400">Settings</span>
+          </div>
+          <div className="text-[10px] font-semibold text-slate-500 mb-1.5">Agent Preferences</div>
+          <div className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] text-slate-600 flex items-center justify-between">✨ Nova Pro <span className="text-slate-300">▾</span></div>
+          <div className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] text-slate-400 mt-1.5 h-10">Add instructions…</div>
+          <div className="text-[10px] font-semibold text-slate-500 mt-4 mb-1.5 flex justify-between">Triggers <span className="text-slate-300">+ Add</span></div>
+          {[['Daily receivables digest', 'At 09:00, Mon–Fri'], ['New invoice parsed', 'Polls uploads · every 5m']].map(([t, s]) => (
+            <div key={t} className="rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5 mb-1.5">
+              <div className="text-[10px] font-medium text-slate-600">{t}</div>
+              <div className="text-[9px] text-slate-400">{s}</div>
+            </div>
+          ))}
+          <div className="text-[10px] font-semibold text-slate-500 mt-4 mb-1.5 flex justify-between">Connectors <span className="text-slate-300">+ Add</span></div>
+          {['Google Calendar', 'Airtable', 'WhatsApp'].map(c => (
+            <div key={c} className="text-[10px] text-slate-500 py-1 flex items-center gap-1.5"><PlugZap size={9} className="text-slate-300" />{c}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Landing() {
   return (
-    <div className="bg-white text-slate-800">
+    <div className="bg-white text-slate-800 font-sans">
+
+      {/* ── announcement banner ── */}
+      <div className="bg-ink text-white text-center text-[13px] py-2 relative">
+        Built on AWS Bedrock + Strands Agents for <b>First Commit</b> hackathon
+        <a href="#/docs" className="underline underline-offset-2 ml-2 text-white/80 hover:text-white">Learn more</a>
+        <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"><X size={14} /></button>
+      </div>
+
       {/* ── nav ── */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <a href="#/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-brand text-white grid place-items-center font-bold text-sm">स</div>
-            <span className="font-bold text-brand tracking-tight">Sahayak AI</span>
+      <nav className="sticky top-0 z-50 bg-white/85 backdrop-blur border-b border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 h-[52px] flex items-center justify-between">
+          <a href="#/" className="flex items-center gap-2">
+            <Blobs />
+            <span className="font-semibold text-[15px] tracking-tight text-ink">Sahayak</span>
           </a>
-          <div className="hidden md:flex items-center gap-7 text-sm text-slate-500">
-            <a href="#features" className="hover:text-brand transition">Features</a>
-            <a href="#how" className="hover:text-brand transition">How it works</a>
-            <a href="#team" className="hover:text-brand transition">Agents</a>
-            <a href="#/docs" className="hover:text-brand transition">Docs</a>
+          <div className="hidden md:flex items-center gap-8 text-[13.5px] text-slate-600">
+            <a href="#features" className="hover:text-ink transition">Product</a>
+            <a href="#team" className="hover:text-ink transition">Agents</a>
+            <a href="#controls" className="hover:text-ink transition">Controls</a>
+            <a href="#/docs" className="hover:text-ink transition">Docs</a>
           </div>
-          <a href="#/app"
-            className="text-sm font-medium bg-brand text-white rounded-full px-4 py-2 hover:bg-brand/90 transition flex items-center gap-1.5">
-            Open app <ArrowRight size={14} />
-          </a>
+          <div className="flex items-center gap-2">
+            <a href="#/docs" className="text-[13px] font-medium border border-slate-300 rounded-lg px-3.5 py-1.5 hover:bg-slate-50 transition">Read docs</a>
+            <a href="#/app" className="text-[13px] font-medium bg-ink text-white rounded-lg px-3.5 py-1.5 hover:bg-ink/85 transition">Get Started</a>
+          </div>
         </div>
       </nav>
 
-      {/* ── hero ── */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-sky/30 via-white to-white" />
-        <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-8 text-center">
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand bg-sky/30 border border-sky rounded-full px-3 py-1.5">
-              <Sparkles size={12} /> Powered by AWS Bedrock · Strands Agents
-            </span>
-          </motion.div>
-          <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.08 }}
-            className="mt-6 text-5xl md:text-7xl font-medium tracking-tight text-slate-900 leading-[1.02]">
-            Your business,<br />
-            <span className="text-brand">staffed by AI agents.</span>
-          </motion.h1>
-          <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.16 }}
-            className="mt-5 text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
-            One chat for invoices, suppliers and cash flow. And when a problem has no specialist,
-            Sahayak <em>hires one</em> — live, in front of you.
-          </motion.p>
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.24 }}
-            className="mt-8 flex items-center justify-center gap-3">
-            <a href="#/app" className="bg-brand text-white rounded-full px-6 py-3 text-sm font-medium hover:bg-brand/90 transition flex items-center gap-2">
-              Try the live demo <ArrowRight size={15} />
-            </a>
-            <a href="#/docs" className="rounded-full px-6 py-3 text-sm font-medium border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition">
-              Read the docs
-            </a>
-          </motion.div>
+      {/* ── hero — left aligned, gumloop style ── */}
+      <section className="max-w-6xl mx-auto px-6 pt-14 pb-10">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
+          <Blobs size="lg" />
+        </motion.div>
+        <motion.h1 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }}
+          className="mt-5 text-[44px] md:text-[64px] leading-[1.02] font-medium tracking-[-0.03em] text-ink max-w-3xl">
+          Chat, hire &amp; control your AI staff
+        </motion.h1>
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.16 }}
+          className="mt-7 flex items-center gap-3">
+          <a href="#/app" className="bg-ink text-white rounded-xl px-6 py-3 text-sm font-medium hover:bg-ink/85 transition">Get Started</a>
+          <a href="#demo" className="border border-slate-300 rounded-xl px-6 py-3 text-sm font-medium hover:bg-slate-50 transition">See it work</a>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 36 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.28 }}
+          className="mt-12">
+          <AppMockup />
+        </motion.div>
+      </section>
 
-          {/* product mockup — pure CSS, no assets */}
-          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.35 }}
-            className="mt-14 mx-auto max-w-4xl">
-            <div className="rounded-2xl shadow-float-lg bg-white border border-slate-200 overflow-hidden text-left">
-              <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-300" /><span className="w-2.5 h-2.5 rounded-full bg-amber-300" /><span className="w-2.5 h-2.5 rounded-full bg-emerald-300" />
-                <span className="ml-3 text-[11px] text-slate-400 bg-white border border-slate-200 rounded-md px-2 py-0.5">sahayak.ai/app</span>
+      {/* ── proof strip ── */}
+      <section className="border-t border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 py-14 grid md:grid-cols-2 gap-10 items-center">
+          <div>
+            <h2 className="text-2xl md:text-[28px] font-medium tracking-tight text-ink leading-snug">
+              The agent back-office powering India&#8217;s smallest businesses
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 gap-8">
+            {[['₹1.9L', 'Overdue tracked'], ['4→5', 'Agents — one hired live'], ['18/18', 'Demo checks on AWS'], ['0', 'Actions without approval']].map(([v, l]) => (
+              <div key={l}>
+                <div className="text-[13px] text-slate-400">{l}</div>
+                <div className="text-3xl font-medium tracking-tight text-ink mt-1">{v}</div>
               </div>
-              <div className="grid md:grid-cols-[1fr_220px]">
-                <div className="p-5 space-y-3">
-                  <div className="flex justify-end"><div className="bg-brand text-white text-xs rounded-2xl rounded-br-md px-3.5 py-2 max-w-[70%]">mera transporter nahi aaya 😰</div></div>
-                  <div className="flex"><div className="bg-slate-50 border border-slate-100 text-xs rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%]">
-                    <div className="text-[9px] font-semibold uppercase tracking-wide text-accent mb-1">sahayak → nirmata · एजेंट बनाने वाला</div>
-                    Here's the specialist I'd hire — <b>Logistics Agent</b>: finds backup carriers, quotes & books pickups. Say <b>haan</b> and I'll hire it.
-                  </div></div>
-                  <div className="flex justify-end"><div className="bg-brand text-white text-xs rounded-2xl rounded-br-md px-3.5 py-2">haan, create it</div></div>
-                  <div className="flex"><div className="bg-slate-50 border border-slate-100 text-xs rounded-2xl rounded-bl-md px-3.5 py-2 max-w-[80%]">
-                    Done — <b>Logistics Agent</b> is live on your dashboard. <span className="text-brand">✨ Hired by AI</span>
-                  </div></div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── "Build →" section — sidebar label + agent shot ── */}
+      <section id="features" className="max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-[280px_1fr] gap-12">
+        <div>
+          <div className="text-[13px] text-slate-400 mb-3">Product →</div>
+          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-ink leading-tight">
+            Let your experts build the agents
+          </h2>
+          <p className="text-sm text-slate-500 mt-4 leading-relaxed">
+            Understanding a problem is the only prerequisite to automating it. Describe it once —
+            Nirmata drafts the specialist, you approve, it joins the team.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <a href="#/app" className="bg-ink text-white rounded-xl px-4 py-2.5 text-[13px] font-medium">Explore agents</a>
+            <a href="#/docs" className="border border-slate-300 rounded-xl px-4 py-2.5 text-[13px] font-medium">Read docs</a>
+          </div>
+          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5">
+            {[
+              [Zap, 'Alert triggers'], [Puzzle, 'Connectors'],
+              [FileText, 'Invoice parsing'], [Repeat2, 'Recurring tasks'],
+              [BrainCircuit, 'Skills via tools'], [TrendingUp, 'Self-improving team'],
+            ].map(([I, t]) => (
+              <div key={t} className="flex items-center gap-2.5 text-[13px] text-slate-600"><I size={14} className="text-slate-400" />{t}</div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 shadow-float overflow-hidden bg-white">
+          <div className="grid grid-cols-[90px_1fr]">
+            <div className="bg-[#fbfbfd] border-r border-slate-100 p-3 space-y-4">
+              {[['Sales', 'bg-[#a325fc]'], ['Support', 'bg-slate-300'], ['Data', 'bg-slate-300'], ['Ops', 'bg-slate-300'], ['Calls', 'bg-slate-300']].map(([l, c], i) => (
+                <div key={l} className="flex flex-col items-center gap-1">
+                  <span className={`w-6 h-6 rounded-lg ${c}`} />
+                  <span className={`text-[9px] ${i === 0 ? 'text-slate-900 font-medium' : 'text-slate-400'}`}>{l}</span>
                 </div>
-                <div className="hidden md:block border-l border-slate-100 bg-cream/60 p-4 space-y-2">
-                  <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Your team</div>
-                  {['Vasool · पैसा वसूलने वाला', 'Sourcer · सही दाम पे सामान', 'Khata · कैश का हिसाब'].map(t => (
-                    <div key={t} className="bg-white rounded-xl border border-slate-150 border-slate-200 px-3 py-2 text-[11px] font-medium">{t}</div>
-                  ))}
-                  <div className="bg-sky/30 rounded-xl border border-accent/40 px-3 py-2 text-[11px] font-medium text-brand">
-                    Logistics Agent <span className="text-[8px] font-bold text-accent">HIRED BY AI</span>
+              ))}
+            </div>
+            <div className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#a325fc] grid place-items-center"><Package size={16} className="text-white" /></div>
+                <div>
+                  <div className="font-semibold text-[15px]">Sourcer</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">Supplier search, price compare and vendor trust across your buys.</div>
+                  <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2"><Sparkles size={10} className="text-amber-500" /> Nova Lite <span className="text-slate-300">+3 tools</span></div>
+                </div>
+              </div>
+              <div className="mt-5 space-y-2.5">
+                <div className="flex items-center gap-2 text-[11px]"><span className="w-5 h-5 rounded-full bg-[#1aaf50] text-white grid place-items-center text-[8px] font-bold">R</span><span className="text-slate-500">Find steel coils under ₹65/kg, 500kg MOQ max</span></div>
+                <div className="rounded-lg bg-slate-50 border border-slate-100 p-3">
+                  <div className="text-[10px] text-slate-400 space-y-1">
+                    <div>→ Searching catalog · 6 suppliers</div>
+                    <div>→ Cross-checking trust scores</div>
+                  </div>
+                  <div className="mt-2 text-[11px] font-medium text-slate-700">Best: Balaji Steel — ₹62/kg, MOQ 500, trust 4.2★</div>
+                  <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden">
+                    <table className="w-full text-[10px]">
+                      <thead className="bg-slate-50 text-slate-400"><tr>{['Supplier', 'Price', 'MOQ', 'Trust'].map(h => <th key={h} className="text-left px-2 py-1.5 font-medium">{h}</th>)}</tr></thead>
+                      <tbody className="divide-y divide-slate-50 text-slate-600">
+                        {[['Balaji Steel', '₹62', '500', '4.2'], ['Apex Alloys', '₹64', '1000', '3.8'], ['Khanna Metals', '₹59', '2000', '2.1']].map(r => (
+                          <tr key={r[0]}>{r.map((c, i) => <td key={i} className={`px-2 py-1.5 ${i === 3 && parseFloat(c) < 3 ? 'text-rose-500 font-medium' : ''}`}>{c}</td>)}</tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
             </div>
-          </motion.div>
-        </div>
-
-        {/* connector marquee */}
-        <div className="relative border-y border-slate-100 bg-white/60 py-4 overflow-hidden">
-          <div className="flex gap-10 whitespace-nowrap animate-marquee w-max">
-            {[...CONNECTORS, ...CONNECTORS].map((c, i) => (
-              <span key={i} className="text-sm text-slate-400 font-medium flex items-center gap-2">
-                <PlugZap size={13} className="text-accent/60" /> {c}
-              </span>
-            ))}
           </div>
         </div>
       </section>
 
-      {/* ── stats ── */}
-      <section className="max-w-6xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {[['₹1.9L', 'overdue tracked for one demo business'], ['4→5', 'specialists — one hired live by AI'], ['100%', 'actions draft-only until approved'], ['11', 'DynamoDB collections on AWS']].map(([v, l]) => (
-            <div key={l} className="text-center">
-              <div className="text-3xl font-medium text-brand tracking-tight">{v}</div>
-              <div className="text-xs text-slate-500 mt-1">{l}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── features bento ── */}
-      <section id="features" className="bg-cream/70 border-y border-slate-100">
+      {/* ── context section — 3 cards ── */}
+      <section className="border-t border-slate-100">
         <div className="max-w-6xl mx-auto px-6 py-20">
-          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-slate-900">Built for owners, not operators</h2>
-          <p className="text-slate-500 mt-3 max-w-xl">Micro and small businesses don't need an ERP. They need a back-office that speaks their language and does the chasing.</p>
+          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-ink">Complete context on your business</h2>
+          <p className="text-sm text-slate-500 mt-3 max-w-lg">Your invoices, suppliers, carriers and cash flow connect into one business brain every agent shares.</p>
           <div className="mt-10 grid md:grid-cols-3 gap-4">
-            {FEATURES.map((f, i) => (
-              <motion.div key={f.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }}
-                className={`rounded-2xl bg-white border border-slate-200 p-6 shadow-float hover:shadow-float-lg transition-shadow ${f.big ? 'md:col-span-2 bg-gradient-to-br from-white to-sky/20' : ''}`}>
-                <f.icon size={20} className="text-accent" />
-                <h3 className="mt-3 font-semibold text-slate-900">{f.title}</h3>
-                <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{f.desc}</p>
-              </motion.div>
-            ))}
+            <div className="rounded-2xl border border-slate-200 bg-[#fbfbfd] p-6 shadow-float min-h-[220px] flex flex-col justify-end">
+              <div className="flex-1 grid place-items-center">
+                <div className="relative w-28 h-28">
+                  <span className="absolute inset-0 rounded-full border border-dashed border-slate-300" />
+                  <span className="absolute inset-4 rounded-full border border-slate-200" />
+                  <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-ink text-white grid place-items-center"><BrainCircuit size={14} /></span>
+                  {[0, 60, 120, 180, 240, 300].map(deg => (
+                    <span key={deg} className="absolute w-4 h-4 rounded-md bg-white border border-slate-200 shadow-sm"
+                      style={{ top: `${50 + 42 * Math.sin(deg * Math.PI / 180)}%`, left: `${50 + 42 * Math.cos(deg * Math.PI / 180)}%`, transform: 'translate(-50%,-50%)' }} />
+                  ))}
+                </div>
+              </div>
+              <div><div className="font-semibold text-sm">Business knowledge</div><p className="text-xs text-slate-500 mt-1">Connect your ledger, suppliers and carriers into a brain every agent shares.</p></div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-[#fbfbfd] p-6 shadow-float min-h-[220px] flex flex-col justify-end">
+              <div className="flex-1 space-y-2">
+                {[['List overdue invoices', 'tool'], ['Draft reminder', 'draft-only'], ['Schedule alert', 'approved']].map(([t, s]) => (
+                  <div key={t} className="rounded-lg bg-white border border-slate-150 border-slate-200 px-3 py-2 text-[11px] flex justify-between items-center">
+                    <span className="font-medium text-slate-600">{t}</span><span className="text-[9px] text-slate-400">{s}</span>
+                  </div>
+                ))}
+              </div>
+              <div><div className="font-semibold text-sm">Skills via tools</div><p className="text-xs text-slate-500 mt-1">Agents only ever use tools you allow — no free-ranging, ever.</p></div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-[#fbfbfd] p-6 shadow-float min-h-[220px] flex flex-col justify-end">
+              <div className="flex-1 space-y-2">
+                {[['Reminder sent · Sharma Motors', '2m'], ['Logistics Agent hired', '1h'], ['₹58K gap flagged', '3h']].map(([t, w]) => (
+                  <div key={t} className="text-[11px] flex justify-between items-center border-b border-slate-100 pb-1.5 last:border-0">
+                    <span className="text-slate-600">{t}</span><span className="text-slate-300">{w}</span>
+                  </div>
+                ))}
+              </div>
+              <div><div className="font-semibold text-sm">Live activity</div><p className="text-xs text-slate-500 mt-1">See which agent did what, when — full audit trail, always.</p></div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── how it works ── */}
-      <section id="how" className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-slate-900">Three steps. No training.</h2>
-        <div className="mt-10 grid md:grid-cols-3 gap-4">
-          {STEPS.map(s => (
-            <div key={s.n} className="rounded-2xl border border-slate-200 p-6 shadow-float">
-              <div className="text-xs font-bold text-accent">{s.n}</div>
-              <h3 className="mt-2 font-semibold text-slate-900">{s.title}</h3>
-              <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{s.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── agents ── */}
-      <section id="team" className="bg-cream/70 border-y border-slate-100">
+      {/* ── dark "Controls →" section ── */}
+      <section id="controls" className="bg-ink text-white">
         <div className="max-w-6xl mx-auto px-6 py-20">
-          <div className="flex items-end justify-between flex-wrap gap-4">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-slate-900">Meet the team</h2>
-              <p className="text-slate-500 mt-3 max-w-xl">Three specialists on day one. Nirmata hires the rest — whatever your business needs.</p>
+          <div className="text-[13px] text-white/40 mb-3">Controls →</div>
+          <h2 className="text-3xl md:text-4xl font-medium tracking-tight">Owner-grade controls</h2>
+          <div className="mt-10 grid md:grid-cols-2 gap-4">
+            <div className="rounded-2xl bg-ink-2 border border-white/10 p-6">
+              <div className="grid grid-cols-3 gap-4 text-center mb-4">
+                {[['74', 'tasks run'], ['₹74.2K', 'recovered'], ['86%', 'approved first-try']].map(([v, l]) => (
+                  <div key={l}><div className="text-[10px] text-white/40">{l}</div><div className="text-lg font-medium mt-0.5">{v}</div></div>
+                ))}
+              </div>
+              <div className="h-28">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={spend}><Line type="monotone" dataKey="v" stroke="#d4428f" strokeWidth={1.5} dot={false} /></LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 font-semibold text-sm">Usage monitoring</div>
+              <p className="text-xs text-white/50 mt-1 leading-relaxed">Every agent run, every tool call, tracked per business — spend and activity you can actually see.</p>
             </div>
-            <a href="#/app" className="text-sm font-medium text-brand flex items-center gap-1.5 hover:gap-2.5 transition-all">See them work <ArrowRight size={14} /></a>
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-ink-2 border border-white/10 p-6">
+                <div className="text-[10px] text-white/40 mb-2 flex items-center gap-1.5"><Eye size={11} /> Capturing…</div>
+                {[['Ramesh approved reminder → Sharma Motors', ''], ['Nirmata published the Logistics Agent', ''], ['Khata updated the 90-day gap flag', '']].map(([t]) => (
+                  <div key={t} className="text-[11px] text-white/70 py-1 flex items-center gap-2"><CheckCircle2 size={11} className="text-emerald-400" />{t}</div>
+                ))}
+                <div className="mt-3 font-semibold text-sm">Audit logging</div>
+                <p className="text-xs text-white/50 mt-1 leading-relaxed">Detailed trails for every action across the team — where data flows, who approved what.</p>
+              </div>
+              <div className="rounded-2xl bg-ink-2 border border-white/10 p-6">
+                <div className="font-semibold text-sm">Runs on AWS</div>
+                <p className="text-xs text-white/50 mt-1 leading-relaxed">Bedrock, DynamoDB, S3 and SES — your data stays in your tenant, in your region.</p>
+              </div>
+            </div>
           </div>
-          <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {AGENTS.map(a => (
-              <div key={a.name} className="rounded-2xl bg-white border border-slate-200 p-5 shadow-float hover:-translate-y-1 transition-transform">
-                <a.icon size={20} className="text-accent" />
-                <h3 className="mt-3 font-semibold">{a.name}</h3>
-                <div className="text-[11px] text-accent font-medium">{a.tag}</div>
-                <p className="mt-2 text-xs text-slate-500 leading-relaxed">{a.desc}</p>
-                <div className="mt-3 text-[10px] text-slate-400">{a.tools}</div>
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-5 gap-8">
+            {[
+              [Lock, 'Owner approvals', 'Every outward action is a draft until you say haan.'],
+              [ShieldCheck, 'Tool allowlists', 'Each agent sees only the tools you gave it.'],
+              [Layers, 'Draft-only mode', 'Reminders, bookings, orders — proposed, never sent.'],
+              [Eye, 'Tenant isolation', 'Your books are yours — hard-walled per business.'],
+              [FileText, 'No invented figures', 'Agents answer from real ledger data or not at all.'],
+            ].map(([I, t, d]) => (
+              <div key={t}>
+                <I size={16} className="text-white/50" />
+                <div className="text-[13px] font-semibold mt-2">{t}</div>
+                <p className="text-[11px] text-white/45 mt-1 leading-relaxed">{d}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── faq ── */}
-      <section className="max-w-3xl mx-auto px-6 py-20">
-        <h2 className="text-3xl font-medium tracking-tight text-slate-900 text-center">Questions</h2>
-        <div className="mt-8 space-y-3">
-          {FAQ.map(f => (
-            <details key={f.q} className="group rounded-2xl border border-slate-200 bg-white shadow-float open:shadow-float-lg transition-shadow">
-              <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium flex items-center justify-between">
-                {f.q}
-                <span className="text-slate-300 group-open:rotate-45 transition-transform text-lg leading-none">+</span>
-              </summary>
-              <p className="px-5 pb-4 text-sm text-slate-500 leading-relaxed">{f.a}</p>
-            </details>
+      {/* ── agents strip ── */}
+      <section id="team" className="max-w-6xl mx-auto px-6 py-20">
+        <div className="flex items-end justify-between flex-wrap gap-4">
+          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-ink">Meet your team where they work</h2>
+          <a href="#/app" className="text-[13px] font-medium text-ink flex items-center gap-1.5 hover:gap-2.5 transition-all">See them work <ArrowRight size={14} /></a>
+        </div>
+        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            [Receipt, 'Vasool', 'पैसा वसूलने वाला', 'Receivables & reminders', '#a325fc'],
+            [Package, 'Sourcer', 'सही दाम पे सामान', 'Suppliers & trust', '#1aaf50'],
+            [Wallet, 'Khata', 'कैश का हिसाब', 'Cash-flow & 90-day traps', '#86cefc'],
+            [Factory, 'Nirmata', 'एजेंट बनाने वाला', 'Hires new specialists', '#d4428f'],
+          ].map(([I, n, tag, d, c]) => (
+            <div key={n} className="rounded-2xl border border-slate-200 p-5 shadow-float hover:-translate-y-1 transition-transform bg-white">
+              <div className="w-8 h-8 rounded-xl grid place-items-center" style={{ background: c }}><I size={15} className="text-white" /></div>
+              <h3 className="mt-3 font-semibold text-[15px]">{n}</h3>
+              <div className="text-[11px] font-medium" style={{ color: c }}>{tag}</div>
+              <p className="mt-2 text-xs text-slate-500">{d}</p>
+            </div>
           ))}
         </div>
       </section>
 
       {/* ── cta ── */}
-      <section className="max-w-6xl mx-auto px-6 pb-20">
-        <div className="rounded-3xl bg-brand text-white px-8 py-14 text-center shadow-float-lg relative overflow-hidden">
-          <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-accent/20 blur-3xl" />
-          <div className="absolute -bottom-24 -left-16 w-72 h-72 rounded-full bg-sky/10 blur-3xl" />
+      <section className="max-w-6xl mx-auto px-6 pb-20" id="demo">
+        <div className="rounded-3xl bg-ink text-white px-8 py-16 text-center relative overflow-hidden">
+          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-[#a325fc]/20 blur-3xl" />
+          <div className="absolute -bottom-28 -left-20 w-80 h-80 rounded-full bg-[#86cefc]/10 blur-3xl" />
           <h2 className="relative text-3xl md:text-4xl font-medium tracking-tight">Stop chasing. Start delegating.</h2>
-          <p className="relative mt-3 text-sky/80 text-sm max-w-md mx-auto">The demo is live — seeded with Ramesh Auto Components, a real-feeling Faridabad manufacturer.</p>
+          <p className="relative mt-3 text-white/50 text-sm max-w-md mx-auto">Live demo, seeded with Ramesh Auto Components — a Faridabad manufacturer with very real problems.</p>
           <div className="relative mt-7 flex items-center justify-center gap-3">
-            <a href="#/app" className="bg-white text-brand rounded-full px-6 py-3 text-sm font-semibold hover:bg-sky/40 transition flex items-center gap-2">
-              Open the app <ArrowRight size={15} />
-            </a>
-            <a href="#/docs" className="rounded-full px-6 py-3 text-sm font-medium border border-white/30 hover:bg-white/10 transition">Docs</a>
+            <a href="#/app" className="bg-white text-ink rounded-xl px-6 py-3 text-sm font-semibold hover:bg-white/90 transition flex items-center gap-2">Open the app <ArrowRight size={15} /></a>
+            <a href="#/docs" className="rounded-xl px-6 py-3 text-sm font-medium border border-white/20 hover:bg-white/10 transition">Docs</a>
           </div>
         </div>
       </section>
@@ -236,11 +390,11 @@ export default function Landing() {
       {/* ── footer ── */}
       <footer className="border-t border-slate-100">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 text-sm text-slate-500">
-            <div className="w-6 h-6 rounded-lg bg-brand text-white grid place-items-center text-[10px] font-bold">स</div>
-            Sahayak AI · First Commit hackathon · Fahmin × Ayush
+          <div className="flex items-center gap-2.5 text-[13px] text-slate-500">
+            <Blobs />
+            Sahayak · First Commit hackathon · Fahmin × Ayush
           </div>
-          <div className="flex items-center gap-4 text-xs text-slate-400">
+          <div className="flex items-center gap-4 text-[11px] text-slate-400">
             {['Bedrock', 'Strands', 'DynamoDB', 'S3', 'SES', 'Lambda'].map(s => (
               <span key={s} className="flex items-center gap-1"><CheckCircle2 size={11} className="text-emerald-500" />{s}</span>
             ))}
