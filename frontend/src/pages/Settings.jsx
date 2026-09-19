@@ -6,9 +6,11 @@ import { CloudSync } from '../components/rui/CloudSync.jsx'
 import { Can } from '../components/rui/Can.jsx'
 import { AccessRings } from '../components/rui/Circles.jsx'
 import { useRole, role, ROLES } from '../lib/role.js'
+import { a11y } from '../lib/a11y.js'
 import {
   ArrowLeft, Building2, SlidersHorizontal, PlugZap, Braces, Server,
   CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store, ShieldCheck,
+  Sun, Moon, Accessibility, Contrast, Zap, Type,
 } from 'lucide-react'
 
 const SKILL_GROUPS = [
@@ -28,6 +30,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
+  const [vis, setVis] = useState(() => a11y.get())
   const fileRef = useRef(null)
   const currentRole = useRole()
   const [syncing, setSyncing] = useState(false)
@@ -90,6 +93,75 @@ export default function Settings() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+
+        {/* accessibility & appearance */}
+        <section>
+          <SectionHead icon={Accessibility} title="Accessibility & appearance"
+            sub={<span className="text-[10px] text-slate-400">Built for owners of every age — applies instantly, everywhere</span>} />
+          <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-50">
+            {/* theme */}
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                {vis.theme === 'dark' ? <Moon size={14} className="text-accent" /> : <Sun size={14} className="text-accent" />}
+                <div>
+                  <div className="text-[13px] font-medium text-ink">Theme</div>
+                  <div className="text-[10px] text-slate-400">Dark mode is easier on the eyes at night</div>
+                </div>
+              </div>
+              <div className="flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
+                {[['light', 'Light', Sun], ['dark', 'Dark', Moon]].map(([k, l, I]) => (
+                  <button key={k} onClick={() => setVis(a11y.set({ theme: k }))}
+                    className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-medium transition
+                      ${vis.theme === k ? 'bg-ink text-white shadow-sm' : 'text-slate-500 hover:text-ink'}`}>
+                    <I size={11} /> {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* text size */}
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <Type size={14} className="text-accent" />
+                <div>
+                  <div className="text-[13px] font-medium text-ink">Text size</div>
+                  <div className="text-[10px] text-slate-400">Bigger text across the whole app — for comfortable reading</div>
+                </div>
+              </div>
+              <div className="flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
+                {[['normal', 'A', '14px'], ['large', 'A+', '17px'], ['xl', 'A++', '20px']].map(([k, l, px]) => (
+                  <button key={k} onClick={() => setVis(a11y.set({ font: k }))}
+                    className={`rounded-full px-3.5 py-1.5 font-semibold transition
+                      ${vis.font === k ? 'bg-ink text-white shadow-sm' : 'text-slate-500 hover:text-ink'}`}
+                    style={{ fontSize: k === 'normal' ? 11 : k === 'large' ? 13 : 15 }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* high contrast */}
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <Contrast size={14} className="text-accent" />
+                <div>
+                  <div className="text-[13px] font-medium text-ink">High contrast</div>
+                  <div className="text-[10px] text-slate-400">Stronger text and borders — easier to read labels</div>
+                </div>
+              </div>
+              <Toggle on={vis.contrast === 'high'} onClick={() => setVis(a11y.set({ contrast: vis.contrast === 'high' ? 'normal' : 'high' }))} />
+            </div>
+            {/* reduced motion */}
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <Zap size={14} className="text-accent" />
+                <div>
+                  <div className="text-[13px] font-medium text-ink">Reduce motion</div>
+                  <div className="text-[10px] text-slate-400">Calms animations, pulses and transitions</div>
+                </div>
+              </div>
+              <Toggle on={vis.motion === 'reduced'} onClick={() => setVis(a11y.set({ motion: vis.motion === 'reduced' ? 'full' : 'reduced' }))} />
+            </div>
+          </div>
+        </section>
 
         {/* business */}
         <section>
@@ -335,4 +407,11 @@ const Field = ({ label, children }) => (
     <span className="text-[11px] font-medium text-slate-500 block mb-1.5">{label}</span>
     {children}
   </label>
+)
+
+const Toggle = ({ on, onClick }) => (
+  <button onClick={onClick} role="switch" aria-checked={on}
+    className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${on ? 'bg-accent' : 'bg-slate-200'}`}>
+    <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
+  </button>
 )

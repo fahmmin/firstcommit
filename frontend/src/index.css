@@ -42,3 +42,61 @@ html { scroll-behavior: smooth; }
 .animate-ringBreathe { animation: ringBreathe 2.4s ease-in-out infinite; }
 @keyframes drawline { to { stroke-dashoffset: 0; } }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── accessibility: font zoom (px-safe via zoom, works with Tailwind literals) ── */
+html[data-font="large"] body { zoom: 1.14; }
+html[data-font="xl"] body { zoom: 1.28; }
+
+/* ── accessibility: high contrast ── */
+html[data-contrast="high"] .text-slate-400 { color: #475569; }
+html[data-contrast="high"] .text-slate-500 { color: #334155; }
+html[data-contrast="high"] .border-slate-100,
+html[data-contrast="high"] .border-slate-200 { border-color: #94a3b8; }
+html[data-contrast="high"] .shadow-float,
+html[data-contrast="high"] .shadow-float-lg { box-shadow: 0 0 0 1.5px rgb(0 0 0 / .18); }
+
+/* ── accessibility: reduced motion ── */
+html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after {
+  animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important; scroll-behavior: auto !important;
+}
+
+/* ── dark theme — override layer over the utilities the app uses ── */
+html[data-theme="dark"] body { background: #0e1117; color: #c6cedd; }
+html[data-theme="dark"] .bg-\[\#fbfbfd\] { background-color: #0e1117; }
+html[data-theme="dark"] .bg-white { background-color: #161a23; }
+html[data-theme="dark"] .bg-white\/85 { background-color: rgb(22 26 35 / .85); }
+html[data-theme="dark"] .bg-white\/15 { background-color: rgb(255 255 255 / .08); }
+html[data-theme="dark"] .bg-slate-50, html[data-theme="dark"] .bg-slate-50\/60 { background-color: #1a2029; }
+html[data-theme="dark"] .bg-slate-100 { background-color: #222a37; }
+html[data-theme="dark"] .text-ink { color: #e9ecf3; }
+html[data-theme="dark"] .text-slate-800, html[data-theme="dark"] .text-slate-700 { color: #c6cedd; }
+html[data-theme="dark"] .text-slate-600 { color: #98a2b5; }
+html[data-theme="dark"] .text-slate-500 { color: #7d8799; }
+html[data-theme="dark"] .text-slate-400 { color: #5f6a7d; }
+html[data-theme="dark"] .text-slate-300 { color: #4a5568; }
+html[data-theme="dark"] .border-slate-300 { border-color: #333d4e; }
+html[data-theme="dark"] .border-slate-200 { border-color: #262d3a; }
+html[data-theme="dark"] .border-slate-100 { border-color: #1f2632; }
+html[data-theme="dark"] .divide-slate-50 > * + * { border-color: #1f2632; }
+html[data-theme="dark"] .divide-slate-100 > * + * { border-color: #1f2632; }
+/* dark buttons — bg-ink surfaces flip to light, their white text flips to ink */
+html[data-theme="dark"] .bg-ink { background-color: #e9ecf3; }
+html[data-theme="dark"] .bg-ink.text-white, html[data-theme="dark"] .bg-ink .text-white { color: #14171f; }
+html[data-theme="dark"] .bg-ink\/5 { background-color: rgb(233 236 243 / .08); }
+html[data-theme="dark"] .bg-ink\/15 { background-color: rgb(233 236 243 / .15); }
+html[data-theme="dark"] .hover\:bg-slate-100:hover, html[data-theme="dark"] .hover\:bg-slate-50:hover { background-color: #222a37; }
+html[data-theme="dark"] .hover\:bg-ink\/85:hover { background-color: rgb(233 236 243 / .85); }
+html[data-theme="dark"] .hover\:text-ink:hover { color: #e9ecf3; }
+html[data-theme="dark"] .hover\:border-ink:hover { border-color: #5f6a7d; }
+html[data-theme="dark"] .hover\:border-ink\/40:hover { border-color: rgb(233 236 243 / .4); }
+html[data-theme="dark"] .focus-within\:border-ink:focus-within,
+html[data-theme="dark"] .focus\:border-ink:focus { border-color: #5f6a7d; }
+html[data-theme="dark"] .focus-within\:border-slate-400:focus-within { border-color: #4a5568; }
+/* terminal/dark surfaces (logs, trace pills) stay dark — no change needed */
+html[data-theme="dark"] .scroll-thin::-webkit-scrollbar-thumb { background: #333d4e; }
+html[data-theme="dark"] input::placeholder { color: #5f6a7d; }
+html[data-theme="dark"][data-contrast="high"] .text-slate-400 { color: #9aa5b8; }
+html[data-theme="dark"][data-contrast="high"] .text-slate-500 { color: #aab3c2; }
+html[data-theme="dark"][data-contrast="high"] .border-slate-100,
+html[data-theme="dark"][data-contrast="high"] .border-slate-200 { border-color: #4a5568; }

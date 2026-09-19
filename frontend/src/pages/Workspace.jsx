@@ -12,10 +12,12 @@ import { LinkifiedText, LinkPreviewCard, extractUrls } from '../components/rui/L
 import { NavIndicator } from '../components/rui/NavIndicator.jsx'
 import { BrandIcon } from '../components/BrandIcon.jsx'
 import { TEMPLATES } from '../lib/templates.js'
+import { a11y } from '../lib/a11y.js'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
   Braces, Server, ScrollText, Paperclip, Globe, MessageSquare, Telescope, ImageIcon,
+  Moon, Sun,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -51,6 +53,7 @@ export default function Workspace() {
   const [mode, setMode] = useState('chat')           // chat | web | deep
   const [files, setFiles] = useState([])             // composer attachments
   const attachRef = useRef(null)
+  const [dark, setDark] = useState(() => a11y.get().theme === 'dark')
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const msgRefs = useRef([])
@@ -242,6 +245,10 @@ export default function Workspace() {
             <Search size={11} className="text-slate-400 shrink-0" />
             <input name="q" placeholder="Search workspace…" className="w-full text-[11px] focus:outline-none bg-transparent" />
           </form>
+          <button onClick={() => setDark(a11y.toggleTheme() === 'dark')} title="Toggle dark mode"
+            className="mt-1 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+            {dark ? <Sun size={13} /> : <Moon size={13} />}
+          </button>
           <a href="#/docs" className="text-[11px] text-slate-400 hover:text-ink flex items-center gap-1 mt-1"><ExternalLink size={11} /> Docs</a>
         </div>
 
