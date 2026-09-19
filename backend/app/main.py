@@ -257,18 +257,22 @@ def demo_reset(tenant_id: str = "ramesh_auto"):
 class LoginReq(BaseModel):
     name: str = "Ramesh Gupta"
     business: str = "Ramesh Auto Components"
+    provider: str = "guest"
+    provider_id: str | None = None
 
 
 @app.post("/auth/login")
 def login(req: LoginReq):
-    """Demo login — no real auth, returns a token + tenant."""
-    biz = (deps.store.get_settings("ramesh_auto") or {}).get("business", {})
-    slug = re.sub(r"[^a-z0-9]+", "", req.name.lower())[:12] or "user"
+    """Demo login — provider adapters are client-side; this resolves tenant + token."""
+    s = deps.store.get_settings("ramesh_auto") or {}
+    biz = s.get("business", {})
+    slug = re.sub(r"[^a-z0-9]+", "", (req.provider_id or req.name).lower())[:12] or "user"
     return {
         "token": f"demo-tok-{slug}",
         "tenant_id": "ramesh_auto",
         "user": {"name": req.name, "business": req.business,
                  "city": biz.get("city", ""), "line": biz.get("line", "")},
+        "onboarded": bool(s.get("onboarded", True)),
     }
 
 
@@ -497,22 +501,36 @@ def settings(tenant_id: str = "ramesh_auto"):
     s = deps.store.get_settings(tenant_id)
     if not s:
         raise HTTPException(404, "no settings seeded")
-    return {"business": s.get("business", {}), "prefs": s.get("prefs", {})}
+    return {
+        "business": s.get("business", {}),
+        "onboarded": s.get("onboarded", True),
+        "prefs": {"disabled_tools": [], **s.get("prefs", {})},
+        "mcp_servers": s.get("mcp_servers", []),
+    }
 
 
 class SettingsPatch(BaseModel):
     tenant_id: str = "ramesh_auto"
     business: dict | None = None
     prefs: dict | None = None
+    onboarded: bool | None = None
+    mcp_servers: list | None = None
 
 
 @app.patch("/settings")
 def patch_settings(req: SettingsPatch):
     cur = deps.store.get_settings(req.tenant_id) or {}
-    deps.store.put_settings(req.tenant_id, {
+    nxt = {
         "business": {**cur.get("business", {}), **(req.business or {})},
         "prefs": {**cur.get("prefs", {}), **(req.prefs or {})},
-    })
+    }
+    for k in ("onboarded", "mcp_servers"):
+        v = getattr(req, k)
+        if v is not None:
+            nxt[k] = v
+        elif k in cur:
+            nxt[k] = cur[k]
+    deps.store.put_settings(req.tenant_id, nxt)
     return {"status": "saved"}
 
 

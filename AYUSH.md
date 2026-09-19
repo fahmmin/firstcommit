@@ -67,7 +67,46 @@ Order them by what unblocks Fahmin's screens fastest:
 `calendar/events` → `connectors` → `settings` → `auth/login` (trivial last).
 Every endpoint gets a contract test; add 2–3 sim steps for the headline ones.
 
-## 5. Deploy — ONLY if `simulate_demo.py` is green
+## 5. Round 2 — demo features (the next few hours, priority order)
+
+New `[TODO]` shapes are already in `contract.json` — build to them exactly.
+MVP rule: **real at the contract + storage layer, thin at external integrations.**
+
+1. **`POST /import/excel`** — `tools/importer.py`. openpyxl → map columns
+   (`invoice_no, buyer, amount, due_date, gst?`) → `store.put_invoice` rows.
+   Unmappable rows → `skipped` count, never 500. Fahmin uploads a pre-made file —
+   generic parsing NOT required. **`openpyxl` is the one pre-approved new dep.**
+2. **`memories` collection + `GET/POST/DELETE /memories` + prompt injection** —
+   THE demo-worthy one. Add `memories` to `Store._COLLECTIONS` (both impls) +
+   2–3 seed rows. Wherever agent system prompts are assembled
+   (`agents/registry.py` spec→prompt builder), append:
+   `"What the owner told you about their business:" + memory lines`.
+   Then Vasool genuinely references "Sharma pays in 45d" — real memory.
+3. **`create_artifact` tool + `artifacts` collection + `GET /artifacts{,/{id}}`** —
+   new `tools/artifacts.py`. Tool sig: `create_artifact(title, template, data)`
+   where `template ∈ {tracking_page, invoice_summary, supplier_compare,
+   payment_card}` — validate `data` per-template (pydantic, lenient: missing
+   optional fields ok, required fields → tool error so the model retries).
+   Give it to ALL agents (registry tool map). When it runs, chat must emit
+   `actions: [{type:"artifact_created", data:{id,title,template,share_path}}]`
+   — same action path `reminder_drafted` uses. **No raw-HTML artifacts** —
+   template-bound only, same philosophy as the card system.
+4. **`GET /search?q=`** — case-insensitive substring over title/desc/meta fields
+   of invoices(buyer,invoice_no), suppliers(name,category), carriers(name,route),
+   agents(name,goal), tasks(title), memories(text), uploads(filename).
+   Grouped `{results:{invoices:[],...}}` per contract. No embeddings.
+5. **Connector seeds** — add `gmail`, `google_drive` rows to the connectors
+   catalog (toggle connect already works). Excel stays `/import/excel`, not a connector.
+6. **Tests** — contract tests for each new endpoint (same `_ep()` pattern) +
+   3 sim steps: excel import count>0, memory visible in agent reply, artifact
+   created + fetchable.
+
+**File map for Round 2** (yours, merge-safe — Fahmin never touches `backend/`):
+`tools/importer.py`, `tools/artifacts.py`, `store.py` (+2 collections),
+`main.py` (append-only endpoints), `agents/registry.py` (memory injection +
+tool map), `seed.json`, `requirements.txt` (openpyxl).
+
+## 6. Deploy — ONLY if `simulate_demo.py` is green
 
 Amplify (frontend `dist/`) + Lambda zip (`handler = Mangum(app)` exists) or App
 Runner. EventBridge rules → `scheduler.py` logic. No local Docker.
@@ -126,6 +165,7 @@ feat(store): DynamoStore on AWS — parity suite green
 feat(notify): SESNotifier verified, first real email
 chore(env): .env → Fahmin (never committed)
 test: contract tests + sim steps for new endpoints
+feat(api): excel import + memories + artifacts + search   ← round 2
 chore(deploy): amplify + lambda URL                ← stretch
 ```
 

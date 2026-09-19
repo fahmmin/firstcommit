@@ -5,8 +5,8 @@
 
   "frontend_flow": {
     "$comment": "Every page, the route, and which endpoints feed it. Ayush: this is your endpoint build list.",
-    "/login": { "desc": "Business login (name + business name → demo token)", "uses": ["POST /auth/login"] },
-    "/onboarding": { "desc": "First-run wizard — business line, city, 'what eats your time' chips → lands on dashboard", "uses": ["PATCH /settings"] },
+    "/login": { "desc": "Provider sign-in — 'Continue with Google' (account-chooser card) or phone + OTP field, plus guest. Provider step is a client-side adapter; /auth/login + tenant are real", "uses": ["POST /auth/login"] },
+    "/onboarding": { "desc": "First-run wizard — name, business, city, 'what eats your time' chips. Chips become business memory; lands on workspace", "uses": ["PATCH /settings", "POST /memories"] },
     "/dashboard": { "desc": "Home: KPI tiles (receivables, capital locked, pending approvals), aging + cashflow charts, activity feed, agent strip", "uses": ["GET /dashboard/summary", "GET /agents", "GET /alerts"] },
     "/agents": { "desc": "Subagents view — grid of all agents incl. AI-hired ones; 'hire agent' button opens factory wizard", "uses": ["GET /agents", "POST /agents/preview", "POST /agents"] },
     "/agents/:id": { "desc": "Agent detail — persona, tools, stats, activity log. RIGHT SIDEBAR is contextual per agent (vasool → invoice summary + capital locked; logistics agent → carriers/bookings)", "uses": ["GET /agents/{id}", "GET /agents/{id}/context", "POST /chat (agent_id)"] },
@@ -15,16 +15,20 @@
     "/notifications": { "desc": "Feed — drafted reminders awaiting approval, sent messages, agent-hired events, scheduler promotions", "uses": ["GET /notifications", "POST /alerts/{id}/approve"] },
     "/chat": { "desc": "Full chat view — orchestrator routing badges, agent pinning, action toasts", "uses": ["POST /chat"] },
     "/connectors": { "desc": "Connect existing services — Google Calendar, Airtable, WhatsApp, Tally, Razorpay. connect → syncing → items_synced", "uses": ["GET /connectors", "POST /connectors/{id}/connect", "POST /connectors/{id}/disconnect", "GET /connectors/{id}/sync"] },
-    "/settings": { "desc": "Business profile, reminder cadence, approval mode, language, notify email", "uses": ["GET /settings", "PATCH /settings"] }
+    "/settings": { "desc": "Business profile, prefs, business context (memories), skills toggles, MCP servers, connectors", "uses": ["GET /settings", "PATCH /settings", "GET /memories", "POST /memories", "DELETE /memories/{id}", "GET /connectors"] },
+    "/search": { "desc": "Global search — topbar input → grouped results across invoices/suppliers/carriers/agents/tasks/memories/documents", "uses": ["GET /search"] },
+    "/a/:id": { "desc": "Shared artifact page — public-looking view of an agent-built mini-app (tracking page, invoice summary, supplier compare). 'Share link' copies the URL", "uses": ["GET /artifacts/{id}"] }
   },
 
   "endpoints": {
     "POST /auth/login [TODO]": {
-      "request": { "name": "Ramesh Gupta", "business": "Ramesh Auto Components" },
+      "$comment": "provider adapters live client-side (Google chooser / phone+OTP); this endpoint just resolves the tenant + token. Keep name/business optional when provider_id present.",
+      "request": { "provider": "google|phone|guest", "provider_id": "ramesh@gmail.com", "name": "Ramesh Gupta", "business": "Ramesh Auto Components" },
       "response": {
         "token": "demo-tok-ramesh",
         "tenant_id": "ramesh_auto",
-        "user": { "name": "Ramesh Gupta", "business": "Ramesh Auto Components", "city": "Faridabad", "line": "auto components" }
+        "user": { "name": "Ramesh Gupta", "business": "Ramesh Auto Components", "city": "Faridabad", "line": "auto components" },
+        "onboarded": true
       }
     },
 
@@ -155,7 +159,9 @@
     "GET /settings [TODO]": {
       "response": {
         "business": { "name": "Ramesh Auto Components", "owner": "Ramesh Gupta", "city": "Faridabad", "line": "auto components" },
-        "prefs": { "reminder_cadence_days": 7, "auto_draft_reminders": true, "approval_mode": "manual", "language": "hinglish", "notify_email": "ramesh@rameshauto.in" }
+        "onboarded": true,
+        "prefs": { "reminder_cadence_days": 7, "auto_draft_reminders": true, "approval_mode": "manual", "language": "hinglish", "notify_email": "ramesh@rameshauto.in", "disabled_tools": [] },
+        "mcp_servers": [{ "id": "mcp-1", "name": "Tally MCP", "url": "http://localhost:9100/mcp", "status": "configured" }]
       }
     },
     "PATCH /settings [TODO]": {
@@ -197,11 +203,52 @@
         "gaps": [{ "period": "Oct wk1", "shortfall": 58000, "reason": "90-day buyer terms vs 30-day supplier terms" }]
       }
     },
+    "POST /import/excel [TODO]": {
+      "$comment": "Owner drops their existing Excel/Tally ledger export — rows become store entries. Expected columns: invoice_no, buyer, amount, due_date, gst(optional). Unmappable rows → skipped with count, never crash.",
+      "request": "multipart/form-data: file=<.xlsx>, tenant_id",
+      "response": { "file_id": "f-imp-1", "filename": "ledger.xlsx", "collection": "invoices", "imported": 34, "skipped": 2, "sample": [{ "invoice_no": "INV-0101", "buyer": "Kapil Auto", "amount": 12400, "due_date": "2026-10-02" }] }
+    },
+
+    "GET /memories?tenant_id= [TODO]": {
+      "$comment": "Business context the owner taught Sahayak — INJECTED into every agent's system prompt (real memory: agents genuinely reference it).",
+      "response": [{ "id": "mem-1", "text": "Sharma Traders always pays around 45 days — don't push hard", "source": "owner", "created_at": "2026-09-19T03:00:00Z" }]
+    },
+    "POST /memories [TODO]": {
+      "request": { "tenant_id": "ramesh_auto", "text": "Big orders go through GST invoice only", "source": "owner|onboarding" },
+      "response": { "id": "mem-2", "status": "saved" }
+    },
+    "DELETE /memories/{id} [TODO]": { "response": { "status": "deleted" } },
+
+    "GET /search?q=&tenant_id= [TODO]": {
+      "$comment": "Enterprise search — title/description/metadata substring match across all collections (no embeddings). Grouped by type; frontend renders groups it knows.",
+      "response": {
+        "q": "sharma",
+        "results": {
+          "invoices": [{ "id": "inv-001", "title": "INV-0038 — Sharma Motors", "meta": "₹45,200 · overdue 9d", "ref": "#/app" }],
+          "suppliers": [{ "id": "sup-1", "title": "Balaji Steel", "meta": "raw steel · trust 4.2", "ref": "#/app" }],
+          "carriers": [], "agents": [], "tasks": [], "memories": [],
+          "documents": [{ "id": "f-001", "title": "invoice_0042.jpg", "meta": "uploaded 18 Sep", "ref": "#/app" }]
+        }
+      }
+    },
+
+    "GET /artifacts?tenant_id= [TODO]": {
+      "$comment": "Mini-apps agents build from chat via the create_artifact TOOL. TEMPLATE-BOUND, never raw HTML: template ∈ {tracking_page, invoice_summary, supplier_compare, payment_card}. Agent picks template + fills data; per-template pydantic schema validates.",
+      "response": [{ "id": "art-1", "title": "Tracking — ORD-1042", "template": "tracking_page", "created_by": "agent-l7x2", "created_at": "2026-09-19T03:00:00Z", "share_path": "/a/art-1" }]
+    },
+    "GET /artifacts/{id} [TODO]": {
+      "response": {
+        "id": "art-1", "title": "Tracking — ORD-1042", "template": "tracking_page",
+        "data": { "order_id": "ORD-1042", "carrier": "SafeRoad Carriers", "from": "Ludhiana", "to": "Faridabad", "eta": "tomorrow 11am", "status": "in_transit", "progress_pct": 62 },
+        "created_by": "agent-l7x2", "created_at": "2026-09-19T03:00:00Z", "share_path": "/a/art-1"
+      }
+    },
+
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },
     "GET /health [EXISTS]": { "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" } }
   },
 
-  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced"]
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported"]
 }
