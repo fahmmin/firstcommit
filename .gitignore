@@ -31,3 +31,9 @@ cdk.out/
 Thumbs.db
 .idea/
 .vscode/
+
+# local agent-tool dirs (not project code)
+.agents/
+.hermes/
+skills-lock.json
+plan.md
