@@ -42,7 +42,11 @@ export const api = {
   agentContext: (id) => req(`/agents/${id}/context?tenant_id=${TENANT}`),
   notifications: () => req(`/notifications?tenant_id=${TENANT}`),
   connectors: () => req(`/connectors?tenant_id=${TENANT}`),
+  connectConnector: (id) => req(`/connectors/${id}/connect?tenant_id=${TENANT}`, { method: 'POST' }),
+  disconnectConnector: (id) => req(`/connectors/${id}/disconnect?tenant_id=${TENANT}`, { method: 'POST' }),
   settings: () => req(`/settings?tenant_id=${TENANT}`),
+  updateSettings: (body) =>
+    req(`/settings?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   dashboard: () => req(`/dashboard/summary?tenant_id=${TENANT}`),
   runScheduler: () => req(`/scheduler/run?tenant_id=${TENANT}`, { method: 'POST' }),
   resetDemo: () => req(`/demo/reset?tenant_id=${TENANT}`, { method: 'POST' }),

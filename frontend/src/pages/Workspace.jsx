@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
+import { AgentAvatar } from '../lib/avatar.jsx'
+import { AgentCards } from '../components/cards/index.jsx'
 import {
-  Receipt, Package, Wallet, Factory, Bot, PlugZap, Zap, CheckCircle2,
-  Plus, RotateCcw, ExternalLink, IndianRupee, Truck, Activity,
+  PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
 } from 'lucide-react'
-
-const ICONS = { receipt: Receipt, package: Package, wallet: Wallet, sparkles: Factory, bot: Bot }
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
                      ['Hired by AI', a => a.created_by === 'factory'],
@@ -17,8 +16,6 @@ const SUGGESTIONS = [
   'Buyer gives 90 day terms, should I take the order?',
   'Mera transporter nahi aaya',
 ]
-
-const fmtInr = n => '₹' + Number(n || 0).toLocaleString('en-IN')
 
 export default function Workspace() {
   const [messages, setMessages] = useState([
@@ -97,9 +94,7 @@ export default function Workspace() {
                 <button key={a.id} onClick={() => setActiveAgent(activeAgent === a.id ? null : a.id)}
                   className={`w-full text-left text-[12px] rounded-lg px-2 py-1.5 mb-0.5 flex items-center gap-2 transition
                     ${activeAgent === a.id ? 'bg-ink text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
-                  <span className={`w-4 h-4 rounded grid place-items-center shrink-0 ${a.created_by === 'factory' ? 'bg-magenta' : 'bg-[#a325fc]'}`}>
-                    {(() => { const I = ICONS[a.icon] || Bot; return <I size={10} className="text-white" /> })()}
-                  </span>
+                  <AgentAvatar seed={a.id} size={18} className="rounded" />
                   <span className="truncate">{a.name}</span>
                   {a.created_by === 'factory' && activeAgent !== a.id &&
                     <span className="ml-auto text-[8px] font-bold text-magenta">AI</span>}
@@ -110,9 +105,13 @@ export default function Workspace() {
         </nav>
         <div className="p-3 border-t border-slate-100 space-y-1">
           <div className="text-[10px] text-slate-400 px-1">{TENANT}</div>
+          <a href="#/settings"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <Settings2 size={11} /> Settings
+          </a>
           <button onClick={async () => { await api.resetDemo(); refresh() }}
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <RotateCcw size={11} /> Reset demo
+            <RotateCcw size={11} /> Reset data
           </button>
         </div>
       </aside>
@@ -121,9 +120,7 @@ export default function Workspace() {
       <main className="flex-1 flex flex-col min-w-0">
         {/* agent header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-start gap-3.5">
-          <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${active?.created_by === 'factory' ? 'bg-magenta' : 'bg-ink'}`}>
-            {(() => { const I = ICONS[active?.icon] || Bot; return <I size={17} className="text-white" /> })()}
-          </div>
+          <AgentAvatar seed={active?.id || 'sahayak'} size={40} />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[15px] text-ink">{active?.name || 'Sahayak'}</span>
@@ -213,25 +210,10 @@ export default function Workspace() {
               </div>
             </section>
 
-            {context && (
+            {activeAgent && (
               <section>
-                <div className="text-[10px] font-semibold text-slate-500 mb-2">Context</div>
-                <div className="rounded-lg border border-slate-200 divide-y divide-slate-50">
-                  {context.invoice_summary && (<>
-                    <ContextRow icon={IndianRupee} label="Outstanding" value={fmtInr(context.invoice_summary.total_outstanding)} />
-                    <ContextRow icon={IndianRupee} label="Overdue" value={fmtInr(context.invoice_summary.overdue_total)} warn />
-                    <ContextRow icon={Activity} label="Oldest overdue" value={`${context.invoice_summary.oldest_overdue_days}d`} />
-                    <ContextRow icon={IndianRupee} label="Locked in 60d+ terms" value={fmtInr(context.capital_locked_90d)} warn />
-                  </>)}
-                  {context.carriers_available != null && (<>
-                    <ContextRow icon={Truck} label="Carriers available" value={context.carriers_available} />
-                    {context.cheapest_route && <ContextRow icon={IndianRupee} label="Cheapest" value={`${context.cheapest_route.name} · ₹${context.cheapest_route.rate_per_kg}/kg`} />}
-                    <ContextRow icon={Zap} label="Pending bookings" value={context.pending_bookings} />
-                  </>)}
-                  {(context.recent_actions || []).slice(0, 3).map(a => (
-                    <ContextRow key={a.id} icon={Activity} label={a.kind?.replace('_', ' ')} value={a.text?.slice(0, 26) + '…'} />
-                  ))}
-                </div>
+                <div className="text-[10px] font-semibold text-slate-500 mb-2">{active?.name || 'Agent'} panel</div>
+                <AgentCards agent={active} context={context} />
               </section>
             )}
 
@@ -286,13 +268,3 @@ export default function Workspace() {
 }
 
 function SparklesDot() { return <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" /> }
-
-function ContextRow({ icon: I, label, value, warn }) {
-  return (
-    <div className="px-2.5 py-2 flex items-center gap-2 text-[11px]">
-      <I size={11} className={warn ? 'text-magenta' : 'text-slate-300'} />
-      <span className="text-slate-400">{label}</span>
-      <span className={`ml-auto font-medium ${warn ? 'text-magenta' : 'text-slate-700'}`}>{value}</span>
-    </div>
-  )
-}
