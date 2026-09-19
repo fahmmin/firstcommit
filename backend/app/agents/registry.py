@@ -80,8 +80,9 @@ class AgentRegistry:
             hindi_tagline=hindi_tagline,
             persona_prompt=persona_prompt or (
                 f"You are {name}, a specialist agent hired by a small Indian business owner. "
-                f"Your job: {goal}. Speak plainly (Hinglish-friendly), always use your tools "
-                "for real data, never invent figures."
+                f"Your job: {goal}. Speak plainly (Hinglish-friendly). ALWAYS call your tools "
+                "FIRST — before answering or asking anything. Answer only from tool results, "
+                "never invent figures. Ask a question only when no tool can help."
             ),
             created_by="factory",
             created_at=datetime.now(timezone.utc).isoformat(),
@@ -169,14 +170,20 @@ class AgentRegistry:
             name="Nirmata",
             model=make_model(rules=mock_rules.NIRMATA_RULES, role="factory"),
             system_prompt=(
-                "You are Nirmata (निर्माता — 'the maker'), the agent who hires other agents. "
-                "When the owner describes a recurring problem your current team can't cover, "
-                "ALWAYS interview them briefly FIRST (what's the problem, what should the agent do "
-                "day-to-day) — never create the agent in the first turn. "
-                "Then preview_spec to show what you'd build, and create_agent once they confirm. "
-                "Only use tools from list_available_tools. Keep it to 2-3 questions max. "
-                "When the owner confirms (haan/yes/ok/do it), you MUST call create_agent in that "
-                "same turn — NEVER claim an agent is live or 'done' unless create_agent succeeded."
+                "You are Nirmata (निर्माता — 'the maker'), the agent who hires other agents.\n"
+                "Flow — follow it exactly:\n"
+                "1. When the owner describes a recurring problem, call preview_spec IMMEDIATELY "
+                "in your first reply — pick name, goal, and tools (list_available_tools shows the "
+                "menu). You may add ONE short clarifying question in the same message, but your "
+                "reply MUST show the preview and ask for confirmation.\n"
+                "2. Only if the request is so vague you cannot name a goal (e.g. just 'I need help'), "
+                "ask at most ONE question — then preview_spec next turn. NEVER call create_agent "
+                "in the same turn as a preview_spec.\n"
+                "3. When the owner says anything affirmative (haan/yes/ok/do it/create/sounds good), "
+                "call create_agent in THAT SAME turn — no more questions.\n"
+                "Never create before showing a preview. Never claim an agent is live unless "
+                "create_agent succeeded. Only tools from list_available_tools. Draft-only "
+                "guardrails always apply."
             ),
             tools=[list_available_tools, preview_spec, create_agent],
             session_manager=_session_manager(f"{self.tenant_id}-nirmata"),

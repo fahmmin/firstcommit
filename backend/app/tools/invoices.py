@@ -45,6 +45,15 @@ def parse_invoice_file(file_path: str) -> dict:
     return dict(PARSE_FIXTURE)
 
 
+def _sniff_image_format(b: bytes) -> str | None:
+    """Magic-byte sniffing — extension/content-type can lie (octet-stream uploads)."""
+    if b[:3] == b"\xff\xd8\xff": return "jpeg"
+    if b[:8] == b"\x89PNG\r\n\x1a\n": return "png"
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP": return "webp"
+    if b[:6] in (b"GIF87a", b"GIF89a"): return "gif"
+    return None
+
+
 def _parse_via_bedrock(file_path: str) -> dict:
     import boto3
     session = boto3.Session(
@@ -52,10 +61,11 @@ def _parse_via_bedrock(file_path: str) -> dict:
         region_name=os.getenv("AWS_REGION", "us-east-1"),
     )
     client = session.client("bedrock-runtime")
-    ext = os.path.splitext(file_path)[1].lower().lstrip(".")
-    fmt = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}.get(ext, "jpeg")
     with open(file_path, "rb") as f:
         img_bytes = f.read()
+    fmt = _sniff_image_format(img_bytes)
+    if fmt is None:
+        raise ValueError("not a real image (no jpeg/png/webp/gif magic bytes)")
     resp = client.converse(
         modelId=os.getenv("WORKER_MODEL", "apac.amazon.nova-lite-v1:0"),
         messages=[{
