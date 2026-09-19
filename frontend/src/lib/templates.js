@@ -2,10 +2,17 @@
 // Clicking a card drops its prompt into the composer for editing before Generate.
 import {
   FileWarning, BarChart3, Truck, Bot, PackageSearch, Scale,
-  CalendarClock, Users, IndianRupee, Store,
+  CalendarClock, Users, IndianRupee, Store, Globe,
 } from 'lucide-react'
 
 export const TEMPLATES = [
+  {
+    id: 'hire-presence',
+    icon: Globe, tint: 'text-blue-600 bg-blue-50', featured: true,
+    title: 'Digital presence agent',
+    desc: 'Facebook Marketplace, IndiaMART, Shopify store + SEO/GEO — one agent',
+    prompt: 'I want to sell online. Hire an agent that publishes my products to Facebook Marketplace and IndiaMART, builds me a web storefront, and keeps my listings SEO-optimized.',
+  },
   {
     id: 'chase-overdue',
     icon: FileWarning, tint: 'text-rose-500 bg-rose-50',

@@ -14,6 +14,10 @@ const MCP_CATALOG = [
   { id: 'india-logistics-mcp', name: 'india-logistics-mcp', icon: 'mcp', desc: 'Live tracking webhooks from Indian carriers — Delhivery, VRL, SafeRoad.', installs: '3.2k', tag: 'logistics' },
   { id: 'gmail-mcp', name: 'gmail-mcp', icon: 'gmail', desc: 'Inbox search + send — agents read invoice emails and reply with drafts.', installs: '54.0k', tag: 'messaging' },
   { id: 'zapier-mcp', name: 'zapier-mcp', icon: 'zapier', desc: 'Bridge to 6,000+ apps through Zapier actions.', installs: '71.3k', tag: 'automation' },
+  { id: 'fb-marketplace-mcp', name: 'fb-marketplace-mcp', icon: 'facebook', desc: 'Publish + manage Marketplace listings as agent tools.', installs: '11.6k', tag: 'commerce' },
+  { id: 'indiamart-mcp', name: 'indiamart-mcp', icon: 'indiamart', desc: 'IndiaMART catalog sync — push products, pull buyer leads.', installs: '6.4k', tag: 'commerce' },
+  { id: 'shopify-mcp', name: 'shopify-mcp', icon: 'shopify', desc: 'Create storefronts, manage products and orders via agents.', installs: '33.8k', tag: 'commerce' },
+  { id: 'perplexity-mcp', name: 'perplexity-mcp', icon: 'perplexity', desc: 'Web + deep research as a tool — cited answers inside chat.', installs: '27.9k', tag: 'research' },
 ]
 
 const SKILL_CATALOG = [
@@ -23,6 +27,8 @@ const SKILL_CATALOG = [
   { id: 'festival-forecast', name: 'Festival Demand Forecast', icon: 'mcp', desc: 'Predicts stock needs around Diwali/wedding season from your history.', installs: '6.7k', tag: 'forecast' },
   { id: 'ledger-ocr', name: 'Ledger OCR+', icon: 'excel', desc: 'Reads handwritten bahi-khata photos into structured ledger rows.', installs: '15.1k', tag: 'input' },
   { id: 'credit-score', name: 'Buyer Credit Scoring', icon: 'razorpay', desc: 'Scores buyers on your own payment history before you offer terms.', installs: '11.3k', tag: 'risk' },
+  { id: 'catalog-syndication', name: 'Catalog Syndication', icon: 'shopify', desc: 'One product sheet → listings on every marketplace, auto-formatted.', installs: '7.9k', tag: 'commerce' },
+  { id: 'geo-seo', name: 'SEO + GEO Optimizer', icon: 'perplexity', desc: 'Keeps listings ranking on Google AND inside AI answers.', installs: '5.5k', tag: 'commerce' },
 ]
 
 export default function Marketplace() {
@@ -84,6 +90,8 @@ export default function Marketplace() {
           </div>
         </div>
 
+        <AgentTemplates />
+
         <div className="flex gap-1 mb-5 rounded-xl border border-slate-200 bg-white p-1 w-fit">
           {[['mcp', 'MCP servers', Server], ['skills', 'Skills', Braces]].map(([k, l, I]) => (
             <button key={k} onClick={() => setTab(k)}
@@ -125,6 +133,74 @@ export default function Marketplace() {
           Registry compatible with skills.sh — install any community MCP server or skill by URL.
         </p>
       </main>
+    </div>
+  )
+}
+
+// Hireable agent templates — full agent specs bundled with connectors + skills.
+// "Hire" drops the hiring prompt into the workspace composer (Nirmata builds it).
+function AgentTemplates() {
+  const AGENTS = [
+    {
+      id: 'digital-presence', name: 'Digital Presence Agent', role: 'Sells your catalogue online',
+      desc: 'Publishes products to Facebook Marketplace and IndiaMART, spins up a Shopify storefront, and keeps every listing SEO/GEO-optimized — one prompt, every channel.',
+      connectors: ['facebook', 'indiamart', 'shopify', 'instagram'],
+      connectorNames: ['Facebook Marketplace', 'IndiaMART', 'Shopify storefront', 'Instagram Shop'],
+      skills: ['Catalog syndication', 'SEO + GEO optimization', 'Storefront builder', 'Listing refresh'],
+      installs: '4.1k', tag: 'sales',
+      prompt: 'I want to sell online. Hire an agent that publishes my products to Facebook Marketplace and IndiaMART, builds me a web storefront, and keeps my listings SEO-optimized.',
+    },
+    {
+      id: 'gst-accountant', name: 'GST Accountant Agent', role: 'Compliance on autopilot',
+      desc: 'Watches your ledger for GST mismatches, preps GSTR summaries before filing dates, and flags invoices missing GSTIN.',
+      connectors: ['tally', 'gmail'],
+      connectorNames: ['Tally Prime', 'Gmail'],
+      skills: ['GST reconciliation', 'Filing reminders', 'GSTIN validation'],
+      installs: '2.8k', tag: 'compliance',
+      prompt: 'Hire an agent that watches my books for GST mismatches and reminds me before every filing deadline.',
+    },
+  ]
+  return (
+    <div className="mb-7">
+      <div className="text-[11px] font-semibold text-slate-500 mb-2.5 flex items-center gap-1.5">
+        <TrendingUp size={11} className="text-accent" /> Featured agent templates
+        <span className="text-slate-300 font-normal">— pre-specced, Nirmata hires in one prompt</span>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {AGENTS.map(a => (
+          <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-float transition">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/15 to-magenta/10 border border-slate-100 grid place-items-center text-accent font-bold text-[15px]">
+                  {a.name[0]}
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-ink">{a.name}</div>
+                  <div className="text-[10px] text-slate-400">{a.role} · {a.installs} hires</div>
+                </div>
+              </div>
+              <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{a.tag}</span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2.5 leading-snug">{a.desc}</p>
+            <div className="flex items-center gap-3 mt-3 pb-2.5 border-b border-slate-100">
+              {a.connectors.map((c, i) => (
+                <span key={c} className="flex items-center gap-1 text-[10px] text-slate-500" title={a.connectorNames[i]}>
+                  <BrandIcon id={c} size={13} /> {a.connectorNames[i]}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1 mt-2.5">
+              {a.skills.map(s => (
+                <span key={s} className="text-[9px] font-medium rounded-full border border-accent/20 bg-accent/5 text-accent px-2 py-0.5">{s}</span>
+              ))}
+            </div>
+            <a href="#/app" onClick={() => localStorage.setItem('prefill_prompt', a.prompt)}
+              className="mt-3 w-full rounded-lg bg-ink text-white text-[11px] font-medium py-2 flex items-center justify-center gap-1.5 hover:bg-ink/85 transition">
+              <Download size={11} className="rotate-180" /> Hire this agent
+            </a>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

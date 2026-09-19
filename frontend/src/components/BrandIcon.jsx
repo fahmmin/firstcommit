@@ -3,6 +3,7 @@
 import {
   SiWhatsapp, SiGmail, SiGoogledrive, SiGooglecalendar, SiAirtable,
   SiRazorpay, SiGooglesheets, SiNotion, SiShopify, SiZapier, SiPhonepe,
+  SiFacebook, SiInstagram, SiPerplexity, SiMeta,
 } from 'react-icons/si'
 import { Server, PlugZap } from 'lucide-react'
 
@@ -37,7 +38,21 @@ const LetterMark = (ch, bg) => ({ size = 14 }) => (
 
 const TallyMark = LetterMark('T', '#1b4f9c')
 
+// IndiaMART has no icon mark — official wordmark is styled text.
+const IndiaMartMark = ({ size = 14 }) => (
+  <svg viewBox="0 0 48 24" width={size * 2} height={size}>
+    <text x="2" y="17" fontSize="12" fontWeight="800" fontFamily="inherit">
+      <tspan fill="#2e3192">India</tspan><tspan fill="#e31e24">MART</tspan>
+    </text>
+  </svg>
+)
+
 const BRANDS = {
+  facebook: { C: SiFacebook, color: '#1877F2' },
+  instagram: { C: SiInstagram, color: '#E4405F' },
+  meta: { C: SiMeta, color: '#0082FB' },
+  perplexity: { C: SiPerplexity, color: '#20808D' },
+  indiamart: { C: IndiaMartMark, color: '#2e3192' },
   whatsapp: { C: SiWhatsapp, color: '#25D366' },
   gmail: { C: SiGmail, color: '#EA4335' },
   google_drive: { C: SiGoogledrive, color: '#34A853' },

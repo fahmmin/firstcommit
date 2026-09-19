@@ -184,3 +184,40 @@ chore(deploy): amplify + lambda URL                ← stretch
 7. **Never commit `.env`/keys.** Check `git status` first.
 8. **Merge gate: `pytest` + `simulate_demo.py` green in both modes.**
 9. **If AWS fights back: stop, tell Fahmin, stay local.** Working local > broken cloud.
+
+## Round 3 — backend additions (contract-compatible)
+
+These landed on the frontend already; the demo store covers them until you ship.
+
+### 1. `POST /context/docs` — business-context ingestion (auto-tag)
+Multipart `file` OR JSON `{text}`. On ingest, run the tagger and store:
+```json
+{ "id": "ctx-..", "name": "GSTR-3B_FY25.xlsx", "kind": "Spreadsheet",
+  "tags": ["tax","finance"], "meta": "18 rows · GSTIN linked",
+  "source": "upload", "created_at": "..." }
+```
+Tag rules mirror `frontend/src/lib/context.js` TAG_RULES — filename + extracted
+text keywords → {tax, invoices, procurement, logistics, finance, hr, sales,
+legal}. `GET /context/docs` lists; `DELETE` removes. Fold into `/search`
+documents group (match name + tags + meta). Extracted text also becomes a
+`memories` row with `source: "doc"` so agents genuinely cite it.
+
+### 2. `POST /chat` — new optional field `mode`
+`"chat" | "web" | "deep"`. Contract-tolerant: ignore if you can't wire it yet —
+the UI only uses it to label the trace. If easy: `web`/`deep` could call a
+search tool and append cited links to `reply` (URLs get link previews free).
+
+### 3. Attachments — already real
+`POST /upload` accepts invoice photos/PDFs; the composer pipes them there
+before `/chat`. No work needed unless you want non-invoice files → auto-route
+to `/context/docs` (nice, not needed).
+
+### 4. Connector seeds
+Add rows for `facebook_marketplace`, `indiamart`, `shopify`, `instagram`
+(frontend already renders them with official brand marks). Statuses:
+fb_marketplace `connected`, rest `available`.
+
+### 5. Agent template spec (digital presence)
+Pre-seed a factory-ready spec so "hire a digital presence agent" converges:
+tools `publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`;
+goal mentions Facebook Marketplace + IndiaMART + Shopify + SEO/GEO.

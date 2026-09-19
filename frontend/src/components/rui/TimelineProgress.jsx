@@ -4,7 +4,7 @@
 // Steps are keyword-routed from the user's message (which tool / MCP / skill).
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Brain, Database, Wrench, Quote, Sparkles, Check, Loader2 } from 'lucide-react'
+import { Brain, Database, Wrench, Quote, Sparkles, Check, Loader2, Globe, ListChecks, BookOpen } from 'lucide-react'
 
 const TOOL_ROUTES = [
   [/invoice|overdue|payment|reminder|vasool|bhej/i, { tool: 'list_overdue', via: 'tally-mcp', sources: 'invoices · reminders' }],
@@ -18,7 +18,9 @@ const DEFAULT_ROUTE = { tool: 'read_ledger', via: 'tally-mcp', sources: 'invoice
 
 // scope: { skills: [..], mcps: [..] } from the exclusion tabs — the trace
 // honestly names the selected surface instead of the default route.
-export function TimelineProgress({ text, scope }) {
+// mode: chat | web | deep — changes which steps appear (web adds a Perplexity
+// search hop; deep expands to a multi-query research plan).
+export function TimelineProgress({ text, scope, mode = 'chat' }) {
   const route = useMemo(() => {
     const r = TOOL_ROUTES.find(([re]) => re.test(text || ''))?.[1] || DEFAULT_ROUTE
     const mcp = scope?.mcps?.[0]
@@ -30,13 +32,27 @@ export function TimelineProgress({ text, scope }) {
     }
   }, [text, scope])
 
-  const steps = useMemo(() => [
-    { icon: Brain, label: 'Gathering business memory', sub: 'owner notes' },
-    { icon: Database, label: 'Fetching sources', sub: route.sources },
-    { icon: Wrench, label: `Calling ${route.tool}`, sub: `via ${route.via}` },
-    { icon: Quote, label: 'Reading citations', sub: 'docs · tables' },
-    { icon: Sparkles, label: 'Cooking response', sub: 'Nova Pro' },
-  ], [route])
+  const steps = useMemo(() => {
+    if (mode === 'deep') return [
+      { icon: Brain, label: 'Gathering business memory', sub: 'owner notes' },
+      { icon: ListChecks, label: 'Planning research', sub: 'Perplexity Sonar' },
+      { icon: Globe, label: 'Running 6 web queries', sub: 'marketplaces · GST rules' },
+      { icon: BookOpen, label: 'Reading 12 sources', sub: 'citations ranked' },
+      { icon: Wrench, label: `Calling ${route.tool}`, sub: `via ${route.via}` },
+      { icon: Sparkles, label: 'Synthesizing report', sub: 'Nova Pro' },
+    ]
+    const base = [
+      { icon: Brain, label: 'Gathering business memory', sub: 'owner notes' },
+      { icon: Database, label: 'Fetching sources', sub: route.sources },
+      { icon: Wrench, label: `Calling ${route.tool}`, sub: `via ${route.via}` },
+    ]
+    if (mode === 'web') base.push({ icon: Globe, label: 'Searching the web', sub: 'Perplexity' })
+    base.push(
+      { icon: Quote, label: 'Reading citations', sub: mode === 'web' ? 'docs · web' : 'docs · tables' },
+      { icon: Sparkles, label: 'Cooking response', sub: 'Nova Pro' },
+    )
+    return base
+  }, [route, mode])
 
   const [shown, setShown] = useState(0)
   useEffect(() => {

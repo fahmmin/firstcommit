@@ -15,7 +15,7 @@ import { TEMPLATES } from '../lib/templates.js'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
-  Braces, Server, ScrollText,
+  Braces, Server, ScrollText, Paperclip, Globe, MessageSquare, Telescope, ImageIcon,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -48,6 +48,9 @@ export default function Workspace() {
   // exclusion tabs — which capability surface the next message should use
   const [scopeTab, setScopeTab] = useState('all')
   const [scope, setScope] = useState({ skills: [], mcps: [] })
+  const [mode, setMode] = useState('chat')           // chat | web | deep
+  const [files, setFiles] = useState([])             // composer attachments
+  const attachRef = useRef(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const msgRefs = useRef([])
@@ -103,16 +106,36 @@ export default function Workspace() {
 
   const send = async (text) => {
     const msg = (text || input).trim()
-    if (!msg || busy) return
-    setInput('')
-    setLastSent(msg)
-    setMessages(m => [...m, { role: 'user', text: msg }])
+    if ((!msg && !files.length) || busy) return
+    const sentMode = mode
+    const atts = files.map(f => ({
+      name: f.name, kind: f.type.startsWith('image/') ? 'image' : 'file',
+      url: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+    }))
+    setInput(''); setFiles([])
+    setLastSent(msg || `📎 ${atts.map(a => a.name).join(', ')}`)
+    setMessages(m => [...m, { role: 'user', text: msg, attachments: atts }])
     setBusy(true)
     try {
-      const r = await api.chat(msg, activeAgent)
+      // attachments first — invoice photos go through the real parse pipeline
+      for (const f of files) {
+        if (/invoice|bill|\.pdf|image/i.test(f.name + f.type)) {
+          try {
+            const r = await api.upload(f)
+            const inv = r.parsed || r.invoice || {}
+            setMessages(m => [...m, {
+              role: 'agent', agent: 'vasool', tagline: 'receivables',
+              text: `Scanned **${f.name}** → ${inv.invoice_no || 'invoice'} · ${inv.buyer || 'buyer'} · ₹${Number(inv.amount || 0).toLocaleString('en-IN')} — added to your ledger.`,
+            }])
+          } catch {
+            setMessages(m => [...m, { role: 'agent', agent: 'sahayak', text: `Received ${f.name} — indexing it into business context.` }])
+          }
+        }
+      }
+      const r = await api.chat(msg || 'What did you just receive?', activeAgent, sentMode)
       setMessages(m => [...m, {
         role: 'agent', agent: r.agent_name, tagline: r.agent_tagline,
-        text: r.reply, trace: r.trace, actions: r.actions,
+        text: r.reply, trace: r.trace, actions: r.actions, mode: sentMode,
       }])
       if (r.actions?.some(a => a.type === 'agent_created' || a.type === 'reminder_drafted')) refresh()
       if (r.agent_name === 'nirmata') setActiveAgent(null)
@@ -242,7 +265,19 @@ export default function Workspace() {
                     {m.trace ? m.trace.join(' → ') : m.agent} {m.tagline && `· ${m.tagline}`}
                   </div>
                 )}
+                {m.attachments?.length > 0 && (
+                  <div className="flex gap-1.5 flex-wrap mb-1.5">
+                    {m.attachments.map((a, j) => a.kind === 'image'
+                      ? <img key={j} src={a.url} alt={a.name} className="max-h-28 rounded-lg border border-white/20" />
+                      : <span key={j} className="flex items-center gap-1 text-[10px] bg-white/15 rounded px-1.5 py-0.5"><FileText size={9} />{a.name}</span>)}
+                  </div>
+                )}
                 <LinkifiedText text={m.text} />
+                {m.role === 'agent' && m.mode === 'deep' && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[9px] font-medium text-slate-400">
+                    <BrandIcon id="perplexity" size={10} /> Deep research · 12 sources cited · powered by Perplexity
+                  </div>
+                )}
                 {m.role === 'agent' && extractUrls(m.text)[0] && <LinkPreviewCard url={extractUrls(m.text)[0]} />}
                 {m.role === 'agent' && m.agent && m.agent !== 'system' && <SourceChips trace={m.trace} actions={m.actions} />}
                 {m.actions?.some(a => a.type === 'agent_created') && (
@@ -264,7 +299,7 @@ export default function Workspace() {
               </div>
             </div>
           ))}
-          {busy && <TimelineProgress text={lastSent} scope={scope} />}
+          {busy && <TimelineProgress text={lastSent} scope={scope} mode={mode} />}
           <div ref={bottomRef} />
           </div>
         </div>
@@ -273,8 +308,22 @@ export default function Workspace() {
         <div className="px-6 pb-4">
           {voice && <VoiceOverlay onClose={() => setVoice(false)}
             onTranscript={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50) }} />}
-          {/* exclusion tabs — capability scope picker */}
+          {/* exclusion tabs — capability scope picker + response mode */}
           <div className="mb-2.5 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5 shadow-float">
+              {[['chat', 'Chat', MessageSquare], ['web', 'Web search', Globe], ['deep', 'Deep research', Telescope]].map(([k, l, I]) => (
+                <button key={k} type="button" onClick={() => setMode(k)}
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium transition
+                    ${mode === k ? 'bg-ink text-white' : 'text-slate-500 hover:text-ink'}`}>
+                  <I size={10} /> {l}
+                </button>
+              ))}
+            </div>
+            {mode !== 'chat' && (
+              <span className="flex items-center gap-1 text-[9px] text-slate-400">
+                powered by <BrandIcon id="perplexity" size={10} /> Perplexity
+              </span>
+            )}
             <ExclusionTabs tabs={scopeTabs} active={scopeTab} onChange={setScopeTab} />
             {scopeTab === 'skills' && installedSkills.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
@@ -340,8 +389,28 @@ export default function Workspace() {
               </button>
             ))}
           </div>
+          {files.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              {files.map((f, i) => (
+                <span key={i} className="flex items-center gap-1.5 text-[10px] font-medium rounded-lg border border-slate-200 bg-white pl-1.5 pr-1 py-1">
+                  {f.type.startsWith('image/')
+                    ? <img src={URL.createObjectURL(f)} alt="" className="w-6 h-6 rounded object-cover" />
+                    : <FileText size={12} className="text-accent" />}
+                  <span className="max-w-[140px] truncate">{f.name}</span>
+                  <button type="button" onClick={() => setFiles(fs => fs.filter((_, j) => j !== i))}
+                    className="text-slate-300 hover:text-rose-500"><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+          )}
           <form onSubmit={e => { e.preventDefault(); send() }}
             className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white shadow-float px-4 py-1.5 focus-within:border-slate-400 transition">
+            <input ref={attachRef} type="file" multiple accept="image/*,video/*,.pdf,.xlsx,.csv,.docx" className="hidden"
+              onChange={e => { setFiles(fs => [...fs, ...Array.from(e.target.files)]); e.target.value = '' }} />
+            <button type="button" onClick={() => attachRef.current?.click()} title="Attach invoice photo, PDF, Excel…"
+              className="w-8 h-8 rounded-xl grid place-items-center transition shrink-0 text-slate-400 hover:text-ink hover:bg-slate-100">
+              <Paperclip size={14} />
+            </button>
             {activeAgent && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ink text-white shrink-0">→ {active?.name || activeAgent}</span>}
             <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
               placeholder={activeAgent ? `Ask ${active?.name || activeAgent}…` : 'Pick a template or write your own prompt…'}

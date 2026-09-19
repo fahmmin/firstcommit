@@ -65,6 +65,13 @@ export default function Search({ param }) {
                     <div className="text-[13px] font-medium text-ink truncate">{r.title}</div>
                     {r.meta && <div className="text-[11px] text-slate-400 truncate">{r.meta}</div>}
                   </div>
+                  {r.tags && (
+                    <div className="ml-auto flex gap-1 shrink-0">
+                      {r.tags.map(t => (
+                        <span key={t} className="text-[9px] font-medium rounded-full border border-slate-200 bg-slate-50 text-slate-500 px-1.5 py-px">{t}</span>
+                      ))}
+                    </div>
+                  )}
                 </a>
               ))}
             </div>
@@ -105,7 +112,7 @@ function BrowseCategories() {
         ))}
       </div>
       <div className="mt-6 flex gap-2 flex-wrap justify-center">
-        {['sharma', 'overdue', 'steel', 'ludhiana'].map(t => (
+        {['tax', 'sharma', 'overdue', 'steel', 'ludhiana'].map(t => (
           <a key={t} href={`#/search/${t}`}
             className="text-[11px] px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-ink hover:text-ink transition">
             try “{t}”

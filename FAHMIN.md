@@ -108,3 +108,37 @@ loop with Ayush), `seed.json`, `AYUSH.md`, `README.md`, `.env*`.
 2. No new npm deps without asking. No new `.md` files.
 3. Never commit `.env`/keys — check `git status` first.
 4. Merge gate before pushing: `npm run build` clean + backend tests green.
+
+## Round 3 — shipped (this pass)
+
+- **Business context = data dump** (`#/context`): drag-drop zone + quick note.
+  `lib/context.js` auto-tags on ingest (tax/invoices/logistics/… TAG_RULES),
+  items show kind + meta + "fed to agents" chip, notes also POST `/memories`.
+  Seeded with tax records, supplier rates, transport contract — search "tax"
+  hits them via tags.
+- **Enterprise search**: documents group now includes context items with tag
+  chips rendered on rows; "try tax" chip on the browse state.
+- **Digital presence agent template**: featured "Agent templates" section on
+  `#/marketplace` — Digital Presence Agent card (Facebook Marketplace,
+  IndiaMART, Shopify, Instagram connector row + skills chips + Hire → prefills
+  composer for the Nirmata moment). Also a Templates entry. GST Accountant
+  template beside it. Matching connectors + MCP entries + skills seeded.
+- **Composer attachments**: paperclip → image/video/PDF/Excel chips with
+  thumbnails; invoice-looking files pipe through real `POST /upload` (Nova
+  vision) and report "Scanned → INV-… added to ledger".
+- **Search modes**: Chat | Web search | Deep research pills above composer —
+  trace changes per mode (deep = research plan → 6 queries → 12 sources →
+  synth), replies carry "powered by Perplexity" badge. `mode` field sent in
+  /chat body (contract-tolerant, backend may ignore).
+- **Official logos only**: SiFacebook/SiInstagram/SiShopify/SiPerplexity/
+  SiMeta via react-icons; IndiaMART = text wordmark (no official icon exists).
+
+## Seams that matter for the video
+
+- Context items persist in localStorage until Ayush ships `/context/docs` —
+  the tagger spec is mirrored in both codebases so results will match.
+- Web/deep mode currently labels the trace + badges the reply; real Perplexity
+  calls are a backend seam (AYUSH.md §Round3.2) — do not claim live web data
+  unless the reply actually contains links (LinkPreview will show them).
+- Attachments are REAL for invoices (upload → parse pipeline); other file
+  types show the "indexing into business context" message — that's the seam.

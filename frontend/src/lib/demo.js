@@ -2,6 +2,7 @@
 // backend endpoints land. api.js tries the REAL endpoint first; only a failure
 // drops to this in-browser store (mutations persist for the session).
 // Nothing here is labelled "demo" in the UI — it's the offline cache layer.
+import { contextStore } from './context.js'
 
 export const DEMO = {
   memories: [
@@ -12,6 +13,10 @@ export const DEMO = {
   ],
   connectors: [
     { id: 'whatsapp', name: 'WhatsApp Business', icon: 'whatsapp', status: 'connected', connected_at: '2026-09-15T10:00:00Z', last_sync: '2026-09-19T02:00:00Z', items_synced: 128, description: 'Send payment reminders + order updates on WhatsApp' },
+    { id: 'fb_marketplace', name: 'Facebook Marketplace', icon: 'facebook', status: 'connected', connected_at: '2026-09-16T10:00:00Z', last_sync: '2026-09-19T01:30:00Z', items_synced: 42, description: 'Publish product listings where local buyers browse' },
+    { id: 'indiamart', name: 'IndiaMART', icon: 'indiamart', status: 'available', items_synced: 0, description: 'B2B marketplace — 7.7 crore buyers' },
+    { id: 'shopify', name: 'Shopify Storefront', icon: 'shopify', status: 'available', items_synced: 0, description: 'Your own web store — agents build and stock it' },
+    { id: 'instagram', name: 'Instagram Shop', icon: 'instagram', status: 'available', items_synced: 0, description: 'Shoppable posts synced from your catalogue' },
     { id: 'gmail', name: 'Gmail', icon: 'gmail', status: 'connected', connected_at: '2026-09-15T10:00:00Z', last_sync: '2026-09-19T01:00:00Z', items_synced: 212, description: 'Read invoices and POs straight from your inbox' },
     { id: 'google_drive', name: 'Google Drive', icon: 'google_drive', status: 'connected', connected_at: '2026-09-15T10:00:00Z', last_sync: '2026-09-19T01:30:00Z', items_synced: 56, description: 'Ledger exports and uploaded docs live in Drive' },
     { id: 'google_calendar', name: 'Google Calendar', icon: 'google_calendar', status: 'connected', connected_at: '2026-09-16T10:00:00Z', last_sync: '2026-09-19T01:00:00Z', items_synced: 18, description: 'Invoice dues and reminders on your calendar' },
@@ -110,8 +115,13 @@ export async function demoSearch(q, api) {
       tasks: [],
       memories: DEMO.memories.filter(m => hit(m.text))
         .map(m => ({ id: m.id, title: m.text, meta: `memory · ${m.source}`, ref: '#/settings' })),
-      documents: DEMO.artifacts.filter(a => hit(a.title))
-        .map(a => ({ id: a.id, title: a.title, meta: `artifact · by ${a.created_by}`, ref: `#${a.share_path}` })),
+      documents: [
+        ...DEMO.artifacts.filter(a => hit(a.title))
+          .map(a => ({ id: a.id, title: a.title, meta: `artifact · by ${a.created_by}`, ref: `#${a.share_path}` })),
+        ...contextStore.list()
+          .filter(c => hit(c.name, c.meta, ...(c.tags || [])))
+          .map(c => ({ id: c.id, title: c.name, meta: `${c.kind} · ${c.meta}`, tags: c.tags, ref: '#/context' })),
+      ],
     },
   }
 }

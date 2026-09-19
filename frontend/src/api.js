@@ -14,11 +14,11 @@ async function req(path, opts = {}) {
 
 export const api = {
   health: () => req('/health'),
-  chat: (text, agentId = null) =>
+  chat: (text, agentId = null, mode = 'chat') =>
     req('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenant_id: TENANT, text, agent_id: agentId }),
+      body: JSON.stringify({ tenant_id: TENANT, text, agent_id: agentId, mode }),
     }),
   agents: () => req(`/agents?tenant_id=${TENANT}`),
   createAgent: (spec) =>
