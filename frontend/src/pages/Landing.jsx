@@ -7,6 +7,7 @@ import {
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { LogoCarousel } from '../components/rui/LogoCarousel.jsx'
 import { DataFeed } from '../components/rui/DataFeed.jsx'
+import { AgentAvatar } from '../lib/avatar.jsx'
 
 /* ── blobs: the 4-color mark, gumloop-style ── */
 const Blobs = ({ size = 'md' }) => {
@@ -45,8 +46,9 @@ function AppMockup() {
               {items.map(i => (
                 <div key={i} className={`text-[11px] rounded-md px-2 py-1.5 mb-0.5 flex items-center gap-1.5
                   ${i === 'Vasool' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
-                  <span className={`w-3 h-3 rounded ${i === 'Logistics Agent' ? 'bg-[#d4428f]' : 'bg-[#a325fc]'}`} />
+                  <AgentAvatar seed={i.toLowerCase().replace(' ', '-')} size={14} className="rounded" />
                   {i}
+                  {i === 'Logistics Agent' && <span className="ml-auto text-[7px] font-bold text-magenta">AI</span>}
                 </div>
               ))}
             </div>
@@ -55,7 +57,7 @@ function AppMockup() {
         {/* center */}
         <div className="p-5">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 grid place-items-center"><Receipt size={18} className="text-white" /></div>
+            <AgentAvatar seed="vasool" size={40} />
             <div>
               <div className="font-semibold text-[15px] text-slate-900">Vasool</div>
               <div className="text-[11px] text-slate-500 mt-0.5">Receivables, reminders and payment chasing across the ledger.</div>
@@ -74,8 +76,8 @@ function AppMockup() {
             <div className="rounded-xl border border-slate-200 p-3">
               <div className="text-[10px] font-medium text-slate-500">Adoption</div>
               <div className="mt-2 flex -space-x-1.5">
-                {['R', 'S', 'K', 'O'].map((c, i) => (
-                  <span key={c} className={`w-6 h-6 rounded-full text-[9px] font-bold text-white grid place-items-center border-2 border-white ${['bg-[#a325fc]', 'bg-[#1aaf50]', 'bg-[#86cefc]', 'bg-[#d4428f]'][i]}`}>{c}</span>
+                {['ramesh', 'seeta', 'karan', 'om'].map(c => (
+                  <AgentAvatar key={c} seed={c} size={24} className="rounded-full border-2 border-white" />
                 ))}
               </div>
               <div className="text-[9px] text-slate-400 mt-1.5">4 people · 74 tasks run</div>
@@ -229,7 +231,7 @@ export default function Landing() {
             </div>
             <div className="p-5">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#a325fc] grid place-items-center"><Package size={16} className="text-white" /></div>
+                <AgentAvatar seed="sourcer" size={36} />
                 <div>
                   <div className="font-semibold text-[15px]">Sourcer</div>
                   <div className="text-[11px] text-slate-500 mt-0.5">Supplier search, price compare and vendor trust across your buys.</div>
@@ -237,7 +239,7 @@ export default function Landing() {
                 </div>
               </div>
               <div className="mt-5 space-y-2.5">
-                <div className="flex items-center gap-2 text-[11px]"><span className="w-5 h-5 rounded-full bg-[#1aaf50] text-white grid place-items-center text-[8px] font-bold">R</span><span className="text-slate-500">Find steel coils under ₹65/kg, 500kg MOQ max</span></div>
+                <div className="flex items-center gap-2 text-[11px]"><AgentAvatar seed="ramesh" size={20} className="rounded-full" /><span className="text-slate-500">Find steel coils under ₹65/kg, 500kg MOQ max</span></div>
                 <div className="rounded-lg bg-slate-50 border border-slate-100 p-3">
                   <div className="text-[10px] text-slate-400 space-y-1">
                     <div>→ Searching catalog · 6 suppliers</div>
