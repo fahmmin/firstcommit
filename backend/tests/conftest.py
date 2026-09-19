@@ -1,0 +1,34 @@
+"""Shared fixtures — force local mode, clean state per test."""
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+os.environ["USE_AWS"] = "0"
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app import deps                      # noqa: E402
+from app.notifier import ConsoleNotifier  # noqa: E402
+from app.store import DATA_DIR, LocalStore  # noqa: E402
+from app.agents import registry as reg    # noqa: E402
+
+import json
+SEED = json.loads((Path(__file__).resolve().parent.parent / "app" / "seed" / "seed.json").read_text())
+TENANT = "ramesh_auto"
+
+
+@pytest.fixture(autouse=True)
+def clean_state(tmp_path):
+    store = LocalStore(data_dir=tmp_path / "data")
+    deps.init_deps(store, ConsoleNotifier(data_dir=tmp_path / "data"))
+    store.reset(TENANT, SEED)
+    reg.reset_registries()
+    yield store
+    reg.reset_registries()
+
+
+@pytest.fixture
+def tenant():
+    return TENANT

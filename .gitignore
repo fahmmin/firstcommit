@@ -1,0 +1,33 @@
+# env / secrets — NEVER commit AWS keys
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# node
+node_modules/
+dist/
+.vite/
+
+# data (keep seed/)
+backend/data/
+uploads/
+*.local
+
+# aws / deploy
+.aws-sam/
+cdk.out/
+.agentcore/
+
+# os / ide
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

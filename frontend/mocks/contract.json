@@ -1,0 +1,81 @@
+{
+  "$comment": "SINGLE SOURCE OF TRUTH for API shapes. Frontend builds against these; backend contract tests enforce them. If you change a shape, change it HERE first.",
+  "base_url": "http://localhost:8000",
+  "endpoints": {
+    "GET /health": {
+      "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" }
+    },
+    "POST /chat": {
+      "request": { "tenant_id": "ramesh_auto", "text": "Show my overdue invoices", "agent_id": null },
+      "response": {
+        "reply": "You have 4 overdue invoices totalling ₹2,14,500...",
+        "agent_name": "vasool",
+        "agent_tagline": "पैसा वसूलने वाला",
+        "actions": [{ "type": "invoices_listed", "data": {} }],
+        "trace": ["orchestrator", "vasool"]
+      }
+    },
+    "GET /agents": {
+      "response": [{
+        "id": "vasool",
+        "name": "Vasool",
+        "hindi_tagline": "पैसा वसूलने वाला",
+        "description": "Tracks invoices and chases payments",
+        "tools": ["parse_document", "list_overdue", "aging_report", "draft_reminder"],
+        "status": "active",
+        "created_by": "builtin",
+        "icon": "receipt"
+      }]
+    },
+    "POST /agents/preview": {
+      "request": { "name": "Logistics Agent", "goal": "Find backup transport when pickups fail", "tools": ["list_carriers", "quote_pickup", "book_pickup"] },
+      "response": { "valid": true, "spec": {}, "warnings": [] }
+    },
+    "POST /agents": {
+      "request": { "name": "Logistics Agent", "goal": "Find backup transport when pickups fail", "tools": ["list_carriers", "quote_pickup", "book_pickup"], "tenant_id": "ramesh_auto" },
+      "response": { "id": "agent-abc123", "status": "active", "created_by": "factory" }
+    },
+    "POST /upload": {
+      "request": "multipart/form-data: file=<image|pdf>, tenant_id",
+      "response": {
+        "file_id": "f-001",
+        "filename": "invoice_0042.jpg",
+        "parsed": {
+          "invoice_no": "INV-0042", "buyer": "Sharma Motors", "amount": 45200,
+          "gst": 8136, "due_date": "2025-10-05", "items": "Brake pads x200", "confidence": 0.93
+        },
+        "low_confidence_fields": []
+      }
+    },
+    "GET /invoices?tenant_id=": {
+      "response": [{ "id": "inv-001", "invoice_no": "INV-0038", "buyer": "Sharma Motors", "amount": 45200, "due_date": "2025-09-10", "status": "overdue", "days_overdue": 9 }]
+    },
+    "POST /invoices/{id}/reminder": {
+      "request": { "channel": "email" },
+      "response": { "draft_id": "draft-1", "status": "draft", "body": "Namaste Sharma ji, ...", "requires_approval": true }
+    },
+    "POST /alerts/{id}/approve": {
+      "response": { "id": "alert-1", "status": "sent", "via": "console|ses" }
+    },
+    "GET /suppliers?tenant_id=&q=": {
+      "response": [{ "id": "sup-1", "name": "Balaji Steel", "category": "raw steel", "trust_score": 4.2, "moq": 500, "price_per_unit": 62, "stock": "in_stock", "lead_days": 4 }]
+    },
+    "GET /carriers?tenant_id=&to=": {
+      "response": [{ "id": "car-1", "name": "VRL Logistics", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.5, "next_slot": "tomorrow 7am", "reliability": 4.6 }]
+    },
+    "GET /alerts?tenant_id=": {
+      "response": [{ "id": "alert-1", "kind": "reminder", "title": "INV-0038 due in 3 days", "status": "pending_approval|sent|scheduled", "fires_at": "2025-09-19T06:00:00Z", "body": "..." }]
+    },
+    "GET /cashflow?tenant_id=": {
+      "response": {
+        "receivables": [{ "buyer": "Sharma Motors", "amount": 45200, "expected": "2025-10-05" }],
+        "payables": [{ "vendor": "Balaji Steel", "amount": 31000, "due": "2025-09-25" }],
+        "gaps": [{ "period": "Oct wk1", "shortfall": 58000, "reason": "90-day buyer terms vs 30-day supplier terms" }]
+      }
+    },
+    "POST /demo/reset": {
+      "response": { "status": "reseeded", "tenants": ["ramesh_auto"] }
+    }
+  },
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report"]
+}

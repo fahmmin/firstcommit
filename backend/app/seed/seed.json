@@ -1,0 +1,65 @@
+{
+  "tenant": "ramesh_auto",
+  "business": {
+    "name": "Ramesh Auto Components",
+    "owner": "Ramesh Gupta",
+    "city": "Faridabad",
+    "line": "auto components — brake pads, gaskets, fasteners"
+  },
+  "invoices": [
+    { "id": "inv-001", "invoice_no": "INV-0031", "buyer": "Sharma Motors", "amount": 45200, "gst": 8136, "issue_date": "2026-06-20", "due_date": "2026-09-18", "status": "overdue", "days_overdue": 1, "items": "Brake pads x200" },
+    { "id": "inv-002", "invoice_no": "INV-0033", "buyer": "Patel Auto Parts", "amount": 78800, "gst": 14184, "issue_date": "2026-06-10", "due_date": "2026-09-09", "status": "overdue", "days_overdue": 10, "items": "Gasket set x350" },
+    { "id": "inv-003", "invoice_no": "INV-0035", "buyer": "Khanna Industries", "amount": 124500, "gst": 22410, "issue_date": "2026-07-01", "due_date": "2026-09-29", "status": "due_soon", "days_overdue": 0, "items": "Wheel studs x1000" },
+    { "id": "inv-004", "invoice_no": "INV-0029", "buyer": "Sharma Motors", "amount": 36200, "gst": 6516, "issue_date": "2026-05-15", "due_date": "2026-08-13", "status": "overdue", "days_overdue": 37, "items": "Brake pads x160" },
+    { "id": "inv-005", "invoice_no": "INV-0040", "buyer": "Delhi Fleet Services", "amount": 96500, "gst": 17370, "issue_date": "2026-07-10", "due_date": "2026-10-08", "status": "due_soon", "days_overdue": 0, "items": "Fastener kit x500" },
+    { "id": "inv-006", "invoice_no": "INV-0026", "buyer": "Om Sai Traders", "amount": 28700, "gst": 5166, "issue_date": "2026-05-01", "due_date": "2026-05-31", "status": "overdue", "days_overdue": 111, "items": "Gasket set x130" },
+    { "id": "inv-007", "invoice_no": "INV-0041", "buyer": "Khanna Industries", "amount": 56000, "gst": 10080, "issue_date": "2026-08-25", "due_date": "2026-09-24", "status": "due_soon", "days_overdue": 0, "items": "Wheel studs x450" },
+    { "id": "inv-008", "invoice_no": "INV-0022", "buyer": "Patel Auto Parts", "amount": 41200, "gst": 7416, "issue_date": "2026-04-18", "due_date": "2026-07-17", "status": "paid", "paid_on": "2026-07-15", "days_overdue": 0, "items": "Brake pads x180" },
+    { "id": "inv-009", "invoice_no": "INV-0018", "buyer": "Delhi Fleet Services", "amount": 63900, "gst": 11502, "issue_date": "2026-03-10", "due_date": "2026-06-08", "status": "paid", "paid_on": "2026-06-02", "days_overdue": 0, "items": "Fastener kit x330" },
+    { "id": "inv-010", "invoice_no": "INV-0043", "buyer": "Om Sai Traders", "amount": 19500, "gst": 3510, "issue_date": "2026-09-05", "due_date": "2026-10-05", "status": "sent", "days_overdue": 0, "items": "Gasket set x90" },
+    { "id": "inv-011", "invoice_no": "INV-0037", "buyer": "Sharma Motors", "amount": 71300, "gst": 12834, "issue_date": "2026-08-01", "due_date": "2026-09-15", "status": "overdue", "days_overdue": 4, "items": "Brake pads x310" },
+    { "id": "inv-012", "invoice_no": "INV-0044", "buyer": "Patel Auto Parts", "amount": 88700, "gst": 15966, "issue_date": "2026-09-10", "due_date": "2026-12-09", "status": "sent", "terms_days": 90, "days_overdue": 0, "items": "Gasket set x400" }
+  ],
+  "suppliers": [
+    { "id": "sup-01", "name": "Balaji Steel Traders", "category": "raw steel coils", "trust_score": 4.2, "moq": 500, "price_per_unit": 62, "stock": "in_stock", "lead_days": 4, "verified": true },
+    { "id": "sup-02", "name": "Khurana Metals", "category": "raw steel coils", "trust_score": 3.6, "moq": 1000, "price_per_unit": 58, "stock": "in_stock", "lead_days": 7, "verified": true },
+    { "id": "sup-03", "name": "Shree Rubber Works", "category": "rubber sheets", "trust_score": 4.5, "moq": 200, "price_per_unit": 95, "stock": "in_stock", "lead_days": 3, "verified": true },
+    { "id": "sup-04", "name": "Gupta Friction Materials", "category": "brake lining", "trust_score": 4.0, "moq": 300, "price_per_unit": 140, "stock": "low_stock", "lead_days": 10, "verified": true },
+    { "id": "sup-05", "name": "National Fastener Co", "category": "fasteners", "trust_score": 4.7, "moq": 1000, "price_per_unit": 3.2, "stock": "in_stock", "lead_days": 2, "verified": true },
+    { "id": "sup-06", "name": "Apex Alloys", "category": "alloy steel", "trust_score": 3.1, "moq": 5000, "price_per_unit": 71, "stock": "in_stock", "lead_days": 14, "verified": false },
+    { "id": "sup-07", "name": "Vishnu Packaging", "category": "packaging", "trust_score": 4.3, "moq": 500, "price_per_unit": 8.5, "stock": "in_stock", "lead_days": 2, "verified": true },
+    { "id": "sup-08", "name": "Rathi Copper House", "category": "copper washers", "trust_score": 3.9, "moq": 2000, "price_per_unit": 2.1, "stock": "in_stock", "lead_days": 5, "verified": true },
+    { "id": "sup-09", "name": "Jain Chemicals", "category": "anti-rust coating", "trust_score": 4.1, "moq": 100, "price_per_unit": 310, "stock": "in_stock", "lead_days": 6, "verified": true },
+    { "id": "sup-10", "name": "Metro Spring Industries", "category": "springs", "trust_score": 4.4, "moq": 400, "price_per_unit": 18, "stock": "in_stock", "lead_days": 4, "verified": true },
+    { "id": "sup-11", "name": "Aggarwal Castings", "category": "cast iron blanks", "trust_score": 2.8, "moq": 800, "price_per_unit": 45, "stock": "delayed", "lead_days": 21, "verified": false },
+    { "id": "sup-12", "name": "Precision Bearings Delhi", "category": "bearings", "trust_score": 4.6, "moq": 250, "price_per_unit": 88, "stock": "in_stock", "lead_days": 3, "verified": true },
+    { "id": "sup-13", "name": "Sona Lubricants", "category": "industrial grease", "trust_score": 4.0, "moq": 50, "price_per_unit": 420, "stock": "in_stock", "lead_days": 3, "verified": true },
+    { "id": "sup-14", "name": "Haryana Wire Products", "category": "wire mesh", "trust_score": 3.5, "moq": 600, "price_per_unit": 33, "stock": "low_stock", "lead_days": 8, "verified": true },
+    { "id": "sup-15", "name": "Trident Graphite", "category": "graphite gaskets", "trust_score": 4.8, "moq": 150, "price_per_unit": 175, "stock": "in_stock", "lead_days": 5, "verified": true },
+    { "id": "sup-16", "name": "Bharat Bolts", "category": "fasteners", "trust_score": 3.3, "moq": 2000, "price_per_unit": 2.8, "stock": "in_stock", "lead_days": 6, "verified": true },
+    { "id": "sup-17", "name": "New India Rubber", "category": "rubber sheets", "trust_score": 3.0, "moq": 1000, "price_per_unit": 79, "stock": "in_stock", "lead_days": 12, "verified": false },
+    { "id": "sup-18", "name": "Lakshmi Metal Forms", "category": "raw steel coils", "trust_score": 4.5, "moq": 750, "price_per_unit": 60, "stock": "in_stock", "lead_days": 5, "verified": true },
+    { "id": "sup-19", "name": "Kalsi Sealing Tech", "category": "oil seals", "trust_score": 4.2, "moq": 300, "price_per_unit": 26, "stock": "in_stock", "lead_days": 4, "verified": true },
+    { "id": "sup-20", "name": "Punjab Abrasives", "category": "grinding wheels", "trust_score": 3.7, "moq": 200, "price_per_unit": 55, "stock": "in_stock", "lead_days": 6, "verified": true }
+  ],
+  "carriers": [
+    { "id": "car-1", "name": "VRL Logistics", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.5, "next_slot": "tomorrow 7:00 AM", "reliability": 4.6, "capacity_kg": 2000 },
+    { "id": "car-2", "name": "TCI Express", "route": "Faridabad→Ludhiana", "rate_per_kg": 5.2, "next_slot": "today 9:00 PM", "reliability": 4.4, "capacity_kg": 1500 },
+    { "id": "car-3", "name": "SafeRoad Carriers", "route": "Faridabad→Ludhiana", "rate_per_kg": 3.9, "next_slot": "tomorrow 2:00 PM", "reliability": 3.8, "capacity_kg": 3000 },
+    { "id": "car-4", "name": "VRL Logistics", "route": "Faridabad→Delhi", "rate_per_kg": 2.8, "next_slot": "today 6:00 PM", "reliability": 4.6, "capacity_kg": 2000 },
+    { "id": "car-5", "name": "Delhi Punjab Roadlines", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.1, "next_slot": "day-after 6:00 AM", "reliability": 4.1, "capacity_kg": 2500 },
+    { "id": "car-6", "name": "Gati Shakti Transport", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.8, "next_slot": "tomorrow 10:00 AM", "reliability": 4.3, "capacity_kg": 1800 }
+  ],
+  "payables": [
+    { "id": "pay-1", "vendor": "Balaji Steel Traders", "amount": 31000, "due": "2026-09-25", "terms_days": 30 },
+    { "id": "pay-2", "vendor": "National Fastener Co", "amount": 12400, "due": "2026-09-22", "terms_days": 30 },
+    { "id": "pay-3", "vendor": "Gupta Friction Materials", "amount": 42000, "due": "2026-10-05", "terms_days": 30 },
+    { "id": "pay-4", "vendor": "Shree Rubber Works", "amount": 19000, "due": "2026-09-28", "terms_days": 30 }
+  ],
+  "alerts": [
+    { "id": "alert-1", "kind": "reminder", "title": "INV-0035 (₹1,24,500) due in 10 days", "status": "scheduled", "fires_at": "2026-09-26T06:00:00Z", "invoice_id": "inv-003" },
+    { "id": "alert-2", "kind": "reminder", "title": "INV-0041 (₹56,000) due in 5 days", "status": "scheduled", "fires_at": "2026-09-21T06:00:00Z", "invoice_id": "inv-007" },
+    { "id": "alert-3", "kind": "warning", "title": "Cash gap ~₹58,000 expected first week of Oct", "status": "sent", "fires_at": "2026-09-18T06:00:00Z", "body": "Payables of ₹94,400 fall due before receivables arrive — Khanna Industries pays on 90-day terms." }
+  ],
+  "specs": []
+}
