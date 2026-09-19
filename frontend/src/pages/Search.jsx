@@ -70,8 +70,48 @@ export default function Search({ param }) {
             </div>
           </section>
         ))}
-        {!q && <div className="text-center py-16 text-[13px] text-slate-400">Type to search across your entire workspace.</div>}
+        {!q && <BrowseCategories />}
       </main>
+    </div>
+  )
+}
+
+// Empty state — browsable index of what's searchable, with live counts.
+function BrowseCategories() {
+  const [counts, setCounts] = useState({})
+  useEffect(() => {
+    Promise.all([
+      api.invoices().catch(() => []), api.suppliers().catch(() => []),
+      api.carriers().catch(() => []), api.agents().catch(() => []),
+      api.memories().catch(() => []), api.artifacts().catch(() => []),
+    ]).then(([inv, sup, car, ag, mem, art]) => setCounts({
+      invoices: inv.length, suppliers: sup.length, carriers: car.length,
+      agents: ag.length, memories: mem.length, documents: art.length,
+    }))
+  }, [])
+  return (
+    <div>
+      <div className="text-center py-8">
+        <div className="text-[16px] font-medium text-ink">Search your whole workspace</div>
+        <div className="text-[11px] text-slate-400 mt-1">Invoices, suppliers, carriers, agents, tasks, business memory, documents — one box.</div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {GROUPS.map(([k, label, I]) => (
+          <div key={k} className="rounded-2xl border border-slate-200 bg-white p-4">
+            <I size={15} className="text-slate-400 mb-2" />
+            <div className="text-[13px] font-semibold text-ink">{label}</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">{counts[k] ?? '…'} searchable</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 flex gap-2 flex-wrap justify-center">
+        {['sharma', 'overdue', 'steel', 'ludhiana'].map(t => (
+          <a key={t} href={`#/search/${t}`}
+            className="text-[11px] px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-ink hover:text-ink transition">
+            try “{t}”
+          </a>
+        ))}
+      </div>
     </div>
   )
 }

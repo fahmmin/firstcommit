@@ -18,7 +18,6 @@ export default function Settings() {
   const [settings, setSettings] = useState(null)
   const [connectors, setConnectors] = useState([])
   const [memories, setMemories] = useState([])
-  const [memText, setMemText] = useState('')
   const [mcpName, setMcpName] = useState('')
   const [mcpUrl, setMcpUrl] = useState('')
   const [saved, setSaved] = useState(false)
@@ -47,13 +46,6 @@ export default function Settings() {
     if (c.status === 'connected') await api.disconnectConnector(c.id)
     else await api.connectConnector(c.id)
     load()
-  }
-
-  const addMemory = async () => {
-    const t = memText.trim()
-    if (!t) return
-    await api.addMemory(t).catch(() => {})
-    setMemText(''); load()
   }
 
   const toggleTool = (t) => {
@@ -101,33 +93,21 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* business context — real agent memory */}
+        {/* business context — preview; full management lives on its own page */}
         <section>
           <SectionHead icon={Brain} title="Business context"
-            sub={<span className="text-[10px] text-slate-400">Sahayak remembers these and uses them in every reply</span>} />
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            {memories.map(m => (
-              <div key={m.id} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-2.5">
-                <Brain size={13} className="text-accent mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] text-ink leading-snug">{m.text}</div>
-                  <div className="text-[9px] text-slate-400 mt-0.5">{m.source || 'owner'}</div>
-                </div>
-                <button onClick={async () => { await api.delMemory(m.id).catch(() => {}); load() }}
-                  className="text-slate-300 hover:text-rose-500 transition shrink-0"><Trash2 size={13} /></button>
+            sub={<span className="text-[10px] text-slate-400">Used by every agent in every reply</span>}
+            right={<a href="#/context" className="text-[11px] text-accent hover:text-ink transition">Manage →</a>} />
+          <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-50">
+            {memories.slice(0, 3).map(m => (
+              <div key={m.id} className="px-5 py-3 text-[12px] text-slate-600 flex items-center gap-2.5">
+                <Brain size={12} className="text-accent shrink-0" />
+                <span className="truncate">{m.text}</span>
               </div>
             ))}
-            {memories.length === 0 && <p className="text-[12px] text-slate-400">Nothing yet — tell Sahayak something about how your business works.</p>}
-            <div className="flex gap-2">
-              <input value={memText} onChange={e => setMemText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addMemory()}
-                placeholder='e.g. "Sharma Traders always pays around 45 days — don’t push hard"'
-                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[12px] focus:outline-none focus:border-ink" />
-              <button onClick={addMemory}
-                className="rounded-lg bg-ink text-white px-4 text-[12px] font-medium flex items-center gap-1 hover:bg-ink/85 transition">
-                <Plus size={12} /> Add
-              </button>
-            </div>
+            <a href="#/context" className="block px-5 py-3 text-[11px] text-accent hover:bg-slate-50 transition">
+              {memories.length > 3 ? `+${memories.length - 3} more — manage all` : 'Add business context →'}
+            </a>
           </div>
         </section>
 

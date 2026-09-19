@@ -8,7 +8,7 @@ import { BrandIcon } from '../components/BrandIcon.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
-  LayoutTemplate, X, Search, FileText, LogOut, Store,
+  LayoutTemplate, X, Search, FileText, LogOut, Store, Brain,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -54,7 +54,11 @@ export default function Workspace() {
     ])
     setAgents(ag); setAlerts(al); setConnectors(cn); setSettings(st)
   }
-  useEffect(() => { refresh().catch(console.error) }, [])
+  useEffect(() => {
+    refresh().catch(console.error)
+    const pre = localStorage.getItem('prefill_prompt')
+    if (pre) { localStorage.removeItem('prefill_prompt'); setInput(pre); setTimeout(() => inputRef.current?.focus(), 50) }
+  }, [])
   useEffect(() => {
     if (!activeAgent) { setContext(null); return }
     api.agentContext(activeAgent).then(setContext).catch(() => setContext(null))
@@ -120,6 +124,14 @@ export default function Workspace() {
         </nav>
         <div className="p-3 border-t border-slate-100 space-y-1">
           <div className="text-[10px] text-slate-400 px-1">{TENANT}</div>
+          <a href="#/templates"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <LayoutTemplate size={11} /> Templates
+          </a>
+          <a href="#/context"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <Brain size={11} /> Business context
+          </a>
           <a href="#/marketplace"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <Store size={11} /> Marketplace
@@ -212,6 +224,7 @@ export default function Workspace() {
               <div className="flex items-center justify-between px-4 pt-3 pb-2">
                 <span className="text-[11px] font-semibold text-ink flex items-center gap-1.5">
                   <LayoutTemplate size={12} className="text-accent" /> Start from a template
+                  <a href="#/templates" className="text-[10px] font-normal text-accent hover:text-ink ml-1">Browse all →</a>
                 </span>
                 <button onClick={() => setShowTemplates(false)} className="text-slate-400 hover:text-ink transition"><X size={13} /></button>
               </div>
