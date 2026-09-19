@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BarChart, Bar, ResponsiveContainer, Cell, XAxis } from 'recharts'
 import { api } from '../../api.js'
+import { TrackInvoices } from '../rui/TrackInvoices.jsx'
 import { IndianRupee, AlertTriangle, TrendingUp } from 'lucide-react'
 
 const fmtInr = n => '₹' + Number(n || 0).toLocaleString('en-IN')
@@ -21,6 +22,7 @@ export default function VasoolCards({ context }) {
   const s = context?.invoice_summary
   return (
     <div className="space-y-3">
+      <TrackInvoices invoices={invoices.filter(i => i.status !== 'paid')} />
       {s && (
         <div className="grid grid-cols-2 gap-2">
           <Tile label="Outstanding" value={fmtInr(s.total_outstanding)} icon={IndianRupee} />

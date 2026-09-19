@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { BrandIcon } from '../components/BrandIcon.jsx'
 import { FractionalSlider } from '../components/rui/FractionalSlider.jsx'
+import { CloudSync } from '../components/rui/CloudSync.jsx'
 import { Can } from '../components/rui/Can.jsx'
 import { AccessRings } from '../components/rui/Circles.jsx'
 import { useRole, role, ROLES } from '../lib/role.js'
@@ -29,6 +30,7 @@ export default function Settings() {
   const [importResult, setImportResult] = useState(null)
   const fileRef = useRef(null)
   const currentRole = useRole()
+  const [syncing, setSyncing] = useState(false)
 
   const mcps = settings?.mcp_servers || []
   const disabledTools = settings?.prefs?.disabled_tools || []
@@ -48,8 +50,10 @@ export default function Settings() {
   }
 
   const toggleConnector = async (c) => {
+    setSyncing(true)
     if (c.status === 'connected') await api.disconnectConnector(c.id)
     else await api.connectConnector(c.id)
+    setTimeout(() => setSyncing(false), 1400)
     load()
   }
 
@@ -156,6 +160,11 @@ export default function Settings() {
         {/* connectors */}
         <section>
           <SectionHead icon={PlugZap} title="Connectors" />
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 mb-3 flex items-center justify-between">
+            <CloudSync syncing={syncing}
+              status={syncing ? 'Syncing sources…' : `${connectors.filter(c => c.status === 'connected').length} sources synced`} />
+            <span className="text-[10px] text-slate-400">last sync {connectors.find(c => c.last_sync)?.last_sync ? new Date(connectors.find(c => c.last_sync).last_sync).toLocaleTimeString() : '—'}</span>
+          </div>
           {/* Excel import — real: parses rows into the ledger */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-3 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0 bg-emerald-100 text-emerald-600">

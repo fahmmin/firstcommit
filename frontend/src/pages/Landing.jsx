@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { LogoCarousel } from '../components/rui/LogoCarousel.jsx'
+import { DataFeed } from '../components/rui/DataFeed.jsx'
 
 /* ── blobs: the 4-color mark, gumloop-style ── */
 const Blobs = ({ size = 'md' }) => {
@@ -301,6 +302,16 @@ export default function Landing() {
               <div><div className="font-semibold text-sm">Live activity</div><p className="text-xs text-slate-500 mt-1">See which agent did what, when — full audit trail, always.</p></div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── data feeding in — sources streaming into the ledger ── */}
+      <section className="border-t border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 py-20">
+          <div className="text-[13px] text-slate-400 mb-3">Ingestion →</div>
+          <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-ink">Every source feeds one ledger</h2>
+          <p className="text-sm text-slate-500 mt-3 max-w-lg">WhatsApp messages, Excel exports, Gmail invoices, Tally entries and UPI pings — all streaming into one brain your agents actually work on.</p>
+          <div className="mt-10"><DataFeed /></div>
         </div>
       </section>
 

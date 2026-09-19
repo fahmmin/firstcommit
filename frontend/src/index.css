@@ -40,3 +40,5 @@ html { scroll-behavior: smooth; }
 .animate-orbPulse { animation: orbPulse 1.6s ease-in-out infinite; }
 @keyframes ringBreathe { 0%,100% { transform: scale(1); opacity: .8; } 50% { transform: scale(1.07); opacity: .35; } }
 .animate-ringBreathe { animation: ringBreathe 2.4s ease-in-out infinite; }
+@keyframes drawline { to { stroke-dashoffset: 0; } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }

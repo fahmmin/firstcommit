@@ -1,5 +1,6 @@
 import VasoolCards from './VasoolCards.jsx'
 import LogisticsCards from './LogisticsCards.jsx'
+import KhataCards from './KhataCards.jsx'
 import { Activity } from 'lucide-react'
 
 /* Template registry — resolve cards by tool signature, not agent id,
@@ -7,6 +8,7 @@ import { Activity } from 'lucide-react'
 const SIGNATURES = [
   { has: 'list_overdue', Comp: VasoolCards },
   { has: 'list_carriers', Comp: LogisticsCards },
+  { has: 'term_gap_analysis', Comp: KhataCards },
 ]
 
 export function AgentCards({ agent, context }) {

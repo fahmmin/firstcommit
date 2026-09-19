@@ -11,13 +11,14 @@ import Marketplace from './pages/Marketplace.jsx'
 import Context from './pages/Context.jsx'
 import Templates from './pages/Templates.jsx'
 import Calendar from './pages/Calendar.jsx'
+import Logs from './pages/Logs.jsx'
 import { isAuthed } from './lib/auth.js'
 
 // hash router — no deps, works on any static host (Amplify, S3+CF, file://)
 const routes = {
   '': Landing, docs: Docs, app: Workspace, settings: Settings,
   login: Login, onboarding: Onboarding, search: Search, a: ArtifactView,
-  marketplace: Marketplace, context: Context, templates: Templates, calendar: Calendar,
+  marketplace: Marketplace, context: Context, templates: Templates, calendar: Calendar, logs: Logs,
 }
 
 export default function App() {

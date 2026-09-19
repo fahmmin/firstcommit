@@ -9,12 +9,13 @@ import { ExclusionTabs } from '../components/rui/ExclusionTabs.jsx'
 import { VoiceOverlay } from '../components/rui/CloudWave.jsx'
 import { Can } from '../components/rui/Can.jsx'
 import { LinkifiedText, LinkPreviewCard, extractUrls } from '../components/rui/LinkPreview.jsx'
+import { NavIndicator } from '../components/rui/NavIndicator.jsx'
 import { BrandIcon } from '../components/BrandIcon.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
-  Braces, Server,
+  Braces, Server, ScrollText,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -49,6 +50,16 @@ export default function Workspace() {
   const [scope, setScope] = useState({ skills: [], mcps: [] })
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const msgRefs = useRef([])
+  const scrollRef = useRef(null)
+  const [activeMsg, setActiveMsg] = useState(0)
+
+  const onChatScroll = (e) => {
+    const mid = e.currentTarget.scrollTop + e.currentTarget.clientHeight / 2
+    let best = 0
+    msgRefs.current.forEach((el, i) => { if (el && el.offsetTop <= mid) best = i })
+    setActiveMsg(best)
+  }
 
   // fall back to seeded surfaces so the scope tabs are explorable before installs
   const installedSkills = settings?.prefs?.installed_skills?.length
@@ -157,6 +168,10 @@ export default function Workspace() {
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <CalendarDays size={11} /> Calendar
           </a>
+          <a href="#/logs"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <ScrollText size={11} /> Logs
+          </a>
           <a href="#/context"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <Brain size={11} /> Business context
@@ -207,10 +222,16 @@ export default function Workspace() {
           <a href="#/docs" className="text-[11px] text-slate-400 hover:text-ink flex items-center gap-1 mt-1"><ExternalLink size={11} /> Docs</a>
         </div>
 
-        {/* messages */}
-        <div className="flex-1 overflow-y-auto scroll-thin px-6 py-5 space-y-4">
+        {/* messages — nav indicator on the right edge jumps to any point */}
+        <div className="relative flex-1 flex flex-col min-h-0">
+          <NavIndicator items={messages} activeIndex={activeMsg}
+            onJump={i => msgRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="right-1" />
+          <div ref={scrollRef} onScroll={onChatScroll}
+            className="flex-1 overflow-y-auto scroll-thin px-6 py-5 space-y-4">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} ref={el => msgRefs.current[i] = el}
+              className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[72%] text-[13px] leading-relaxed whitespace-pre-wrap
                 ${m.role === 'user'
                   ? 'bg-ink text-white rounded-2xl rounded-br-md px-4 py-2.5'
@@ -245,6 +266,7 @@ export default function Workspace() {
           ))}
           {busy && <TimelineProgress text={lastSent} scope={scope} />}
           <div ref={bottomRef} />
+          </div>
         </div>
 
         {/* templates gallery + scope tabs + suggestions + input */}
