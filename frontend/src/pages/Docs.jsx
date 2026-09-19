@@ -1,16 +1,8 @@
 import { useState } from 'react'
 import { ArrowLeft, Terminal, Layers, Bot, Braces, Cloud, PlayCircle, Users } from 'lucide-react'
 import { AgentAvatar } from '../lib/avatar.jsx'
+import { Blobs } from '../components/Logo.jsx'
 import contract from '../../mocks/contract.json'
-
-const Blobs = () => (
-  <div className="flex items-end gap-1">
-    <span className="w-4 h-4 rounded-full bg-[#a325fc]" />
-    <span className="w-4 h-4 rounded-full rounded-bl-md bg-[#1aaf50]" />
-    <span className="w-4 h-4 rounded-md rotate-12 bg-[#86cefc]" />
-    <span className="w-4 h-4 rounded-full rounded-tr-md bg-[#d4428f]" />
-  </div>
-)
 
 const NAV = [
   { id: 'quickstart', label: 'Quickstart', icon: Terminal },

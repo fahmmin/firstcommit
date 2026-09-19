@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { Blobs } from '../components/Logo.jsx'
 import { ARTIFACT_TEMPLATES } from '../components/artifacts/index.jsx'
 import { Share2, Check, Sparkles } from 'lucide-react'
 
@@ -25,7 +26,7 @@ export default function ArtifactView({ param }) {
     <div className="min-h-screen bg-[#fbfbfd] font-sans flex flex-col">
       <header className="px-6 h-[52px] flex items-center justify-between border-b border-slate-100 bg-white/85 backdrop-blur sticky top-0">
         <a href="#/" className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-lg bg-ink text-white grid place-items-center text-[10px] font-bold">स</span>
+          <Blobs />
           <span className="font-semibold text-[14px] tracking-tight text-ink">Sahayak</span>
         </a>
         {art && (

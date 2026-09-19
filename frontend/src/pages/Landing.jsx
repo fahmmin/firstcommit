@@ -8,19 +8,7 @@ import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { LogoCarousel } from '../components/rui/LogoCarousel.jsx'
 import { DataFeed } from '../components/rui/DataFeed.jsx'
 import { AgentAvatar } from '../lib/avatar.jsx'
-
-/* ── blobs: the 4-color mark, gumloop-style ── */
-const Blobs = ({ size = 'md' }) => {
-  const s = size === 'lg' ? 'w-6 h-6' : 'w-4 h-4'
-  return (
-    <div className="flex items-end gap-1">
-      <span className={`${s} rounded-full bg-[#a325fc]`} />
-      <span className={`${s} rounded-full rounded-bl-md bg-[#1aaf50]`} />
-      <span className={`${s} rounded-md rotate-12 bg-[#86cefc]`} />
-      <span className={`${s} rounded-full rounded-tr-md bg-[#d4428f]`} />
-    </div>
-  )
-}
+import { Blobs } from '../components/Logo.jsx'
 
 const spend = [
   { m: 'Jul 12', v: 12 }, { m: 'Jul 19', v: 18 }, { m: 'Jul 26', v: 15 }, { m: 'Aug 2', v: 24 },

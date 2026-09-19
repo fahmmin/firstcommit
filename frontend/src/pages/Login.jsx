@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api.js'
 import { session } from '../lib/auth.js'
 import { MFACode } from '../components/rui/MFACode.jsx'
+import { Blobs } from '../components/Logo.jsx'
 import { ArrowLeft, Chrome, Phone, ChevronRight, Loader2, MailCheck } from 'lucide-react'
 
 // Provider adapters are client-side seams — /auth/login + tenant are real.
@@ -31,7 +32,7 @@ export default function Login() {
     <div className="min-h-screen bg-[#fbfbfd] font-sans flex flex-col">
       <header className="px-6 h-[52px] flex items-center">
         <a href="#/" className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-lg bg-ink text-white grid place-items-center text-[10px] font-bold">स</span>
+          <Blobs />
           <span className="font-semibold text-[14px] tracking-tight text-ink">Sahayak</span>
         </a>
       </header>

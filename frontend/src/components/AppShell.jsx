@@ -8,6 +8,7 @@ import {
   Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search,
 } from 'lucide-react'
 import { SpinPlus } from './anim/index.jsx'
+import { Blobs } from './Logo.jsx'
 
 const NAV = [
   ['#/templates', 'Templates', LayoutTemplate],
@@ -57,7 +58,7 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
     <div className="h-screen flex bg-white font-sans">
       <aside className="w-[190px] shrink-0 border-r border-slate-100 bg-[#fbfbfd] flex flex-col">
         <a href="#/" className="flex items-center gap-2 px-4 h-[52px] border-b border-slate-100">
-          <span className="w-6 h-6 rounded-lg bg-ink text-white grid place-items-center text-[10px] font-bold">स</span>
+          <Blobs />
           <span className="font-semibold text-[14px] tracking-tight text-ink">Sahayak</span>
         </a>
         <div className="p-3">

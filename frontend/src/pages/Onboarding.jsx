@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api.js'
 import { session } from '../lib/auth.js'
 import { role } from '../lib/role.js'
+import { Blobs } from '../components/Logo.jsx'
 import { ArrowLeft, ArrowRight, Check, Loader2, Sparkles, Crown, Calculator, Briefcase, HardHat } from 'lucide-react'
 
 // onboarding role → RBAC role (drives Can/permission gates app-wide)
@@ -59,7 +60,7 @@ export default function Onboarding() {
     <div className="min-h-screen bg-[#fbfbfd] font-sans flex flex-col">
       <header className="px-6 h-[52px] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-lg bg-ink text-white grid place-items-center text-[10px] font-bold">स</span>
+          <Blobs />
           <span className="font-semibold text-[14px] tracking-tight text-ink">Sahayak</span>
         </div>
         <div className="flex gap-1.5">
