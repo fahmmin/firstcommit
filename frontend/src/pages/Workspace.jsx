@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { AgentCards } from '../components/cards/index.jsx'
+import { TEMPLATES } from '../lib/templates.js'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
+  LayoutTemplate, X,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -30,7 +32,15 @@ export default function Workspace() {
   const [busy, setBusy] = useState(false)
   const [activeAgent, setActiveAgent] = useState(null)
   const [tab, setTab] = useState('agent')
+  const [showTemplates, setShowTemplates] = useState(false)
   const bottomRef = useRef(null)
+  const inputRef = useRef(null)
+
+  const pickTemplate = (t) => {
+    setInput(t.prompt)
+    setShowTemplates(false)
+    inputRef.current?.focus()
+  }
 
   const active = agents.find(a => a.id === activeAgent)
 
@@ -165,9 +175,36 @@ export default function Workspace() {
           <div ref={bottomRef} />
         </div>
 
-        {/* suggestions + input */}
+        {/* templates gallery + suggestions + input */}
         <div className="px-6 pb-4">
-          <div className="flex gap-2 flex-wrap mb-3">
+          {showTemplates && (
+            <div className="mb-3 rounded-2xl border border-slate-200 bg-[#fbfbfd] shadow-float overflow-hidden">
+              <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                <span className="text-[11px] font-semibold text-ink flex items-center gap-1.5">
+                  <LayoutTemplate size={12} className="text-accent" /> Start from a template
+                </span>
+                <button onClick={() => setShowTemplates(false)} className="text-slate-400 hover:text-ink transition"><X size={13} /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 px-4 pb-4 max-h-[240px] overflow-y-auto scroll-thin">
+                {TEMPLATES.map(t => (
+                  <button key={t.id} onClick={() => pickTemplate(t)}
+                    className="text-left rounded-xl border border-slate-200 bg-white p-3 hover:border-ink/40 hover:shadow-float transition group">
+                    <span className={`w-7 h-7 rounded-lg grid place-items-center mb-2 ${t.tint}`}>
+                      <t.icon size={14} />
+                    </span>
+                    <div className="text-[12px] font-semibold text-ink leading-tight group-hover:text-accent transition">{t.title}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">{t.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2 flex-wrap mb-3 items-center">
+            <button onClick={() => setShowTemplates(v => !v)}
+              className={`text-[11px] px-3 py-1.5 rounded-full border font-medium transition flex items-center gap-1.5
+                ${showTemplates ? 'border-ink bg-ink text-white' : 'border-accent/50 text-accent hover:border-accent'}`}>
+              <LayoutTemplate size={11} /> Templates
+            </button>
             {SUGGESTIONS.map(s => (
               <button key={s} onClick={() => send(s)}
                 className="text-[11px] px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-ink hover:text-ink transition">
@@ -178,10 +215,10 @@ export default function Workspace() {
           <form onSubmit={e => { e.preventDefault(); send() }}
             className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white shadow-float px-4 py-1.5 focus-within:border-slate-400 transition">
             {activeAgent && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ink text-white shrink-0">→ {active?.name || activeAgent}</span>}
-            <input value={input} onChange={e => setInput(e.target.value)}
-              placeholder={activeAgent ? `Ask ${active?.name || activeAgent}…` : 'Ask Sahayak anything… (Hinglish works)'}
+            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+              placeholder={activeAgent ? `Ask ${active?.name || activeAgent}…` : 'Pick a template or write your own prompt…'}
               className="flex-1 py-2 text-[13px] focus:outline-none bg-transparent" />
-            <button disabled={busy} className="rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 transition">Send</button>
+            <button disabled={busy} className="rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 transition">Generate</button>
           </form>
         </div>
       </main>
