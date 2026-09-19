@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 CONTRACT = json.loads(
-    (Path(__file__).resolve().parents[3] / "frontend" / "mocks" / "contract.json").read_text()
+    (Path(__file__).resolve().parents[3] / "frontend" / "mocks" / "contract.json").read_text(encoding="utf-8")
 )
 
 
