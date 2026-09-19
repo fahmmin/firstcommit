@@ -103,6 +103,24 @@ Logistics Agent → carriers/bookings) → `/tasks` (assign work to an agent, wa
 
 Fully parallel: Fahmin builds against contract.json mocks; Ayush builds to contract.
 
+## The iteration loop (how you two actually work together)
+
+As screens come online, Fahmin reports mismatches to Ayush in this format:
+
+```
+PAGE: /agents/agent-l7x2 (right sidebar)
+COMPONENT: InvoiceSummaryCard
+NEED: oldest_overdue_days (number)
+EXPECTED: 111   ACTUAL: missing
+KIND: behavior | shape | new-endpoint
+```
+
+- **behavior** → reply was wrong/weird → Ayush fixes prompt/tool/mock_rules/seed
+- **shape** → component needs a field → agree shape, **edit contract.json first**, then implement
+- **new-endpoint** → whole view has no API → same: contract first, then build
+
+Done = contract test for that endpoint + `simulate_demo.py` green.
+
 ## Guardrails (pitch these)
 
 tool allowlist per agent · spec validation · human-approval for all outbound ·

@@ -89,6 +89,31 @@ factory-hiring animation → landing → demo video + submission.
 | stable demo path when you deploy | `[TODO]` endpoints (he mocks till then) |
 | — | SES-verified demo inbox |
 
+## The iteration loop — how Fahmin reports, how you fix
+
+As you build, Fahmin wires real screens and will send you reports. Every report
+is one of three kinds — identify which before touching code:
+
+| He says… | Kind | You do |
+|---|---|---|
+| "reply was wrong / weird / missed the point" | **BEHAVIOR** | Fix prompt, tool logic, mock_rules, or seed until *actual* matches his *expected*. Contract shapes untouched. |
+| "this component needs field X" / "missing data" | **SHAPE** | Don't just add it ad-hoc — agree the shape with him, **edit contract.json first**, then implement. Then contract test. |
+| "expose an API for this view" (whole component has nothing) | **NEW ENDPOINT** | Same: contract.json first (shape + page in `frontend_flow`), then build. |
+
+**Report format he'll use:**
+
+```
+PAGE: /agents/agent-l7x2 (right sidebar)
+COMPONENT: InvoiceSummaryCard
+NEED: oldest_overdue_days (number)
+EXPECTED: 111   ACTUAL: missing
+KIND: shape | behavior | new-endpoint
+```
+
+**Your response rule:** fix it, then re-run the contract test for that endpoint +
+`simulate_demo.py` before saying "done." If you can't tell which kind it is — ask
+him, don't guess and refactor.
+
 ## Expected commits from you
 
 ```
