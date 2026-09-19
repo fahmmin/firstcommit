@@ -3,10 +3,12 @@ import { api, TENANT } from '../api.js'
 import { session } from '../lib/auth.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { AgentCards } from '../components/cards/index.jsx'
+import { ThinkingTrace, SourceChips } from '../components/ThinkingTrace.jsx'
+import { BrandIcon } from '../components/BrandIcon.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
-  LayoutTemplate, X, Search, FileText, LogOut,
+  LayoutTemplate, X, Search, FileText, LogOut, Store,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -31,6 +33,7 @@ export default function Workspace() {
   const [context, setContext] = useState(null)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [lastSent, setLastSent] = useState('')
   const [activeAgent, setActiveAgent] = useState(null)
   const [tab, setTab] = useState('agent')
   const [showTemplates, setShowTemplates] = useState(false)
@@ -62,6 +65,7 @@ export default function Workspace() {
     const msg = (text || input).trim()
     if (!msg || busy) return
     setInput('')
+    setLastSent(msg)
     setMessages(m => [...m, { role: 'user', text: msg }])
     setBusy(true)
     try {
@@ -116,6 +120,10 @@ export default function Workspace() {
         </nav>
         <div className="p-3 border-t border-slate-100 space-y-1">
           <div className="text-[10px] text-slate-400 px-1">{TENANT}</div>
+          <a href="#/marketplace"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <Store size={11} /> Marketplace
+          </a>
           <a href="#/settings"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <Settings2 size={11} /> Settings
@@ -173,6 +181,7 @@ export default function Workspace() {
                   </div>
                 )}
                 {m.text}
+                {m.role === 'agent' && m.agent && m.agent !== 'system' && <SourceChips trace={m.trace} actions={m.actions} />}
                 {m.actions?.some(a => a.type === 'agent_created') && (
                   <div className="mt-2.5 text-[11px] bg-magenta/10 text-magenta rounded-lg px-2.5 py-1.5 font-medium">
                     ✨ New agent joined your team — check the sidebar
@@ -192,7 +201,7 @@ export default function Workspace() {
               </div>
             </div>
           ))}
-          {busy && <div className="text-[11px] text-slate-400 animate-pulse flex items-center gap-1.5"><Activity size={11} /> agents thinking…</div>}
+          {busy && <ThinkingTrace text={lastSent} />}
           <div ref={bottomRef} />
         </div>
 
@@ -297,7 +306,7 @@ export default function Workspace() {
               <div className="text-[10px] font-semibold text-slate-500 mb-2 flex justify-between">Connectors <span className="text-slate-300">+ Add</span></div>
               {connectors.map(c => (
                 <div key={c.id} className="text-[11px] text-slate-600 py-1.5 flex items-center gap-2">
-                  <PlugZap size={11} className="text-slate-300" />
+                  <BrandIcon id={c.icon || c.id} size={12} />
                   {c.name}
                   <span className={`ml-auto w-1.5 h-1.5 rounded-full ${c.status === 'connected' ? 'bg-emerald-400' : 'bg-slate-200'}`} />
                 </div>

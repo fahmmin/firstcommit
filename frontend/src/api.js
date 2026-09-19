@@ -4,6 +4,8 @@
 const BASE = import.meta.env.VITE_API_URL || '/api'
 export const TENANT = 'ramesh_auto'
 
+import { demo, demoSearch } from './lib/demo.js'
+
 async function req(path, opts = {}) {
   const r = await fetch(`${BASE}${path}`, opts)
   if (!r.ok) throw new Error(`${opts.method || 'GET'} ${path} → ${r.status}`)
@@ -41,9 +43,12 @@ export const api = {
   agentDetail: (id) => req(`/agents/${id}?tenant_id=${TENANT}`),
   agentContext: (id) => req(`/agents/${id}/context?tenant_id=${TENANT}`),
   notifications: () => req(`/notifications?tenant_id=${TENANT}`),
-  connectors: () => req(`/connectors?tenant_id=${TENANT}`),
-  connectConnector: (id) => req(`/connectors/${id}/connect?tenant_id=${TENANT}`, { method: 'POST' }),
-  disconnectConnector: (id) => req(`/connectors/${id}/disconnect?tenant_id=${TENANT}`, { method: 'POST' }),
+  connectors: () =>
+    req(`/connectors?tenant_id=${TENANT}`).then(demo.connectors.merge).catch(() => demo.connectors.merge([])),
+  connectConnector: (id) =>
+    req(`/connectors/${id}/connect?tenant_id=${TENANT}`, { method: 'POST' }).catch(() => demo.connectors.toggle(id, true)),
+  disconnectConnector: (id) =>
+    req(`/connectors/${id}/disconnect?tenant_id=${TENANT}`, { method: 'POST' }).catch(() => demo.connectors.toggle(id, false)),
   settings: () => req(`/settings?tenant_id=${TENANT}`),
   updateSettings: (body) =>
     req(`/settings?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
@@ -51,21 +56,22 @@ export const api = {
   runScheduler: () => req(`/scheduler/run?tenant_id=${TENANT}`, { method: 'POST' }),
   resetDemo: () => req(`/demo/reset?tenant_id=${TENANT}`, { method: 'POST' }),
 
-  // ── round 2 ──
+  // ── round 2 — real endpoint first, demo store on failure ──
   login: (body) =>
     req('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-  memories: () => req(`/memories?tenant_id=${TENANT}`),
+  memories: () => req(`/memories?tenant_id=${TENANT}`).catch(() => demo.memories.list()),
   addMemory: (text, source = 'owner') =>
     req('/memories', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                       body: JSON.stringify({ tenant_id: TENANT, text, source }) }),
-  delMemory: (id) => req(`/memories/${id}`, { method: 'DELETE' }),
-  search: (q) => req(`/search?tenant_id=${TENANT}&q=${encodeURIComponent(q)}`),
-  artifacts: () => req(`/artifacts?tenant_id=${TENANT}`),
-  artifact: (id) => req(`/artifacts/${id}`),
+                       body: JSON.stringify({ tenant_id: TENANT, text, source }) })
+      .catch(() => demo.memories.add(text, source)),
+  delMemory: (id) => req(`/memories/${id}`, { method: 'DELETE' }).catch(() => demo.memories.del(id)),
+  search: (q) => req(`/search?tenant_id=${TENANT}&q=${encodeURIComponent(q)}`).catch(() => demoSearch(q, api)),
+  artifacts: () => req(`/artifacts?tenant_id=${TENANT}`).catch(() => demo.artifacts.list()),
+  artifact: (id) => req(`/artifacts/${id}`).catch(() => demo.artifacts.get(id)),
   importExcel: (file) => {
     const fd = new FormData()
     fd.append('file', file)
     fd.append('tenant_id', TENANT)
-    return req('/import/excel', { method: 'POST', body: fd })
+    return req('/import/excel', { method: 'POST', body: fd }).catch(() => demo.importExcel(file?.name))
   },
 }

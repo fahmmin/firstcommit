@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
+import { BrandIcon } from '../components/BrandIcon.jsx'
 import {
   ArrowLeft, Building2, SlidersHorizontal, PlugZap, Braces, Server,
-  CheckCircle2, Plus, Trash2, Calendar, Table, MessageSquare, BookOpen, IndianRupee,
-  Brain, FileSpreadsheet, Mail, HardDrive, Upload, Loader2,
+  CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store,
 } from 'lucide-react'
-
-const CONN_ICONS = { calendar: Calendar, table: Table, message: MessageSquare, ledger: BookOpen, rupee: IndianRupee,
-                     mail: Mail, gmail: Mail, drive: HardDrive, excel: FileSpreadsheet }
 
 const SKILL_GROUPS = [
   { group: 'invoices', tools: ['list_overdue', 'aging_report', 'create_invoice', 'draft_reminder'] },
@@ -192,12 +189,11 @@ export default function Settings() {
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
             {connectors.map(c => {
-              const I = CONN_ICONS[c.icon] || PlugZap
               const connected = c.status === 'connected'
               return (
                 <div key={c.id} className="rounded-2xl border border-slate-200 bg-white p-4 flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-xl grid place-items-center shrink-0 ${connected ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                    <I size={15} />
+                  <div className={`w-9 h-9 rounded-xl grid place-items-center shrink-0 ${connected ? 'bg-emerald-50' : 'bg-slate-50'} border border-slate-100`}>
+                    <BrandIcon id={c.icon || c.id} size={17} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-semibold text-ink flex items-center gap-1.5">
@@ -221,8 +217,19 @@ export default function Settings() {
 
         {/* skills */}
         <section>
-          <SectionHead icon={Braces} title="Skills" sub={<span className="text-[10px] text-slate-400">Tool groups agents can use — click to enable/disable</span>} />
+          <SectionHead icon={Braces} title="Skills" sub={<span className="text-[10px] text-slate-400">Tool groups agents can use — click to enable/disable</span>}
+            right={<a href="#/marketplace" className="text-[11px] text-accent hover:text-ink flex items-center gap-1 transition"><Store size={11} /> Browse marketplace</a>} />
           <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-50">
+            {(settings?.prefs?.installed_skills || []).length > 0 && (
+              <div className="px-5 py-3.5 flex items-center gap-4 bg-accent/5">
+                <span className="text-[11px] font-semibold text-accent w-20 shrink-0">installed</span>
+                <div className="flex gap-1.5 flex-wrap">
+                  {settings.prefs.installed_skills.map(s => (
+                    <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 font-medium">{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             {SKILL_GROUPS.map(g => (
               <div key={g.group} className="px-5 py-3.5 flex items-center gap-4">
                 <span className="text-[11px] font-semibold text-ink w-20 shrink-0">{g.group}</span>
@@ -245,7 +252,8 @@ export default function Settings() {
 
         {/* mcp servers */}
         <section>
-          <SectionHead icon={Server} title="MCP servers" sub={<span className="text-[9px] font-bold text-magenta bg-magenta/10 rounded px-1.5 py-0.5">BETA</span>} />
+          <SectionHead icon={Server} title="MCP servers" sub={<span className="text-[9px] font-bold text-magenta bg-magenta/10 rounded px-1.5 py-0.5">BETA</span>}
+            right={<a href="#/marketplace" className="text-[11px] text-accent hover:text-ink flex items-center gap-1 transition"><Store size={11} /> Browse marketplace</a>} />
           <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
             <p className="text-[12px] text-slate-500 leading-relaxed">
               Plug in external MCP endpoints — agents can call their tools after owner approval.
