@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { BrandIcon } from '../components/BrandIcon.jsx'
+import { FractionalSlider } from '../components/rui/FractionalSlider.jsx'
+import { Can } from '../components/rui/Can.jsx'
+import { AccessRings } from '../components/rui/Circles.jsx'
+import { useRole, role, ROLES } from '../lib/role.js'
 import {
   ArrowLeft, Building2, SlidersHorizontal, PlugZap, Braces, Server,
-  CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store,
+  CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store, ShieldCheck,
 } from 'lucide-react'
 
 const SKILL_GROUPS = [
@@ -24,6 +28,7 @@ export default function Settings() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const fileRef = useRef(null)
+  const currentRole = useRole()
 
   const mcps = settings?.mcp_servers || []
   const disabledTools = settings?.prefs?.disabled_tools || []
@@ -116,9 +121,14 @@ export default function Settings() {
           <SectionHead icon={SlidersHorizontal} title="Preferences" right={saved && <span className="text-[11px] text-emerald-600 flex items-center gap-1"><CheckCircle2 size={11} /> saved</span>} />
           <div className="rounded-2xl border border-slate-200 bg-white p-5 grid sm:grid-cols-2 gap-5">
             <Field label="Reminder cadence (days)">
-              <input type="number" min="1" max="30" defaultValue={settings?.prefs?.reminder_cadence_days}
-                onBlur={e => patch({ prefs: { reminder_cadence_days: +e.target.value } })}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] focus:outline-none focus:border-ink" />
+              <FractionalSlider min={1} max={30} step={1} major={5} unit="d"
+                value={settings?.prefs?.reminder_cadence_days ?? 7}
+                onChange={v => { setSettings(s => ({ ...s, prefs: { ...s.prefs, reminder_cadence_days: v } })) }}
+                className="pt-1" />
+              <button onClick={() => patch({ prefs: { reminder_cadence_days: settings?.prefs?.reminder_cadence_days } })}
+                className="mt-2 text-[10px] font-medium text-accent hover:text-ink transition">
+                Save cadence → {settings?.prefs?.reminder_cadence_days}d
+              </button>
             </Field>
             <Field label="Approval mode">
               <select defaultValue={settings?.prefs?.approval_mode}
@@ -184,11 +194,13 @@ export default function Settings() {
                     {connected && c.items_synced != null &&
                       <div className="text-[10px] text-slate-400 mt-1">{c.items_synced} items synced · last {new Date(c.last_sync).toLocaleDateString()}</div>}
                   </div>
-                  <button onClick={() => toggleConnector(c)}
-                    className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition
-                      ${connected ? 'border border-slate-200 text-slate-500 hover:bg-slate-50' : 'bg-ink text-white hover:bg-ink/85'}`}>
-                    {connected ? 'Disconnect' : 'Connect'}
-                  </button>
+                  <Can perm="connect" reason="Connecting sources needs Owner">
+                    <button onClick={() => toggleConnector(c)}
+                      className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition
+                        ${connected ? 'border border-slate-200 text-slate-500 hover:bg-slate-50' : 'bg-ink text-white hover:bg-ink/85'}`}>
+                      {connected ? 'Disconnect' : 'Connect'}
+                    </button>
+                  </Can>
                 </div>
               )
             })}
@@ -230,6 +242,29 @@ export default function Settings() {
           </div>
         </section>
 
+        {/* role / access — RBAC demo surface */}
+        <section>
+          <SectionHead icon={ShieldCheck} title="Access role" sub={<span className="text-[10px] text-slate-400">What this login can do — drives button permissions across the app</span>} />
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-center gap-6">
+            <AccessRings allowed={currentRole === 'owner'} size={84} />
+            <div className="flex-1">
+              <div className="flex gap-2">
+                {Object.entries(ROLES).map(([k, r]) => (
+                  <button key={k} onClick={() => role.set(k)}
+                    className={`rounded-xl border px-4 py-2.5 text-left transition
+                      ${currentRole === k ? 'border-ink bg-ink text-white' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <div className="text-[12px] font-semibold">{r.label}</div>
+                    <div className={`text-[9px] mt-0.5 ${currentRole === k ? 'text-white/60' : 'text-slate-400'}`}>{r.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
+                Viewer sees everything but can't act; Manager can approve drafts and hire agents; Owner controls connectors, MCP and skills.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* mcp servers */}
         <section>
           <SectionHead icon={Server} title="MCP servers" sub={<span className="text-[9px] font-bold text-magenta bg-magenta/10 rounded px-1.5 py-0.5">BETA</span>}
@@ -254,10 +289,12 @@ export default function Settings() {
                 className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[12px] focus:outline-none focus:border-ink" />
               <input value={mcpUrl} onChange={e => setMcpUrl(e.target.value)} placeholder="https://…/sse"
                 className="flex-[1.5] rounded-lg border border-slate-200 px-3 py-2 text-[12px] focus:outline-none focus:border-ink" />
-              <button onClick={addMcp}
-                className="rounded-lg bg-ink text-white px-4 text-[12px] font-medium flex items-center gap-1 hover:bg-ink/85 transition">
-                <Plus size={12} /> Add
-              </button>
+              <Can perm="mcp" reason="Adding MCP servers needs Owner">
+                <button onClick={addMcp}
+                  className="rounded-lg bg-ink text-white px-4 text-[12px] font-medium flex items-center gap-1 hover:bg-ink/85 transition">
+                  <Plus size={12} /> Add
+                </button>
+              </Can>
             </div>
           </div>
         </section>

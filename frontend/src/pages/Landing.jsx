@@ -5,6 +5,7 @@ import {
   Zap, Puzzle, FileText, Repeat2, BrainCircuit, TrendingUp, Lock, Eye, Layers,
 } from 'lucide-react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
+import { LogoCarousel } from '../components/rui/LogoCarousel.jsx'
 
 /* ── blobs: the 4-color mark, gumloop-style ── */
 const Blobs = ({ size = 'md' }) => {
@@ -182,6 +183,12 @@ export default function Landing() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* ── partner logo carousel ── */}
+      <section className="max-w-6xl mx-auto px-6 pb-6">
+        <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 text-center mb-4">Works with</div>
+        <LogoCarousel />
       </section>
 
       {/* ── "Build →" section — sidebar label + agent shot ── */}

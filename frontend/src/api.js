@@ -74,4 +74,5 @@ export const api = {
     fd.append('tenant_id', TENANT)
     return req('/import/excel', { method: 'POST', body: fd }).catch(() => demo.importExcel(file?.name))
   },
+  calendarEvents: () => req(`/calendar/events?tenant_id=${TENANT}`).catch(() => []),
 }

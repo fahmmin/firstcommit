@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { api } from '../api.js'
 import { session } from '../lib/auth.js'
-import { ArrowLeft, Chrome, Phone, ChevronRight, Loader2 } from 'lucide-react'
+import { MFACode } from '../components/rui/MFACode.jsx'
+import { ArrowLeft, Chrome, Phone, ChevronRight, Loader2, MailCheck } from 'lucide-react'
 
 // Provider adapters are client-side seams — /auth/login + tenant are real.
 export default function Login() {
-  const [mode, setMode] = useState('pick') // pick | phone | otp
+  const [mode, setMode] = useState('pick') // pick | phone | otp | email-verify
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
+  const [emailCode, setEmailCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -22,7 +24,7 @@ export default function Login() {
     } finally { setBusy(false) }
   }
 
-  const google = () => finish('google', 'ramesh@rameshauto.in', 'Ramesh Gupta', 'Ramesh Auto Components')
+  const google = () => setMode('email-verify')
   const guest = () => finish('guest', null, 'Ramesh Gupta', 'Ramesh Auto Components')
 
   return (
@@ -90,16 +92,32 @@ export default function Login() {
           {mode === 'otp' && (<>
             <button onClick={() => setMode('phone')} className="text-[12px] text-slate-400 hover:text-ink flex items-center gap-1 mb-6"><ArrowLeft size={12} /> Back</button>
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">Enter the code</h1>
-            <p className="text-[12px] text-slate-500 mt-1.5 mb-6">Sent to +91 {phone}</p>
+            <p className="text-[12px] text-slate-500 mt-1.5 mb-7">Sent to +91 {phone} — any 6 digits work in this build.</p>
             <form onSubmit={e => { e.preventDefault(); if (otp.length === 6) finish('phone', `+91${phone}`, 'Ramesh Gupta', 'Ramesh Auto Components') }}
-              className="space-y-3">
-              <input value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="••••••" inputMode="numeric" autoFocus
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-[18px] tracking-[0.5em] text-center font-semibold focus:outline-none focus:border-ink" />
+              className="space-y-5">
+              <MFACode value={otp} onChange={setOtp} />
               <button disabled={otp.length !== 6 || busy}
                 className="w-full rounded-xl bg-ink text-white py-3 text-[13px] font-medium hover:bg-ink/85 transition disabled:opacity-40 flex items-center justify-center gap-2">
                 {busy ? <Loader2 size={14} className="animate-spin" /> : 'Verify & continue'}
               </button>
+            </form>
+            {err && <p className="text-[11px] text-rose-500 text-center mt-3">{err}</p>}
+          </>)}
+
+          {mode === 'email-verify' && (<>
+            <button onClick={() => setMode('pick')} className="text-[12px] text-slate-400 hover:text-ink flex items-center gap-1 mb-6"><ArrowLeft size={12} /> Back</button>
+            <div className="w-11 h-11 rounded-2xl bg-accent/10 text-accent grid place-items-center mb-4"><MailCheck size={18} /></div>
+            <h1 className="text-[22px] font-semibold tracking-tight text-ink">Verify your email</h1>
+            <p className="text-[12px] text-slate-500 mt-1.5 mb-7">We sent a 6-digit code to <span className="font-medium text-ink">ramesh@rameshauto.in</span></p>
+            <form onSubmit={e => { e.preventDefault(); if (emailCode.length === 6) finish('google', 'ramesh@rameshauto.in', 'Ramesh Gupta', 'Ramesh Auto Components') }}
+              className="space-y-5">
+              <MFACode value={emailCode} onChange={setEmailCode} />
+              <button disabled={emailCode.length !== 6 || busy}
+                className="w-full rounded-xl bg-ink text-white py-3 text-[13px] font-medium hover:bg-ink/85 transition disabled:opacity-40 flex items-center justify-center gap-2">
+                {busy ? <Loader2 size={14} className="animate-spin" /> : 'Verify & sign in'}
+              </button>
+              <button type="button" onClick={() => finish('google', 'ramesh@rameshauto.in', 'Ramesh Gupta', 'Ramesh Auto Components')}
+                className="w-full text-[11px] text-slate-400 hover:text-ink transition">Skip verification for now</button>
             </form>
             {err && <p className="text-[11px] text-rose-500 text-center mt-3">{err}</p>}
           </>)}
