@@ -18,11 +18,12 @@ import { CommandPalette } from '../components/CommandPalette.jsx'
 import { ApprovalsDrawer, ApprovalBell } from '../components/ApprovalsDrawer.jsx'
 import { Digest } from '../components/Digest.jsx'
 import { SetupChecklist } from '../components/SetupChecklist.jsx'
+import { SpinPlus, TypingDots } from '../components/anim/index.jsx'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
   Braces, Server, ScrollText, Paperclip, Globe, MessageSquare, Telescope, ImageIcon,
-  Moon, Sun, Volume2, Square, Command,
+  Moon, Sun, Volume2, Square, Command, Users, Send,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -190,8 +191,8 @@ export default function Workspace() {
         </a>
         <div className="p-3">
           <button onClick={() => { setActiveAgent(null); setMessages(m => m.slice(0, 1)) }}
-            className="w-full text-[12px] font-medium border border-slate-200 bg-white rounded-lg py-2 text-slate-600 hover:border-slate-300 transition flex items-center justify-center gap-1.5">
-            <Plus size={12} /> New Chat
+            className="plus-hover w-full text-[12px] font-medium border border-slate-200 bg-white rounded-lg py-2 text-slate-600 hover:border-slate-300 transition flex items-center justify-center gap-1.5">
+            <SpinPlus size={12} /> New Chat
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto scroll-thin px-3 pb-3 space-y-4">
@@ -220,6 +221,14 @@ export default function Workspace() {
           <a href="#/calendar"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <CalendarDays size={11} /> Calendar
+          </a>
+          <a href="#/notifications"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <Activity size={11} /> Notifications
+          </a>
+          <a href="#/people"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <Users size={11} /> People
           </a>
           <a href="#/logs"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
@@ -474,7 +483,9 @@ export default function Workspace() {
                 ${voice ? 'bg-accent text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-100'}`}>
               <Mic size={14} />
             </button>
-            <button disabled={busy} className="rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 transition">Generate</button>
+            <button disabled={busy} className="group rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 transition flex items-center gap-1.5">
+              Generate <Send size={10} className="send-fly" />
+            </button>
           </form>
         </div>
       </main>

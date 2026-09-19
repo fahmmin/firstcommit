@@ -1,8 +1,9 @@
 import { useToasts } from '../lib/toast.js'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, AlertTriangle, Info } from 'lucide-react'
+import { DrawCheck } from './anim/index.jsx'
 
-const ICONS = { ok: CheckCircle2, warn: AlertTriangle, info: Info }
+const ICONS = { ok: DrawCheck, warn: AlertTriangle, info: Info }
 const TINT = { ok: 'text-emerald-400', warn: 'text-amber-400', info: 'text-accent-2' }
 
 export function Toasts() {

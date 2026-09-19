@@ -7,17 +7,21 @@ import { api } from '../api.js'
 import { toast } from '../lib/toast.js'
 import { Can } from './rui/Can.jsx'
 import { BrandIcon } from './BrandIcon.jsx'
-import { Bell, X, CheckCircle2, CheckCheck, Ban, ShieldCheck } from 'lucide-react'
+import { DrawCheck, RingBell } from './anim/index.jsx'
+import { Bell, X, CheckCircle2, CheckCheck, Ban, ShieldCheck, Loader2 } from 'lucide-react'
 
 export function ApprovalsDrawer({ open, onClose, alerts, onChanged }) {
   const [dismissed, setDismissed] = useState(new Set())
+  const [approving, setApproving] = useState({})   // id -> 'busy' | 'done'
   const pending = alerts.filter(a => a.status === 'pending_approval' && !dismissed.has(a.id))
   const done = alerts.filter(a => a.status === 'sent' || a.status === 'approved')
 
   const approve = async (a) => {
+    setApproving(s => ({ ...s, [a.id]: 'busy' }))
     await api.approveAlert(a.id).catch(() => {})
+    setApproving(s => ({ ...s, [a.id]: 'done' }))
     toast.push('Approved — sending to customer')
-    onChanged?.()
+    setTimeout(() => onChanged?.(), 600)
   }
 
   return (
@@ -70,9 +74,12 @@ export function ApprovalsDrawer({ open, onClose, alerts, onChanged }) {
                   )}
                   <div className="flex gap-1.5 px-3 py-2.5">
                     <Can perm="approve" reason="Approving outbound actions needs Manager+">
-                      <button onClick={() => approve(a)}
-                        className="flex-1 rounded-lg bg-ink text-white text-[11px] font-medium py-1.5 flex items-center justify-center gap-1 hover:bg-ink/85 transition">
-                        <CheckCircle2 size={11} /> Approve &amp; send
+                      <button onClick={() => approve(a)} disabled={approving[a.id]}
+                        className="flex-1 rounded-lg bg-ink text-white text-[11px] font-medium py-1.5 flex items-center justify-center gap-1 hover:bg-ink/85 transition disabled:opacity-70">
+                        {approving[a.id] === 'busy' && <Loader2 size={11} className="animate-spin" />}
+                        {approving[a.id] === 'done' && <DrawCheck size={11} />}
+                        {!approving[a.id] && <CheckCircle2 size={11} />}
+                        {approving[a.id] === 'done' ? 'Sent!' : 'Approve & send'}
                       </button>
                     </Can>
                     <button onClick={() => setDismissed(s => new Set(s).add(a.id))}
@@ -101,14 +108,14 @@ export function ApprovalsDrawer({ open, onClose, alerts, onChanged }) {
   )
 }
 
-// Header bell — badge = pending count.
+// Header bell — badge = pending count, swings once when a new one lands.
 export function ApprovalBell({ alerts, onClick }) {
   const n = alerts.filter(a => a.status === 'pending_approval').length
   return (
     <button onClick={onClick} title="Pending approvals"
       className="relative mt-1 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
-      <Bell size={13} />
-      {n > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[8px] font-bold grid place-items-center">{n}</span>}
+      <RingBell ring={n > 0}><Bell size={13} /></RingBell>
+      {n > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[8px] font-bold grid place-items-center animate-popIn">{n}</span>}
     </button>
   )
 }

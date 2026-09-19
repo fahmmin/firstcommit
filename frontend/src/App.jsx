@@ -13,6 +13,8 @@ import Templates from './pages/Templates.jsx'
 import Calendar from './pages/Calendar.jsx'
 import Logs from './pages/Logs.jsx'
 import Artifacts from './pages/Artifacts.jsx'
+import Notifications from './pages/Notifications.jsx'
+import People from './pages/People.jsx'
 import { Toasts } from './components/Toasts.jsx'
 import { isAuthed } from './lib/auth.js'
 
@@ -21,7 +23,7 @@ const routes = {
   '': Landing, docs: Docs, app: Workspace, settings: Settings,
   login: Login, onboarding: Onboarding, search: Search, a: ArtifactView,
   marketplace: Marketplace, context: Context, templates: Templates, calendar: Calendar, logs: Logs,
-  artifacts: Artifacts,
+  artifacts: Artifacts, notifications: Notifications, people: People,
 }
 
 export default function App() {
