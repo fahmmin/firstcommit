@@ -27,11 +27,11 @@ export function DataFeed({ dark = false, className = '' }) {
     return () => clearInterval(t)
   }, [])
 
-  const W = 640, H = 150, cols = SOURCES.length
+  const W = 640, H = 210, cols = SOURCES.length
   const paths = useMemo(() => SOURCES.map((_, i) => {
     const x0 = 60 + i * ((W - 120) / (cols - 1))
-    const x1 = W / 2 + (i - (cols - 1) / 2) * 18
-    return `M ${x0} 0 C ${x0} ${H * 0.55}, ${x1} ${H * 0.45}, ${x1} ${H}`
+    const x1 = W / 2 + (i - (cols - 1) / 2) * 26
+    return `M ${x0} 0 C ${x0} ${H * 0.62}, ${x1} ${H * 0.38}, ${x1} ${H}`
   }), [])
 
   return (
@@ -46,7 +46,7 @@ export function DataFeed({ dark = false, className = '' }) {
         ))}
       </div>
       {/* pulse-traced paths */}
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[120px] -mt-1" preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[190px] mt-1" preserveAspectRatio="none">
         {paths.map((d, i) => (
           <g key={i}>
             <path d={d} fill="none" stroke={dark ? 'rgba(255,255,255,.12)' : '#cbd5e1'} strokeWidth="1" strokeDasharray="3 4" />

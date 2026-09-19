@@ -313,7 +313,7 @@ export default function Landing() {
           <div className="text-[13px] text-slate-400 mb-3">Ingestion →</div>
           <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-ink">Every source feeds one ledger</h2>
           <p className="text-sm text-slate-500 mt-3 max-w-lg">WhatsApp messages, Excel exports, Gmail invoices, Tally entries and UPI pings — all streaming into one brain your agents actually work on.</p>
-          <div className="mt-10"><DataFeed /></div>
+          <div className="mt-12 max-w-4xl mx-auto"><DataFeed /></div>
         </div>
       </section>
 
