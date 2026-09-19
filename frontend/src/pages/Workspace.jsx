@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
+import { session } from '../lib/auth.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { AgentCards } from '../components/cards/index.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
-  LayoutTemplate, X,
+  LayoutTemplate, X, Search, FileText, LogOut,
 } from 'lucide-react'
 const GROUP_ORDER = [['Money', a => ['vasool', 'khata'].includes(a.id)],
                      ['Procurement', a => a.id === 'sourcer'],
@@ -123,6 +124,10 @@ export default function Workspace() {
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <RotateCcw size={11} /> Reset data
           </button>
+          <button onClick={() => { session.clear(); location.hash = '#/login' }}
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <LogOut size={11} /> Sign out
+          </button>
         </div>
       </aside>
 
@@ -145,7 +150,12 @@ export default function Workspace() {
               {active?.stats?.runs != null ? `${active.stats.runs} tasks run` : 'Ramesh Auto Components · Faridabad'}
             </div>
           </div>
-          <a href="#/docs" className="ml-auto text-[11px] text-slate-400 hover:text-ink flex items-center gap-1 mt-1"><ExternalLink size={11} /> Docs</a>
+          <form onSubmit={e => { e.preventDefault(); const q = e.target.q.value.trim(); if (q) location.hash = `#/search/${encodeURIComponent(q)}` }}
+            className="ml-auto mt-1 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 w-44 focus-within:border-ink transition">
+            <Search size={11} className="text-slate-400 shrink-0" />
+            <input name="q" placeholder="Search workspace…" className="w-full text-[11px] focus:outline-none bg-transparent" />
+          </form>
+          <a href="#/docs" className="text-[11px] text-slate-400 hover:text-ink flex items-center gap-1 mt-1"><ExternalLink size={11} /> Docs</a>
         </div>
 
         {/* messages */}
@@ -168,6 +178,17 @@ export default function Workspace() {
                     ✨ New agent joined your team — check the sidebar
                   </div>
                 )}
+                {m.actions?.filter(a => a.type === 'artifact_created').map((a, j) => (
+                  <a key={j} href={`#${a.data?.share_path || '/app'}`}
+                    className="mt-2 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-accent hover:shadow-float transition">
+                    <FileText size={14} className="text-accent shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-semibold text-ink truncate">{a.data?.title || 'Artifact'}</div>
+                      <div className="text-[9px] text-slate-400">Shareable page · tap to open</div>
+                    </div>
+                    <ExternalLink size={11} className="text-slate-300 shrink-0" />
+                  </a>
+                ))}
               </div>
             </div>
           ))}

@@ -50,4 +50,22 @@ export const api = {
   dashboard: () => req(`/dashboard/summary?tenant_id=${TENANT}`),
   runScheduler: () => req(`/scheduler/run?tenant_id=${TENANT}`, { method: 'POST' }),
   resetDemo: () => req(`/demo/reset?tenant_id=${TENANT}`, { method: 'POST' }),
+
+  // ── round 2 ──
+  login: (body) =>
+    req('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  memories: () => req(`/memories?tenant_id=${TENANT}`),
+  addMemory: (text, source = 'owner') =>
+    req('/memories', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ tenant_id: TENANT, text, source }) }),
+  delMemory: (id) => req(`/memories/${id}`, { method: 'DELETE' }),
+  search: (q) => req(`/search?tenant_id=${TENANT}&q=${encodeURIComponent(q)}`),
+  artifacts: () => req(`/artifacts?tenant_id=${TENANT}`),
+  artifact: (id) => req(`/artifacts/${id}`),
+  importExcel: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('tenant_id', TENANT)
+    return req('/import/excel', { method: 'POST', body: fd })
+  },
 }
