@@ -115,10 +115,15 @@ Runner. EventBridge rules → `scheduler.py` logic. No local Docker.
 
 ## What Fahmin is building meanwhile (context — not your scope)
 
-login → onboarding → dashboard (tiles/charts/activity) → subagents grid →
-agent detail + contextual sidebar → create-task flow → calendar →
-notifications w/ approve → connectors page → settings → chat polish →
-factory-hiring animation → landing → demo video + submission.
+Shipped so far: login (phone OTP + email verify UI) → 5-step onboarding
+(name, **role → RBAC**, business, city, problems → memories) → workspace
+chat (attachments, web/deep modes, thinking trace, link previews,
+read-aloud) → approvals drawer → morning digest → ⌘K palette → pages:
+templates gallery, business-context dump (auto-tag), enterprise search,
+marketplace (MCP + skills + agent templates), kanban tasks board, people
+(CRM), notifications, analytics, calendar, logs, artifacts, settings
+(a11y: dark mode/text size/contrast/reduced motion + connectors + MCP
+persistence + role switcher) → docs page → landing.
 
 ## Dependencies
 
@@ -221,3 +226,49 @@ fb_marketplace `connected`, rest `available`.
 Pre-seed a factory-ready spec so "hire a digital presence agent" converges:
 tools `publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`;
 goal mentions Facebook Marketplace + IndiaMART + Shopify + SEO/GEO.
+
+---
+
+## Round 4 — backend additions (what the newest frontend needs)
+
+All contract-tolerant — demo store covers until you ship. Order by effort.
+
+### 1. `PATCH /tasks/{id}` — kanban moves (NEW, needed)
+The tasks board (`#/tasks`) drags cards between
+`todo | in_progress | approval | done`. Frontend sends
+`{status}` (and a duplicate `col` field — ignore it) + `tenant_id` query.
+Update `status`, return the row. `GET /tasks` already exists and works —
+the board is live on it today; this patch is the missing half.
+
+### 2. `POST /tasks` field mapping
+Frontend quick-add sends `{tenant_id, title, col, agent}` — map
+`col→status`, `agent→agent_id` (accept both spellings, contract already
+has `status`/`agent_id` canonical). Priority/due/tags optional.
+
+### 3. UTF-8 bug — FIX BEFORE FILMING
+JSON responses mangle `₹` → `â‚¹` (visible in `/tasks` title
+"Get steel quotes under â‚¹62/unit", also on invoice amounts).
+Fix: ensure every JSON response is `application/json; charset=utf-8` —
+either `JSONResponse(..., media_type="application/json; charset=utf-8")`
+or a tiny middleware. Verify: `curl -s localhost:8000/tasks | grep ₹`.
+
+### 4. `GET /activity` — real feed for the Logs page (optional)
+`#/logs` synthesizes entries from alerts + notifications today. If you have
+the `activity` collection from §1 anyway, expose `GET /activity?tenant_id=`
+→ `[{ts, level, kind, message, agent_id}]` (level ∈ INFO/TOOL/MCP/APPROVE/
+SYNC/WARN) and the page will stream real events instead.
+
+### 5. `PATCH /settings` — accept `role` (optional)
+Onboarding now asks role (owner/accountant/manager/worker) and maps it to
+RBAC client-side. Persist `settings.role` so it survives a re-login.
+
+### Already covered / no backend work needed
+- Analytics (`#/analytics`) composes `dashboard/summary` + `/cashflow` +
+  `/invoices` + `/agents` — all exist.
+- People (`#/people`) aggregates `/invoices` + `/suppliers` + `/carriers`.
+- Notifications page uses `GET /notifications` (+ `read` when it lands).
+- Approvals drawer uses `GET /alerts` + `POST /alerts/{id}/approve` — exists.
+- Global search `tasks` group is live via the demo merge; your `/search`
+  already lists tasks per Round 2 spec — keep it.
+- Voice input, TTS, command palette, dark mode, kanban DnD, onboarding —
+  all client-side.
