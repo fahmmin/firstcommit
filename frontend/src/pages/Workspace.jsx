@@ -230,6 +230,10 @@ export default function Workspace() {
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <Users size={11} /> People
           </a>
+          <a href="#/analytics"
+            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <Activity size={11} /> Analytics
+          </a>
           <a href="#/logs"
             className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
             <ScrollText size={11} /> Logs

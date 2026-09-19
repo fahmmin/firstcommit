@@ -15,6 +15,7 @@ import Logs from './pages/Logs.jsx'
 import Artifacts from './pages/Artifacts.jsx'
 import Notifications from './pages/Notifications.jsx'
 import People from './pages/People.jsx'
+import Analytics from './pages/Analytics.jsx'
 import { Toasts } from './components/Toasts.jsx'
 import { isAuthed } from './lib/auth.js'
 
@@ -24,6 +25,7 @@ const routes = {
   login: Login, onboarding: Onboarding, search: Search, a: ArtifactView,
   marketplace: Marketplace, context: Context, templates: Templates, calendar: Calendar, logs: Logs,
   artifacts: Artifacts, notifications: Notifications, people: People,
+  analytics: Analytics,
 }
 
 export default function App() {
