@@ -30,10 +30,24 @@ Done ✅
 - ✅ `simulation/setup_aws.py` provisioner + `check_aws.py` (all 14 tables)
 
 Open ⬜ (not done yet)
+
+**Needed by the live frontend** (Fahmin's pages are shipped — these are the real gaps):
+- ⬜ `PATCH /tasks/{id}` — kanban drag-drop persistence (Round-4 §1 below)
+- ⬜ `POST /tasks` field mapping — accept `col`/`agent` → `status`/`agent_id`, return the full row (Round-4 §2)
+- ⬜ **UTF-8 charset** on JSON responses — `₹` mojibakes to `â‚¹` on Windows/curl (Round-4 §3)
+- ⬜ `PATCH /settings` accept `role` — onboarding's role→RBAC pick should persist (Round-4 §5)
+- ⬜ Connector seeds: `facebook_marketplace` (connected) + `indiamart`, `shopify`, `instagram` (available) — demo store covers today (Round-3 §4)
+
+**Reconcile route names** (built, but under different names than Fahmin's spec — pick one, tell him):
+- ⬜ Context docs: built as `POST /context/upload` + `GET /context` + `DELETE /context/{id}`; spec asked `/context/docs`. Frontend doesn't call either yet.
+- ⬜ Activity feed: built as `GET /logs`; spec asked `GET /activity`. Same data — keep `/logs` and update the spec, or alias.
+
+**Stretch / open**
 - ⬜ **Real Google Drive / Google Calendar OAuth connectors** (currently simulated — connect flips status, sync counts local rows only). Gmail/Drive/WhatsApp/Tally/Razorpay are stubs. ← revisit for genuine external integration
 - ⬜ **Deploy** (§6): Amplify (frontend) + Lambda URL (`Mangum` ready) + EventBridge rule → `scheduler.run_once`
-- ⬜ **Web search / Deep research** agent tool (needs a `TAVILY_API_KEY`)
-- ⬜ Frontend wiring of already-built backends (artifacts UI, business-context page, people, templates gallery, onboarding wizard, excel import) — Fahmin's side
+- ⬜ **Web search / Deep research** agent tool — `/chat` already receives `mode: "web"|"deep"` (ignored today); needs a `TAVILY_API_KEY`
+- ⬜ Digital-presence template's tools (`publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`) aren't in `TOOL_REGISTRY` — template ships `tools: []` so install converges via Nirmata prompt only
+- ⬜ Frontend wiring of already-built backends (real `/context/*`, `POST /onboarding`, `/people`, `/logs`, `/notifications/{id}/read`, `/connectors/{id}/sync`, `/templates` install) — Fahmin's side; his pages exist but several still run on the demo store
 
 ---
 
@@ -221,6 +235,8 @@ chore(deploy): amplify + lambda URL                ← stretch
 
 These landed on the frontend already; the demo store covers them until you ship.
 
+> **Status after `ayush/backend-rounds-2-4`:** §1 ✅ built (as `/context/upload`+`GET /context`+`DELETE /context/{id}` — route names differ, reconcile), §2 ⬜ (`mode` silently ignored today), §3 ✅ nothing needed, §4 ⬜ seeds missing, §5 ⚠️ template exists but `tools: []`.
+
 ### 1. `POST /context/docs` — business-context ingestion (auto-tag)
 Multipart `file` OR JSON `{text}`. On ingest, run the tagger and store:
 ```json
@@ -259,6 +275,8 @@ goal mentions Facebook Marketplace + IndiaMART + Shopify + SEO/GEO.
 ## Round 4 — backend additions (what the newest frontend needs)
 
 All contract-tolerant — demo store covers until you ship. Order by effort.
+
+> **Status after `ayush/backend-rounds-2-4`:** §1 ⬜ missing (kanban moves 404 → demo-store fallback), §2 ⬜ `col`/`agent` silently dropped, §3 ⬜ open, §4 ⚠️ built as `GET /logs` (name differs), §5 ⬜ `role` silently dropped.
 
 ### 1. `PATCH /tasks/{id}` — kanban moves (NEW, needed)
 The tasks board (`#/tasks`) drags cards between
