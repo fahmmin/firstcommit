@@ -171,15 +171,48 @@ def test_calendar_events(client):
     assert {e["kind"] for e in rows} >= {"invoice_due", "alert", "task"}
 
 
-def test_connectors_flow(client):
+def test_connectors_flow(client, monkeypatch):
     r = client.get("/connectors", params={"tenant_id": "ramesh_auto"})
     assert r.status_code == 200
     rows = r.json()
     assert _keys(rows[0]) >= _keys(_ep("GET /connectors")["response"][0])
-    c = client.post("/connectors/google_calendar/connect", params={"tenant_id": "ramesh_auto"})
-    assert c.status_code == 200 and c.json()["status"] == "connected"
+    by_id = {c["id"]: c for c in rows}
+    # google connectors exist and are connectable-but-unconfigured (SA not set in tests)
+    for gid in ("google_drive", "google_sheets", "google_docs", "google_calendar"):
+        assert gid in by_id and by_id[gid]["status"] == "available"
+    # everything without a real integration is honestly coming soon
+    for sid in ("whatsapp", "gmail", "razorpay", "tally", "slack", "airtable",
+                "instagram", "facebook_marketplace", "indiamart", "shopify"):
+        assert by_id[sid]["status"] == "coming_soon"
+
+    # stub connect → coming_soon, never connected
+    c = client.post("/connectors/razorpay/connect", params={"tenant_id": "ramesh_auto"})
+    assert c.status_code == 200 and c.json()["status"] == "coming_soon"
+    assert by_id["razorpay"]["status"] == "coming_soon"
+
+    # google connect without SA → unconfigured + actionable note (NOT connected)
+    c = client.post("/connectors/google_drive/connect", params={"tenant_id": "ramesh_auto"})
+    assert c.status_code == 200 and c.json()["status"] == "unconfigured"
+    assert "GOOGLE_SERVICE_ACCOUNT_JSON" in c.json()["note"]
+
+    # sync on a non-connected connector → not_connected, no fake items
     s = client.get("/connectors/airtable/sync", params={"tenant_id": "ramesh_auto"})
+    assert s.status_code == 200 and s.json()["state"] == "not_connected"
+
+    # google connect WITH SA configured → connected + share_to email surfaced
+    from app import gcp
+    monkeypatch.setattr(gcp, "available", lambda: True)
+    monkeypatch.setattr(gcp, "sa_email", lambda: "sa@test.iam.gserviceaccount.com")
+    c = client.post("/connectors/google_calendar/connect", params={"tenant_id": "ramesh_auto"})
+    assert c.json()["status"] == "connected"
+    assert c.json()["share_to"] == "sa@test.iam.gserviceaccount.com"
+
+    # calendar sync with SA but no shared calendars → real empty pull, state ok
+    monkeypatch.setattr(gcp, "list_calendar_events", lambda *a, **k: [])
+    s = client.get("/connectors/google_calendar/sync", params={"tenant_id": "ramesh_auto"})
     assert s.status_code == 200 and s.json()["state"] == "ok"
+    assert s.json()["items_synced"] == 0
+
     d = client.post("/connectors/google_calendar/disconnect", params={"tenant_id": "ramesh_auto"})
     assert d.status_code == 200 and d.json()["status"] == "available"
 

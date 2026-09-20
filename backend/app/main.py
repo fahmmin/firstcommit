@@ -23,7 +23,7 @@ class UTF8JSONResponse(JSONResponse):
         return json.dumps(content, ensure_ascii=False, allow_nan=False,
                           separators=(",", ":"), default=str).encode("utf-8")
 
-from . import deps
+from . import deps, gcp
 from .agents import registry as reg
 from .agents.specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec
 from .notifier import get_notifier
@@ -521,6 +521,12 @@ def calendar_events(tenant_id: str = "ramesh_auto",
         if t.get("due"):
             events.append({"id": f"ev-task-{t['id']}", "date": t["due"],
                            "title": f"Task: {t['title']}", "kind": "task", "ref_id": t["id"]})
+    gcal = next((c for c in deps.store.list_connectors(tenant_id)
+                 if c["id"] == "google_calendar"), None)
+    for e in (gcal or {}).get("last_events", []):
+        events.append({"id": f"ev-gcal-{e['id']}", "date": (e.get("start") or "")[:10],
+                       "title": e.get("summary") or "Google Calendar event",
+                       "kind": "google_calendar", "ref_id": e["id"]})
     if start:
         events = [e for e in events if e["date"] >= start]
     if end:
@@ -529,7 +535,11 @@ def calendar_events(tenant_id: str = "ramesh_auto",
     return events
 
 
-_CONNECTOR_STUBS = {"whatsapp", "tally", "razorpay"}  # real OAuth post-demo
+_CONNECTOR_STUBS = {"whatsapp", "gmail", "airtable", "slack", "tally",
+                    "razorpay", "instagram", "facebook_marketplace",
+                    "indiamart", "shopify"}  # no real OAuth yet — coming soon
+_GOOGLE_CONNECTORS = {"google_drive", "google_sheets", "google_docs",
+                      "google_calendar"}  # real via GCP service account (gcp.py)
 
 
 def _connector(tenant_id: str, conn_id: str) -> dict:
@@ -537,6 +547,37 @@ def _connector(tenant_id: str, conn_id: str) -> dict:
     if not c:
         raise HTTPException(404, "unknown connector")
     return c
+
+
+def _sync_google_files(tenant_id: str, conn_id: str) -> int:
+    """Pull files shared with the service account → real ingest into context.
+    Drive = anything shared; Sheets/Docs connectors = filtered by type. New files
+    only (dedupe by gdrive:<file_id> in the stored doc)."""
+    want = {"google_drive": None,
+            "google_sheets": {"application/vnd.google-apps.spreadsheet"},
+            "google_docs": {"application/vnd.google-apps.document"}}[conn_id]
+    known = {d.get("gdrive_id") for d in deps.store.list_documents(tenant_id)}
+    synced = 0
+    for f in gcp.list_drive_files():
+        mime, fid, name = f.get("mimeType", ""), f["id"], f.get("name", "file")
+        if want and mime not in want or fid in known:
+            continue
+        try:
+            if mime.startswith("application/vnd.google-apps."):
+                text = gcp.download_text(fid, mime)
+                doc = ingest_document_impl(tenant_id, note=f"[google drive] {name}\n\n{text}",
+                                           filename=name)
+            else:
+                raw = gcp.download_bytes(fid)
+                UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+                dest = UPLOAD_DIR / f"gdrive-{fid[:8]}-{name}"
+                dest.write_bytes(raw)
+                doc = ingest_document_impl(tenant_id, file_path=str(dest), filename=name)
+            deps.store.update_document(tenant_id, doc["id"], gdrive_id=fid)
+            synced += 1
+        except Exception as e:
+            print(f"[gcp] sync failed for {name}: {e}")
+    return synced
 
 
 @app.get("/connectors")
@@ -550,6 +591,18 @@ def connect_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
     if conn_id in _CONNECTOR_STUBS:
         return {"id": conn_id, "status": "coming_soon",
                 "note": f"{c['name']} integration ships post-demo"}
+    if conn_id in _GOOGLE_CONNECTORS:
+        if not gcp.available():
+            return {"id": conn_id, "status": "unconfigured",
+                    "note": "GOOGLE_SERVICE_ACCOUNT_JSON not set on the backend"}
+        now = datetime.now(timezone.utc).isoformat()
+        deps.store.update_connector(tenant_id, conn_id, status="connected",
+                                    connected_at=now, last_sync=now)
+        deps.log_activity(tenant_id, "connector_synced", f"{c['name']} connected")
+        return {"id": conn_id, "status": "connected", "connected_at": now,
+                "share_to": gcp.sa_email(),
+                "note": f"Share Drive files / Sheets / a calendar with {gcp.sa_email()} "
+                        "— Sync pulls them into business context."}
     now = datetime.now(timezone.utc).isoformat()
     deps.store.update_connector(tenant_id, conn_id, status="connected",
                                 connected_at=now, last_sync=now)
@@ -570,8 +623,12 @@ def sync_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
     if c.get("status") != "connected":
         return {"id": conn_id, "state": "not_connected",
                 "items_synced": c.get("items_synced", 0), "last_sync": c.get("last_sync")}
-    if conn_id == "airtable":
-        count = len(deps.store.list_invoices(tenant_id)) + len(deps.store.list_suppliers(tenant_id))
+    if conn_id == "google_calendar" and gcp.available():
+        events = gcp.list_calendar_events()
+        deps.store.update_connector(tenant_id, conn_id, last_events=events[:50])
+        count = len(events)
+    elif conn_id in ("google_drive", "google_sheets", "google_docs") and gcp.available():
+        count = _sync_google_files(tenant_id, conn_id)
     elif conn_id == "google_calendar":
         count = len(calendar_events(tenant_id))
     else:

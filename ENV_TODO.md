@@ -22,28 +22,22 @@ Then re-ingest a PDF (`simulation/seed_hardware.py`) and check extracted text �
 
 ---
 
-## 2. Web search / Deep research — set `TAVILY_API_KEY`
-**Status:** plumbing done (`/chat` honors `mode: web|deep`; `web_search` tool on all agents). Keyless → returns "not configured".
-**How:** get a free key at https://tavily.com → add to `.env`:
-```
-TAVILY_API_KEY=tvly-xxxxxxxx
-```
-Restart backend. No code change — the tool activates automatically.
+## 2. Web search / Deep research — ✅ DONE
+`TAVILY_API_KEY` set in `.env` + forwarded to the Lambda env by `deploy_aws.py`.
+`web_search` tool active on all agents; `/chat` honors `mode: web|deep`.
 
 ---
 
-## 3. SES — verify a demo recipient (for a real delivered email)
-**Status:** sender `kkfahmin@gmail.com` verified. SES sandbox only delivers to **verified** recipients; unverified → auto-falls back to console log (demo still completes).
-**How:**
-```bash
-aws ses verify-email-identity --email-address <recipient@example.com> --profile sahayak --region ap-south-1
-```
-Click the verification link in that inbox. (Or request SES production access to email anyone.)
+## 3. SES — ✅ DONE
+Sender `kkfahmin@gmail.com` verified (sender + recipient are the same inbox,
+so sandbox-mode delivery works — real emails land). To email OTHER recipients:
+`aws ses verify-email-identity --email-address <them>` → they click the link.
+(Or request SES production access to email anyone.)
 
 ---
 
-## 4. Billing alert (safety)
-Console → **Billing → Budgets → Create budget** → cost budget ~$5–10 → email alert. (One-time; protects the free credits.)
+## 4. Billing alert — ✅ DONE
+Budget + email alert created in Billing → Budgets.
 
 ---
 
@@ -53,18 +47,34 @@ Console → **IAM → Users → `AWSHACKATHON` → Security credentials** → cr
 
 ---
 
-## 6. Real OAuth connectors (stretch — currently simulated)
-Google Drive / Calendar connectors flip status + count local rows only; no real data leaves the app.
-**To make real (Drive example):**
-1. Google Cloud Console → create project → enable **Drive API** (and **Calendar API**).
-2. **OAuth consent screen** (External, add your test users) → **Create credentials → OAuth client ID** (Web) → note client id/secret, set redirect URI.
-3. Add to `.env`:
-   ```
-   GOOGLE_CLIENT_ID=...
-   GOOGLE_CLIENT_SECRET=...
-   GOOGLE_REDIRECT_URI=http://localhost:8000/connectors/google_drive/callback
-   ```
-4. Backend work (not yet built): OAuth code-exchange + token store + real `sync` pulling files → `/context/upload`. **Ping Ayush to build the adapter once creds exist.**
+## 6. Google connectors — ✅ REAL via service account (no OAuth needed)
+GCP project `sahayak-connect-24b14f` (created via gcloud). Service account:
+`sahayak-connector@sahayak-connect-24b14f.iam.gserviceaccount.com`.
+APIs enabled: Drive, Sheets, Docs, Calendar. Backend: `app/gcp.py`.
+
+**"Connect" = share, not OAuth.** The SA has no Drive of its own — it only sees
+files/calendars the owner shares *to its email*:
+
+| To make real | Owner action |
+|---|---|
+| `google_drive` | Share any Drive file/folder → `sahayak-connector@…` (Viewer) |
+| `google_sheets` | Share a Google Sheet → same email |
+| `google_docs` | Share a Google Doc → same email |
+| `google_calendar` | Calendar Settings → Share with specific people → same email (See all event details) |
+
+Then **Settings → connector → Sync** pulls them for real:
+- Sheets/Docs/Drive text files → text → `ingest_document_impl` (auto-tag + embed + searchable)
+- PDFs/xlsx in Drive → binary download → real extractors (Textract/openpyxl)
+- Calendar → events merge into `/calendar/events` as `kind: google_calendar`
+
+**Env:** `GOOGLE_SERVICE_ACCOUNT_JSON` (minified key JSON — set on Lambda by
+`deploy_aws.py` automatically from `GOOGLE_SA_KEY_FILE`) or local dev:
+`GOOGLE_SA_KEY_FILE=gcp-sa.json` (gitignored). Missing → connectors show
+`available`, Connect returns `unconfigured` + note.
+
+**Coming soon (no real integration, connect → `coming_soon`):** WhatsApp, Gmail,
+Instagram, Airtable, Slack, Tally, Razorpay, Facebook Marketplace, IndiaMART,
+Shopify. UI shows a COMING SOON chip; Connect is hidden.
 
 ---
 
@@ -93,12 +103,13 @@ Do only when `simulate_demo.py` is green.
 ---
 
 ### Quick status
-| Item | Blocking demo? | Needs |
-|---|---|---|
-| Textract IAM | No (PDF fallback) | root console |
-| Tavily key | No (graceful) | free API key |
-| SES recipient | No (console fallback) | verify email |
-| Billing alert | No | 1 click |
-| Rotate key | No | housekeeping |
-| OAuth connectors | No (simulated) | Google creds + backend adapter |
-| Deploy | No (runs locally) | AWS console + a build |
+| Item | Status |
+|---|---|
+| Textract IAM | ✅ done (inline policy) |
+| Tavily key | ✅ set |
+| SES sender+recipient | ✅ verified |
+| Billing alert | ✅ created |
+| Rotate AWSHACKATHON key | ⏳ housekeeping (was exposed in chat) |
+| Google connectors | ✅ real via service account — owner shares files to SA email |
+| Other connectors (Meta/Razorpay/…) | coming_soon by design — no fake OAuth |
+| Deploy + custom domain | ✅ live on sahaayak.space |

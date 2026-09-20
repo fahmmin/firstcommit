@@ -41,12 +41,12 @@ Open ⬜ (not done yet)
 - ✅ `PATCH /settings` accept `role` — persists to `prefs.role`
 - ✅ `_PAIN_MAP` `too_many_excels` — handled as an "import your ledger" next-step (no specialist agent)
 - ✅ **Textract IAM** — granted via inline policy; PDFs OCR for real on ingest (verified in seeded docs)
-- ⬜ **Real auth + OAuth connectors** — see §OAuth below (login is demo-only; connector connect/sync are stubs; artifact private ACL needs auth to be real)
+- ⬜ **Real auth** — see §OAuth below (login is demo-only; artifact private ACL needs auth to be real). Connectors: google_* are REAL via service account; the rest are honest `coming_soon` — no fake OAuth
 
 **Reconcile route names** — ✅ resolved: frontend adopted your routes. Context docs → `POST /context/upload` + `GET /context` + `DELETE /context/{id}` (spec's `/context/docs` dropped). Activity feed → `GET /logs` (spec's `/activity` dropped). contract.json + Round-3 §1 spec updated to match.
 
 **Stretch / open**
-- ⬜ **Real Google Drive / Google Calendar OAuth connectors** — §OAuth below has the full setup list (env placeholders already in `.env.example`)
+- ✅ **Real Google connectors (Drive/Sheets/Docs/Calendar)** — DONE via GCP service account `sahayak-connect-24b14f` + `app/gcp.py` (see §OAuth). Owner shares files to the SA email → Sync ingests them for real
 - ✅ **Deploy** (§6): shipped — frontend live at `https://www.sahaayak.space` (Amplify + custom domain), backend on permanent Lambda Function URL, EventBridge scheduler ticking
 - 🟡 **Web search / Deep research** agent tool — **plumbing DONE**: `/chat` now honors `mode: "web"|"deep"` (prepends a hint), `web_search` tool given to all agents + orchestrator (`tools/websearch.py`, Tavily via httpx), mock rule added. **Activate by setting `TAVILY_API_KEY`** — keyless it returns a graceful "not configured" reply.
 - ✅ Digital-presence tools built (`tools/presence.py` + `listings` collection): `sync_catalog` (product lines from supplier categories, 18% markup), `publish_listing` (honest — only `connected` channels get pushes), `seo_audit` (title/score fixes), `storefront_builder` (mints a PUBLIC `storefront` artifact → shareable `/a/{id}`). Template spec now carries real tools; mock rules + 2 new contract tests added.
@@ -358,13 +358,26 @@ verify a top-level `role` or `prefs.role` survives a re-login.
 
 ---
 
-## §OAuth — real authentication + connector setup (NEW — 2026-09-20)
+## §OAuth — real authentication + connector setup (UPDATED 2026-09-20, Fahmin)
 
-**Today everything is demo auth.** `POST /auth/login` accepts any credentials,
-there is no session/token check on any route, and connector connect/sync are
-stubs (connect flips `status`, sync counts local rows). This section is what
-makes it real. All env placeholders are already in `.env.example` — ask Fahmin
-for the real `.env` values once provisioned.
+**App auth stays demo-only** (`POST /auth/login` accepts anything; the
+`DEMO_GATE_TOKEN` middleware is the demo gate — not real auth).
+
+**Google connectors are REAL via service account** — no OAuth consent needed.
+GCP project `sahayak-connect-24b14f`, SA
+`sahayak-connector@…iam.gserviceaccount.com`, `app/gcp.py`, env
+`GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_SA_KEY_FILE` (gitignored `gcp-sa.json`).
+"Connect" = owner shares Drive files / Sheets / Docs / a Calendar to the SA
+email; Sync pulls them through the real `ingest_document_impl` pipeline.
+Details + sharing table → `ENV_TODO.md §6`.
+
+**Everything else is `coming_soon`** (`_CONNECTOR_STUBS` in `main.py`):
+WhatsApp, Gmail, Instagram, Airtable, Slack, Tally, Razorpay,
+Facebook Marketplace, IndiaMART, Shopify. Connect returns `coming_soon`,
+the UI shows a chip, no fake OAuth is claimed.
+
+The OAuth build list below remains the plan for *upgrading* a coming_soon
+connector to real — when/if provider creds get provisioned.
 
 ### A. App auth (do this FIRST — everything else hangs off it)
 1. `AUTH_JWT_SECRET` — issue a signed JWT (or opaque session id) at

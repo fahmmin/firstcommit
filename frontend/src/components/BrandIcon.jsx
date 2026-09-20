@@ -2,7 +2,7 @@
 // hand-drawn SVG for brands simple-icons dropped (Slack, Excel) or lacks (Tally).
 import {
   SiWhatsapp, SiGmail, SiGoogledrive, SiGooglecalendar, SiAirtable,
-  SiRazorpay, SiGooglesheets, SiNotion, SiShopify, SiZapier, SiPhonepe,
+  SiRazorpay, SiGooglesheets, SiGoogledocs, SiNotion, SiShopify, SiZapier, SiPhonepe,
   SiFacebook, SiInstagram, SiPerplexity, SiMeta,
 } from 'react-icons/si'
 import { Server, PlugZap } from 'lucide-react'
@@ -61,6 +61,8 @@ const BRANDS = {
   razorpay: { C: SiRazorpay, color: '#2B5CF6' },
   excel: { C: ExcelMark, color: '#217346' },
   sheets: { C: SiGooglesheets, color: '#0F9D58' },
+  google_sheets: { C: SiGooglesheets, color: '#0F9D58' },
+  google_docs: { C: SiGoogledocs, color: '#4285F4' },
   slack: { C: SlackMark, color: '#611f69' },
   tally: { C: TallyMark, color: '#1b4f9c' },
   notion: { C: SiNotion, color: '#000' },

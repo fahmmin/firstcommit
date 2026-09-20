@@ -1,7 +1,8 @@
-# env / secrets — NEVER commit AWS keys
+# env / secrets — NEVER commit AWS keys or GCP service-account keys
 .env
 .env.*
 !.env.example
+gcp-sa.json
 
 # python
 __pycache__/

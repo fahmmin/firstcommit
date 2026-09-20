@@ -7,6 +7,9 @@ import pytest
 
 os.environ.setdefault("USE_AWS", "0")  # USE_AWS=1 in env → parity suite also runs DynamoStore
 os.environ["DEMO_GATE_TOKEN"] = ""  # tests are ungated local dev — .env's real token must not leak in
+# google connectors must behave "unconfigured" in tests regardless of local .env
+os.environ.pop("GOOGLE_SERVICE_ACCOUNT_JSON", None)
+os.environ["GOOGLE_SA_KEY_FILE"] = "/nonexistent/sa.json"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

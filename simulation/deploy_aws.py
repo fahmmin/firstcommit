@@ -43,12 +43,14 @@ RULE_NAME = "sahayak-scheduler"
 RUNTIME_DEPS = [
     "strands-agents", "fastapi", "mangum", "python-dotenv", "python-multipart",
     "boto3", "pydantic", "openpyxl", "cedarpy", "fpdf2",
+    "google-api-python-client", "google-auth",  # gcp.py — google_* connectors
 ]
 # forwarded to the Lambda env verbatim — never AWS keys/profile (role supplies
 # creds) and never AWS_REGION (Lambda reserves + sets it itself)
 ENV_FORWARD = ("USE_AWS", "ORCHESTRATOR_MODEL", "WORKER_MODEL",
                "EMBED_MODEL", "SES_SENDER", "S3_BUCKET", "DEFAULT_TENANT",
-               "DEMO_GATE_TOKEN", "TAVILY_API_KEY", "TOKEN_STORE")
+               "DEMO_GATE_TOKEN", "TAVILY_API_KEY", "TOKEN_STORE",
+               "GOOGLE_SERVICE_ACCOUNT_JSON")
 LAMBDA_POLICY = {
     "Version": "2012-10-17",
     "Statement": [
@@ -142,6 +144,15 @@ def ensure_role() -> str | None:
 def deploy_lambda(role_arn: str, zip_path: Path) -> str | None:
     lam = session.client("lambda")
     env = {k: str(_env[k]) for k in ENV_FORWARD if _env.get(k)}
+    # Lambda can't read a local key file — inline the SA JSON as the env var.
+    if not env.get("GOOGLE_SERVICE_ACCOUNT_JSON") and _env.get("GOOGLE_SA_KEY_FILE"):
+        sa_path = Path(_env["GOOGLE_SA_KEY_FILE"])
+        if not sa_path.is_absolute():
+            sa_path = ROOT / sa_path
+        if sa_path.exists():
+            env["GOOGLE_SERVICE_ACCOUNT_JSON"] = json.dumps(
+                json.loads(sa_path.read_text(encoding="utf-8")), separators=(",", ":"))
+            print("[gcp] inlined GOOGLE_SERVICE_ACCOUNT_JSON from", sa_path.name)
     env["USE_AWS"] = "1"
     if not env.get("DEMO_GATE_TOKEN"):
         import secrets

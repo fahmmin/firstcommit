@@ -756,64 +756,70 @@
       "name": "Google Calendar",
       "icon": "calendar",
       "status": "available",
-      "description": "Push invoice dues + reminders to your calendar",
+      "description": "Share a calendar with our service account — Sync reads real events",
       "items_synced": 0
     },
     {
       "id": "airtable",
       "name": "Airtable",
       "icon": "table",
-      "status": "connected",
-      "connected_at": "2026-09-18T10:00:00Z",
-      "last_sync": "2026-09-19T01:00:00Z",
-      "items_synced": 32,
+      "status": "coming_soon",
+      "items_synced": 0,
       "description": "Sync ledger + suppliers to your base"
     },
     {
       "id": "whatsapp",
       "name": "WhatsApp Business",
       "icon": "whatsapp",
-      "status": "connected",
-      "connected_at": "2026-09-15T10:00:00Z",
-      "last_sync": "2026-09-19T02:00:00Z",
-      "items_synced": 128,
+      "status": "coming_soon",
+      "items_synced": 0,
       "description": "Send payment reminders + order updates on WhatsApp"
     },
     {
       "id": "gmail",
       "name": "Gmail",
       "icon": "gmail",
-      "status": "connected",
-      "connected_at": "2026-09-15T10:00:00Z",
-      "last_sync": "2026-09-19T01:00:00Z",
-      "items_synced": 212,
+      "status": "coming_soon",
+      "items_synced": 0,
       "description": "Read invoices and POs straight from your inbox"
     },
     {
       "id": "google_drive",
       "name": "Google Drive",
       "icon": "google_drive",
-      "status": "connected",
-      "connected_at": "2026-09-15T10:00:00Z",
-      "last_sync": "2026-09-19T01:30:00Z",
-      "items_synced": 56,
-      "description": "Ledger exports and uploaded docs live in Drive"
+      "status": "available",
+      "items_synced": 0,
+      "description": "Share Drive files with our service account — Sync imports them into business context"
+    },
+    {
+      "id": "google_sheets",
+      "name": "Google Sheets",
+      "icon": "google_sheets",
+      "status": "available",
+      "items_synced": 0,
+      "description": "Share a spreadsheet with our service account — Sync imports rows into context"
+    },
+    {
+      "id": "google_docs",
+      "name": "Google Docs",
+      "icon": "google_docs",
+      "status": "available",
+      "items_synced": 0,
+      "description": "Share a doc with our service account — Sync imports its text into context"
     },
     {
       "id": "facebook_marketplace",
       "name": "Facebook Marketplace",
       "icon": "facebook",
-      "status": "connected",
-      "connected_at": "2026-09-16T10:00:00Z",
-      "last_sync": "2026-09-19T01:30:00Z",
-      "items_synced": 42,
+      "status": "coming_soon",
+      "items_synced": 0,
       "description": "Publish product listings where local buyers browse"
     },
     {
       "id": "indiamart",
       "name": "IndiaMART",
       "icon": "indiamart",
-      "status": "available",
+      "status": "coming_soon",
       "items_synced": 0,
       "description": "B2B marketplace — 7.7 crore buyers"
     },
@@ -821,7 +827,7 @@
       "id": "shopify",
       "name": "Shopify Storefront",
       "icon": "shopify",
-      "status": "available",
+      "status": "coming_soon",
       "items_synced": 0,
       "description": "Your own web store — agents build and stock it"
     },
@@ -829,7 +835,7 @@
       "id": "instagram",
       "name": "Instagram Shop",
       "icon": "instagram",
-      "status": "available",
+      "status": "coming_soon",
       "items_synced": 0,
       "description": "Shoppable posts synced from your catalogue"
     },
@@ -837,7 +843,7 @@
       "id": "tally",
       "name": "Tally Prime",
       "icon": "tally",
-      "status": "available",
+      "status": "coming_soon",
       "description": "Two-way sync with your existing accounting",
       "items_synced": 0
     },
@@ -845,7 +851,7 @@
       "id": "razorpay",
       "name": "Razorpay",
       "icon": "razorpay",
-      "status": "available",
+      "status": "coming_soon",
       "description": "Payment links inside reminders",
       "items_synced": 0
     },
@@ -853,7 +859,7 @@
       "id": "slack",
       "name": "Slack",
       "icon": "slack",
-      "status": "available",
+      "status": "coming_soon",
       "description": "Agent alerts in your team channel",
       "items_synced": 0
     }
@@ -1182,17 +1188,12 @@
       "category": "GI pipes & MS sections",
       "price": 73.16,
       "unit": "unit",
-      "status": "live",
-      "marketplaces": [
-        "facebook_marketplace"
-      ],
-      "urls": {
-        "facebook_marketplace": "https://facebook-marketplace.example.in/gi-pipes-ms-sections-l001"
-      },
+      "status": "draft",
+      "marketplaces": [],
+      "urls": {},
       "desc": "GI pipes, MS angles & channels — Balaji Steel stock, ISI marked.",
       "seo_score": 85,
       "source_supplier": "Balaji Steel Traders",
-      "published_at": "2026-09-18T14:00:00Z",
       "created_at": "2026-09-17T09:00:00Z"
     },
     {

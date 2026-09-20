@@ -130,6 +130,8 @@ class Store(ABC):
     @abstractmethod
     def put_document(self, tenant_id: str, doc: dict) -> dict: ...
     @abstractmethod
+    def update_document(self, tenant_id: str, doc_id: str, **fields) -> dict | None: ...
+    @abstractmethod
     def delete_document(self, tenant_id: str, doc_id: str) -> bool: ...
 
     # seed/reset
@@ -347,6 +349,9 @@ class LocalStore(Store):
 
     def put_document(self, tenant_id, doc):
         return self._put("documents", tenant_id, doc)
+
+    def update_document(self, tenant_id, doc_id, **fields):
+        return self._update("documents", tenant_id, doc_id, **fields)
 
     def delete_document(self, tenant_id, doc_id):
         return self._delete("documents", tenant_id, doc_id)
@@ -586,6 +591,9 @@ class DynamoStore(Store):
 
     def put_document(self, tenant_id, doc):
         return self._put("documents", tenant_id, doc)
+
+    def update_document(self, tenant_id, doc_id, **fields):
+        return self._update("documents", tenant_id, doc_id, **fields)
 
     def delete_document(self, tenant_id, doc_id):
         if not self._put_get("documents", tenant_id, doc_id):

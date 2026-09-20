@@ -12,3 +12,5 @@ pytest
 pytest-asyncio
 httpx
 fpdf2
+google-api-python-client
+google-auth

@@ -31,6 +31,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
+  const [connNote, setConnNote] = useState(null)
   const [vis, setVis] = useState(() => a11y.get())
   const fileRef = useRef(null)
   const currentRole = useRole()
@@ -56,7 +57,11 @@ export default function Settings() {
   const toggleConnector = async (c) => {
     setSyncing(true)
     if (c.status === 'connected') await api.disconnectConnector(c.id)
-    else { await api.connectConnector(c.id); await api.syncConnector?.(c.id).catch(() => {}) }
+    else {
+      const r = await api.connectConnector(c.id)
+      if (r?.note) setConnNote(r.note)          // e.g. "share files to <sa-email>"
+      if (r?.status === 'connected') await api.syncConnector?.(c.id).catch(() => {})
+    }
     load(); setSyncing(false)
   }
 
@@ -265,11 +270,18 @@ export default function Settings() {
               {importing ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} {importing ? 'Importing…' : 'Upload'}
             </button>
           </div>
+          {connNote && (
+            <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-[11px] text-sky-800 flex items-start justify-between gap-3">
+              <span className="break-all">{connNote}</span>
+              <button onClick={() => setConnNote(null)} className="text-sky-400 shrink-0">✕</button>
+            </div>
+          )}
           <div className="grid sm:grid-cols-2 gap-3">
             {connectors.map(c => {
               const connected = c.status === 'connected'
+              const soon = c.status === 'coming_soon'
               return (
-                <div key={c.id} className="rounded-2xl border border-slate-200 bg-white p-4 flex items-start gap-3">
+                <div key={c.id} className={`rounded-2xl border bg-white p-4 flex items-start gap-3 ${soon ? 'border-slate-100 opacity-70' : 'border-slate-200'}`}>
                   <div className={`w-9 h-9 rounded-xl grid place-items-center shrink-0 ${connected ? 'bg-emerald-50' : 'bg-slate-50'} border border-slate-100`}>
                     <BrandIcon id={c.icon || c.id} size={17} />
                   </div>
@@ -277,18 +289,21 @@ export default function Settings() {
                     <div className="text-[13px] font-semibold text-ink flex items-center gap-1.5">
                       {c.name}
                       {connected && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded px-1 py-0.5">CONNECTED</span>}
+                      {soon && <span className="text-[9px] font-bold text-slate-400 bg-slate-100 rounded px-1 py-0.5">COMING SOON</span>}
                     </div>
                     <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{c.description}</div>
                     {connected && c.items_synced != null &&
                       <div className="text-[10px] text-slate-400 mt-1">{c.items_synced} items synced · last {new Date(c.last_sync).toLocaleDateString()}</div>}
                   </div>
-                  <Can perm="connect" reason="Connecting sources needs Owner">
-                    <button onClick={() => toggleConnector(c)}
-                      className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition
-                        ${connected ? 'border border-slate-200 text-slate-500 hover:bg-slate-50' : 'bg-ink text-white hover:bg-ink/85'}`}>
-                      {connected ? 'Disconnect' : 'Connect'}
-                    </button>
-                  </Can>
+                  {!soon && (
+                    <Can perm="connect" reason="Connecting sources needs Owner">
+                      <button onClick={() => toggleConnector(c)}
+                        className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition
+                          ${connected ? 'border border-slate-200 text-slate-500 hover:bg-slate-50' : 'bg-ink text-white hover:bg-ink/85'}`}>
+                        {connected ? 'Disconnect' : 'Connect'}
+                      </button>
+                    </Can>
+                  )}
                 </div>
               )
             })}

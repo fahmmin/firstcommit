@@ -105,7 +105,8 @@ def presence_tools(tenant_id: str) -> list:
         if pushed:
             reply += "Published:\n" + "\n".join(f"• {t} → {', '.join(ms)}" for t, ms in pushed)
         if blocked:
-            reply += ("\nCouldn't publish (connect the channel in Settings first):\n"
+            reply += ("\nCouldn't publish — channel integration isn't live yet "
+                      "(marked coming soon in Settings):\n"
                       + "\n".join(f"• {t} → {', '.join(ms)}" for t, ms in blocked))
         return {"published": len(pushed), "blocked": [b[0] for b in blocked], "reply": reply}
 
