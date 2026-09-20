@@ -21,7 +21,7 @@ export default function Login() {
       session.set(r)
       location.hash = r.onboarded ? '#/app' : '#/onboarding'
     } catch (e) {
-      setErr('Backend not reachable — is it running on :8000?')
+      setErr('Couldn\'t reach the backend — it may be cold-starting; retry in a few seconds.')
     } finally { setBusy(false) }
   }
 

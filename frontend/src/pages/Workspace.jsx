@@ -174,7 +174,7 @@ export default function Workspace() {
       if (r.actions?.some(a => a.type === 'agent_created' || a.type === 'reminder_drafted')) refresh()
       if (r.agent_name === 'nirmata') setActiveAgent(null)
     } catch (e) {
-      setMessages(m => [...m, { role: 'agent', agent: 'system', text: `Error: ${e.message} — is the backend running on :8000?` }])
+      setMessages(m => [...m, { role: 'agent', agent: 'system', text: `Error: ${e.message} — the backend may be cold-starting; try again in a few seconds.` }])
     } finally {
       setBusy(false)
     }
