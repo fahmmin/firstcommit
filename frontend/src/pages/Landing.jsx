@@ -396,16 +396,66 @@ export default function Landing() {
       </section>
 
       {/* ── footer ── */}
-      <footer className="border-t border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 text-[13px] text-slate-500">
-            <Blobs />
-            Sahayak · First Commit hackathon · Fahmin × Ayush
-          </div>
-          <div className="flex items-center gap-4 text-[11px] text-slate-400">
-            {['Bedrock', 'Strands', 'DynamoDB', 'S3', 'SES', 'Lambda'].map(s => (
-              <span key={s} className="flex items-center gap-1"><CheckCircle2 size={11} className="text-emerald-500" />{s}</span>
+      <footer className="border-t border-slate-100 bg-[#fbfbfd]">
+        <div className="max-w-6xl mx-auto px-6 pt-14 pb-8">
+          <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+            {/* brand */}
+            <div>
+              <a href="#/" className="flex items-center gap-2.5">
+                <Blobs />
+                <span className="font-semibold text-[15px] tracking-tight text-ink">Sahayak</span>
+              </a>
+              <p className="mt-3.5 text-[12.5px] leading-relaxed text-slate-500 max-w-[270px]">
+                AI operations team for Indian SMBs — receivables, procurement,
+                compliance, logistics and digital presence, run by agents on your real data.
+              </p>
+              <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live demo — real AWS + GCP backend
+              </div>
+            </div>
+            {/* link columns — every href is a real route/anchor */}
+            {[
+              ['Product', [
+                ['#features', 'Features'],
+                ['#team', 'Meet the agents'],
+                ['#controls', 'Controls & safety'],
+                ['#/app', 'Open the app'],
+              ]],
+              ['Resources', [
+                ['#/docs', 'Documentation'],
+                ['#demo', 'See it work'],
+                ['#/a/art-fy26', 'Live public report'],
+                ['https://github.com/fahmmin/firstcommit', 'Source on GitHub'],
+              ]],
+              ['Team', [
+                ['#/', 'Fahmin — platform & agents'],
+                ['#/', 'Ayush — backend'],
+                ['#/', 'First Commit hackathon'],
+              ]],
+            ].map(([title, links]) => (
+              <div key={title}>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{title}</div>
+                <ul className="mt-3.5 space-y-2.5">
+                  {links.map(([href, label]) => (
+                    <li key={label}>
+                      <a href={href} className="text-[12.5px] text-slate-500 hover:text-ink transition">{label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
+          </div>
+          {/* bottom bar */}
+          <div className="mt-12 pt-6 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
+            <div className="text-[11px] text-slate-400">
+              © 2026 Fahmin × Ayush · sahaayak.space · Demo data: Ramesh Hardware &amp; Electricals
+            </div>
+            <div className="flex items-center flex-wrap gap-x-3.5 gap-y-1.5 text-[10px] text-slate-400">
+              {['Bedrock', 'Strands', 'Lambda', 'DynamoDB', 'S3', 'SES', 'Textract', 'EventBridge', 'GCP'].map(s => (
+                <span key={s} className="flex items-center gap-1"><CheckCircle2 size={10} className="text-emerald-500" />{s}</span>
+              ))}
+            </div>
           </div>
         </div>
       </footer>
