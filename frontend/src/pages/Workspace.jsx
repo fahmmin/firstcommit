@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { session } from '../lib/auth.js'
-import { AgentAvatar } from '../lib/avatar.jsx'
+import { motion } from 'framer-motion'
+import { AgentAvatar, agentColor } from '../lib/avatar.jsx'
 import { AgentCards } from '../components/cards/index.jsx'
 import { SourceChips } from '../components/ThinkingTrace.jsx'
 import { TimelineProgress } from '../components/rui/TimelineProgress.jsx'
@@ -24,7 +25,7 @@ import {
   PlugZap, CheckCircle2, Plus, RotateCcw, ExternalLink, Activity, Settings2,
   LayoutTemplate, X, Search, FileText, LogOut, Store, Brain, Mic, CalendarDays,
   Braces, Server, ScrollText, Paperclip, Globe, MessageSquare, Telescope, ImageIcon,
-  Moon, Sun, Volume2, Square, Command, Users, Send, ListTodo,
+  Moon, Sun, Volume2, Square, Command, Users, Send, ListTodo, ChevronRight,
 } from 'lucide-react'
 const SUGGESTIONS = [
   'Show my overdue invoices',
@@ -225,17 +226,40 @@ export default function Workspace() {
             className="right-1" />
           <div ref={scrollRef} onScroll={onChatScroll}
             className="flex-1 overflow-y-auto scroll-thin px-6 py-5 space-y-4">
-          {messages.map((m, i) => (
-            <div key={i} ref={el => msgRefs.current[i] = el}
+          {messages.map((m, i) => {
+            const isAgent = m.role === 'agent' && m.agent && m.agent !== 'system'
+            const isSystem = m.role === 'agent' && m.agent === 'system'
+            const who = isAgent ? agents.find(a => a.id === m.agent) : null
+            const color = agentColor(m.agent)
+            return (
+            <motion.div key={i} ref={el => msgRefs.current[i] = el}
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {isAgent && <AgentAvatar seed={m.agent} size={26} className="rounded-lg mt-1 mr-2.5 shadow-sm" />}
               <div className={`max-w-[72%] text-[13px] leading-relaxed whitespace-pre-wrap
                 ${m.role === 'user'
                   ? 'bg-ink text-white rounded-2xl rounded-br-md px-4 py-2.5'
-                  : 'text-slate-700'}`}>
-                {m.role === 'agent' && m.agent && (
-                  <div className="text-[10px] font-semibold tracking-wide text-accent mb-1.5 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
-                    {m.trace ? m.trace.join(' → ') : m.agent} {m.tagline && `· ${m.tagline}`}
+                  : isAgent
+                    ? 'rounded-2xl rounded-tl-md border border-slate-100 bg-[#fbfbfd] px-4 py-3 text-slate-700 shadow-sm'
+                    : 'text-slate-400 text-[12px] italic mx-auto text-center'}`}>
+                {isAgent && (
+                  <div className="mb-1.5 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11.5px] font-bold tracking-tight" style={{ color }}>
+                      {who?.name || m.agent}
+                    </span>
+                    {m.tagline && <span className="text-[10px] text-slate-400">· {m.tagline}</span>}
+                    {m.trace?.length > 1 && (
+                      <span className="flex items-center gap-0.5 text-[9px] text-slate-400 font-medium">
+                        {m.trace.map((t, k) => (
+                          <span key={k} className="flex items-center gap-0.5">
+                            {k > 0 && <ChevronRight size={8} className="text-slate-300" />}
+                            <span className="px-1 py-px rounded bg-slate-100"
+                              style={k === m.trace.length - 1 ? { color } : {}}>{t}</span>
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </div>
                 )}
                 {m.attachments?.length > 0 && (
@@ -260,13 +284,13 @@ export default function Workspace() {
                   </button>
                 )}
                 {m.actions?.some(a => a.type === 'agent_created') && (
-                  <div className="mt-2.5 text-[11px] bg-magenta/10 text-magenta rounded-lg px-2.5 py-1.5 font-medium">
+                  <div className="mt-2.5 text-[11px] bg-magenta/10 text-magenta rounded-lg px-2.5 py-1.5 font-medium animate-popIn">
                     ✨ New agent joined your team — check the sidebar
                   </div>
                 )}
                 {m.actions?.filter(a => a.type === 'artifact_created').map((a, j) => (
                   <a key={j} href={`#${a.data?.share_path || '/app'}`}
-                    className="mt-2 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-accent hover:shadow-float transition">
+                    className="mt-2 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-accent hover:shadow-float hover:-translate-y-0.5 transition animate-popIn">
                     <FileText size={14} className="text-accent shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] font-semibold text-ink truncate">{a.data?.title || 'Artifact'}</div>
@@ -276,9 +300,22 @@ export default function Workspace() {
                   </a>
                 ))}
               </div>
-            </div>
-          ))}
-          {busy && <TimelineProgress text={lastSent} scope={scope} mode={mode} />}
+            </motion.div>
+          )})}
+          {busy && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              className="flex items-start">
+              <AgentAvatar seed={activeAgent || 'sahayak'} size={26} className="rounded-lg mt-1 mr-2.5 shadow-sm" />
+              <div className="max-w-[72%]">
+                <div className="w-fit rounded-2xl rounded-tl-md border border-slate-100 bg-[#fbfbfd] px-4 py-2.5 shadow-sm flex items-center gap-1">
+                  <span className="text-[11.5px] font-bold tracking-tight"
+                    style={{ color: agentColor(activeAgent || 'sahayak') }}>{active?.name || 'Sahayak'}</span>
+                  <TypingDots className="text-slate-400" />
+                </div>
+                <div className="mt-2"><TimelineProgress text={lastSent} scope={scope} mode={mode} /></div>
+              </div>
+            </motion.div>
+          )}
           <div ref={bottomRef} />
           </div>
         </div>
@@ -344,7 +381,7 @@ export default function Workspace() {
               <div className="grid grid-cols-2 gap-2 px-4 pb-4 max-h-[240px] overflow-y-auto scroll-thin">
                 {TEMPLATES.map(t => (
                   <button key={t.id} onClick={() => pickTemplate(t)}
-                    className="text-left rounded-xl border border-slate-200 bg-white p-3 hover:border-ink/40 hover:shadow-float transition group">
+                    className="text-left rounded-xl border border-slate-200 bg-white p-3 hover:border-ink/40 hover:shadow-float hover:-translate-y-0.5 active:scale-[.98] transition group">
                     <span className={`w-7 h-7 rounded-lg grid place-items-center mb-2 ${t.tint}`}>
                       <t.icon size={14} />
                     </span>
@@ -368,7 +405,7 @@ export default function Workspace() {
             </button>
             {SUGGESTIONS.map(s => (
               <button key={s} onClick={() => send(s)}
-                className="text-[11px] px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-ink hover:text-ink transition">
+                className="text-[11px] px-3 py-1.5 rounded-full border border-slate-200 text-slate-500 hover:border-ink hover:text-ink hover:-translate-y-0.5 active:scale-95 transition">
                 {s}
               </button>
             ))}
@@ -376,7 +413,7 @@ export default function Workspace() {
           {files.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mb-2">
               {files.map((f, i) => (
-                <span key={i} className="flex items-center gap-1.5 text-[10px] font-medium rounded-lg border border-slate-200 bg-white pl-1.5 pr-1 py-1">
+                <span key={i} className="flex items-center gap-1.5 text-[10px] font-medium rounded-lg border border-slate-200 bg-white pl-1.5 pr-1 py-1 animate-popIn">
                   {f.type.startsWith('image/')
                     ? <img src={URL.createObjectURL(f)} alt="" className="w-6 h-6 rounded object-cover" />
                     : <FileText size={12} className="text-accent" />}
@@ -404,7 +441,7 @@ export default function Workspace() {
                 ${voice ? 'bg-accent text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-100'}`}>
               <Mic size={14} />
             </button>
-            <button disabled={busy} className="group rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 transition flex items-center gap-1.5">
+            <button disabled={busy} className="group rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 active:scale-95 transition flex items-center gap-1.5">
               Generate <Send size={10} className="send-fly" />
             </button>
           </form>

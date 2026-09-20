@@ -69,15 +69,15 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
         </div>
         <nav className="flex-1 overflow-y-auto scroll-thin px-3 pb-3 space-y-4">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1">Agents</div>
-          {groups.map(([label, items]) => (
-            <div key={label}>
+          {groups.map(([label, items], gi) => (
+            <div key={label} className="animate-riseIn" style={{ animationDelay: `${gi * 60}ms` }}>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-1 flex items-center justify-between">
                 {label}
                 <span className="text-[9px] font-medium text-slate-300 normal-case">{items.length}</span>
               </div>
               {items.map(a => (
                 <button key={a.id} onClick={() => clickAgent(a)}
-                  className={`w-full text-left text-[13px] rounded-lg px-2 py-1.5 mb-0.5 flex items-center gap-2 transition
+                  className={`w-full text-left text-[13px] rounded-lg px-2 py-1.5 mb-0.5 flex items-center gap-2 transition active:scale-[.98]
                     ${activeAgent === a.id ? 'bg-ink text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
                   <AgentAvatar seed={a.id} size={18} className="rounded" />
                   <span className="truncate">{a.name}</span>
