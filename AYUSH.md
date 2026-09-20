@@ -150,10 +150,42 @@ MVP rule: **real at the contract + storage layer, thin at external integrations.
 `main.py` (append-only endpoints), `agents/registry.py` (memory injection +
 tool map), `seed.json`, `requirements.txt` (openpyxl).
 
-## 6. Deploy — ONLY if `simulate_demo.py` is green
+## 6. Deploy — ✅ SHIPPED (2026-09-20)
 
-Amplify (frontend `dist/`) + Lambda zip (`handler = Mangum(app)` exists) or App
-Runner. EventBridge rules → `scheduler.py` logic. No local Docker.
+`simulation/deploy_aws.py` is the whole pipeline, idempotent, re-runnable:
+
+```
+python simulation/deploy_aws.py                    # full deploy
+python simulation/deploy_aws.py --package-only     # just build the lambda zip
+python simulation/deploy_aws.py --api-url <url>    # frontend pointed at any backend URL
+```
+
+**What's live**
+- Frontend: Amplify manual zip-deploy → `https://main.<appId>.amplifyapp.com`
+  (S3 static-website fallback inside the script if Amplify fails)
+- Backend: Lambda `sahayak-api` (python3.11 zip, 41MB, handler `app.main.handler`)
+  — verified via direct invoke: `/health` 200, gated routes 401→200 with token,
+  public artifact route open, private artifacts 404
+- Scheduler: EventBridge rule `sahayak-scheduler` (rate 1 min) → same function;
+  `handler` detects `detail-type:"Scheduled Event"` and runs `scheduler.run_once`
+  instead of HTTP (verified: `{'moved': N}`)
+
+**Demo gate (auth stays demo-only per project rules)** — `DEMO_GATE_TOKEN`
+env var turns on a FastAPI middleware: every API call needs `x-demo-token`
+header or `?gate=` param; exempt = `/health` + `/public/artifacts/*` (share
+links must work for recipients). Frontend stores the token once from
+`?gate=CODE` in the URL → sends it on every call; wrong/missing → `#/gate`
+passcode screen. Judge link format: `https://<site>/?gate=<TOKEN>#/app`.
+
+**The one blocked step** — `lambda:CreateFunctionUrlConfig` is denied on the
+`AWSHACKATHON` IAM user (apigateway/ecr/ecs/lightsail/eb all denied too).
+The function is deployed + working; it just has no public URL. To finish:
+grant the user `lambda:CreateFunctionUrlConfig` + `lambda:InvokeFunctionUrl`
+(or attach `AWSLambda_FullAccess`) and re-run the script — it creates the URL,
+rebuilds the frontend against it, done. Until then the demo backend rides an
+ngrok tunnel to the local uvicorn (`ngrok http 8000`), which is why
+`--api-url` exists. API Gateway HTTP-API path is ready in the script's
+fallback if the permission lands there instead.
 
 ---
 

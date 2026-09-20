@@ -31,6 +31,10 @@ def check(step: str, expected: str, actual: str, ok: bool):
 
 def main() -> int:
     with TestClient(app) as c:
+        # deployed backend gates on x-demo-token; when .env sets it, we send it
+        # (so the sim also exercises the gate path end-to-end)
+        if os.getenv("DEMO_GATE_TOKEN"):
+            c.headers["x-demo-token"] = os.environ["DEMO_GATE_TOKEN"]
         c.post("/demo/reset", params={"tenant_id": TENANT})
 
         # 1. Onboarding — agents visible

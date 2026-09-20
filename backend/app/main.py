@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from . import deps
@@ -25,7 +26,9 @@ from .tools.documents import cosine, embed_text, ingest_document_impl
 from .tools.importer import import_excel_impl
 from .tools.invoices import create_invoice_impl, draft_reminder_impl, parse_invoice_file
 
-UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+ON_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+_PKG_ROOT = Path("/tmp") if ON_LAMBDA else Path(__file__).resolve().parent.parent
+UPLOAD_DIR = _PKG_ROOT / "uploads"          # Lambda FS is read-only outside /tmp
 SEED_PATH = Path(__file__).resolve().parent / "seed" / "seed.json"
 
 app = FastAPI(title="Sahayak AI")
@@ -33,6 +36,22 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _demo_gate(request, call_next):
+    """Demo gate — project rule says auth stays demo-only, so instead of real
+    auth we gate the API behind a shared passcode (DEMO_GATE_TOKEN). Judges get
+    the URL with ?gate=TOKEN baked in; crawlers and link-followers get a 401.
+    Exempt: health + public artifact shares (recipients have no passcode)."""
+    token = os.getenv("DEMO_GATE_TOKEN", "")
+    if (token and request.method != "OPTIONS"
+            and not request.url.path.startswith(("/health", "/public/artifacts"))):
+        if (request.headers.get("x-demo-token") != token
+                and request.query_params.get("gate") != token):
+            return JSONResponse({"detail": "demo passcode required"}, status_code=401,
+                                headers={"Access-Control-Allow-Origin": "*"})
+    return await call_next(request)
 
 
 @app.on_event("startup")
@@ -934,6 +953,15 @@ def search(q: str = "", tenant_id: str = "ramesh_auto"):
 handler = None
 try:
     from mangum import Mangum
-    handler = Mangum(app)
+    _mangum = Mangum(app)
+
+    def handler(event, context):  # noqa: F811 — real Lambda entrypoint
+        # EventBridge scheduled tick → run the alert scheduler, not HTTP.
+        # Mangum isn't involved, so init deps ourselves on cold start.
+        if isinstance(event, dict) and event.get("detail-type") == "Scheduled Event":
+            if deps.store is None:
+                deps.init_deps(get_store(), get_notifier())
+            return {"moved": scheduler_run_once("ramesh_auto")}
+        return _mangum(event, context)
 except ImportError:
     pass

@@ -6,8 +6,32 @@ export const TENANT = 'ramesh_auto'
 
 import { demo, demoSearch } from './lib/demo.js'
 
+// demo gate — the deployed API sits behind DEMO_GATE_TOKEN (auth is demo-only
+// by project rule). Share the URL as .../?gate=PASSCODE#/app once and it sticks
+// in localStorage; public artifact links never need it.
+const qs = new URLSearchParams(location.search)
+if (qs.get('gate')) localStorage.setItem('sahayak_gate', qs.get('gate'))
+export const setGate = (t) => localStorage.setItem('sahayak_gate', t || '')
+export const gateToken = () => localStorage.getItem('sahayak_gate') || ''
+// raw probe for the Gate page — no demo fallback: a wrong passcode must fail
+export const checkGate = async (code) => {
+  try {
+    const r = await fetch(`${BASE}/agents?tenant_id=${TENANT}`,
+      { headers: { 'x-demo-token': code, 'ngrok-skip-browser-warning': '1' } })
+    return r.ok
+  } catch { return false }
+}
+
 async function req(path, opts = {}) {
-  const r = await fetch(`${BASE}${path}`, opts)
+  const headers = { ...(opts.headers || {}) }
+  const g = gateToken()
+  if (g) headers['x-demo-token'] = g
+  headers['ngrok-skip-browser-warning'] = '1'  // harmless elsewhere; skips tunnel interstitial
+  const r = await fetch(`${BASE}${path}`, { ...opts, headers })
+  if (r.status === 401 && !path.startsWith('/public/')) {
+    location.hash = '#/gate'
+    throw new Error('demo passcode required')
+  }
   if (!r.ok) throw new Error(`${opts.method || 'GET'} ${path} → ${r.status}`)
   return r.json()
 }

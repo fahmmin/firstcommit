@@ -4,6 +4,7 @@ import Docs from './pages/Docs.jsx'
 import Workspace from './pages/Workspace.jsx'
 import Settings from './pages/Settings.jsx'
 import Login from './pages/Login.jsx'
+import Gate from './pages/Gate.jsx'
 import Onboarding from './pages/Onboarding.jsx'
 import Search from './pages/Search.jsx'
 import ArtifactView from './pages/ArtifactView.jsx'
@@ -23,7 +24,7 @@ import { isAuthed } from './lib/auth.js'
 // hash router — no deps, works on any static host (Amplify, S3+CF, file://)
 const routes = {
   '': Landing, docs: Docs, app: Workspace, settings: Settings,
-  login: Login, onboarding: Onboarding, search: Search, a: ArtifactView,
+  login: Login, gate: Gate, onboarding: Onboarding, search: Search, a: ArtifactView,
   marketplace: Marketplace, context: Context, templates: Templates, calendar: Calendar, logs: Logs,
   artifacts: Artifacts, notifications: Notifications, people: People,
   analytics: Analytics, tasks: Tasks,
@@ -38,7 +39,7 @@ export default function App() {
   }, [])
   const [key, param] = route.split('/')
   // landing, docs, login and artifact share links are public
-  const PUBLIC = ['', 'docs', 'login', 'a']
+  const PUBLIC = ['', 'docs', 'login', 'gate', 'a']
   if (!PUBLIC.includes(key) && !isAuthed()) {
     location.hash = '#/login'
     return null

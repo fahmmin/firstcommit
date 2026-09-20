@@ -13,7 +13,8 @@ import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = (Path("/tmp/sahayak-data") if os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+            else Path(__file__).resolve().parent.parent / "data")
 
 
 class Store(ABC):

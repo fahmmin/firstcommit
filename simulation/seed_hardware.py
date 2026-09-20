@@ -216,6 +216,10 @@ def main() -> int:
     print(f"[fixtures] generated {len(files)} files in {FIXTURES}")
 
     with TestClient(app) as c:
+        # demo gate — deployed backend requires x-demo-token; local runs don't set it
+        if os.getenv("DEMO_GATE_TOKEN"):
+            c.headers["x-demo-token"] = os.environ["DEMO_GATE_TOKEN"]
+
         # 1. fresh tenant state from seed.json
         r = c.post("/demo/reset", params={"tenant_id": TENANT})
         print(f"[reset] {r.json()}")

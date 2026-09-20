@@ -40,3 +40,6 @@ plan.md
 
 # generated demo fixtures — regenerate via simulation/seed_hardware.py
 simulation/fixtures/
+
+# deploy packaging (simulation/deploy_aws.py)
+build/

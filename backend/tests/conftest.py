@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 os.environ.setdefault("USE_AWS", "0")  # USE_AWS=1 in env → parity suite also runs DynamoStore
+os.environ["DEMO_GATE_TOKEN"] = ""  # tests are ungated local dev — .env's real token must not leak in
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
