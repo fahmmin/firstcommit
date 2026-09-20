@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { session } from '../lib/auth.js'
-import { GROUP_ORDER } from '../lib/agentGroups.js'
+import { groupAgents } from '../lib/agentGroups.js'
 import {
   PlugZap, LayoutTemplate, RotateCcw, Activity, Settings2, FileText, LogOut,
   Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search,
@@ -52,55 +52,64 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
     location.reload()
   }
 
-  const groups = GROUP_ORDER.map(([label, match]) => [label, agents.filter(match)]).filter(([, l]) => l.length)
+  const groups = groupAgents(agents)
 
   return (
     <div className="h-screen flex bg-white font-sans">
-      <aside className="w-[190px] shrink-0 border-r border-slate-100 bg-[#fbfbfd] flex flex-col">
+      <aside className="w-[208px] shrink-0 border-r border-slate-100 bg-[#fbfbfd] flex flex-col">
         <a href="#/" className="flex items-center gap-2 px-4 h-[52px] border-b border-slate-100">
           <Blobs />
-          <span className="font-semibold text-[14px] tracking-tight text-ink">Sahayak</span>
+          <span className="font-semibold text-[15px] tracking-tight text-ink">Sahayak</span>
         </a>
         <div className="p-3">
           <button onClick={newChat}
-            className="plus-hover w-full text-[12px] font-medium border border-slate-200 bg-white rounded-lg py-2 text-slate-600 hover:border-slate-300 transition flex items-center justify-center gap-1.5">
-            <SpinPlus size={12} /> New Chat
+            className="plus-hover w-full text-[13px] font-medium border border-slate-200 bg-white rounded-lg py-2 text-slate-600 hover:border-slate-300 transition flex items-center justify-center gap-1.5">
+            <SpinPlus size={13} /> New Chat
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto scroll-thin px-3 pb-3 space-y-4">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1">Agents</div>
           {groups.map(([label, items]) => (
             <div key={label}>
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-1">{label}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-1 flex items-center justify-between">
+                {label}
+                <span className="text-[9px] font-medium text-slate-300 normal-case">{items.length}</span>
+              </div>
               {items.map(a => (
                 <button key={a.id} onClick={() => clickAgent(a)}
-                  className={`w-full text-left text-[12px] rounded-lg px-2 py-1.5 mb-0.5 flex items-center gap-2 transition
+                  className={`w-full text-left text-[13px] rounded-lg px-2 py-1.5 mb-0.5 flex items-center gap-2 transition
                     ${activeAgent === a.id ? 'bg-ink text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
                   <AgentAvatar seed={a.id} size={18} className="rounded" />
                   <span className="truncate">{a.name}</span>
                   {a.created_by === 'factory' && activeAgent !== a.id &&
-                    <span className="ml-auto text-[8px] font-bold text-magenta">AI</span>}
+                    <span className="ml-auto text-[9px] font-bold text-magenta">AI</span>}
                 </button>
               ))}
             </div>
           ))}
         </nav>
-        <div className="p-3 border-t border-slate-100 space-y-1 max-h-[45vh] overflow-y-auto scroll-thin">
-          <div className="text-[10px] text-slate-400 px-1">{TENANT}</div>
-          {NAV.map(([href, label, I]) => (
-            <a key={href} href={href}
-              className={`w-full text-[11px] rounded-lg px-2 py-1.5 transition flex items-center gap-1.5
-                ${isActive(href) ? 'bg-slate-900 text-white font-medium' : 'text-slate-500 hover:bg-slate-100'}`}>
-              <I size={11} /> {label}
-            </a>
-          ))}
-          <button onClick={reset}
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <RotateCcw size={11} /> Reset data
-          </button>
-          <button onClick={() => { session.clear(); location.hash = '#/login' }}
-            className="w-full text-[11px] text-slate-500 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition flex items-center gap-1.5">
-            <LogOut size={11} /> Sign out
-          </button>
+        <div className="p-3 pt-2 border-t border-slate-100 max-h-[45vh] overflow-y-auto scroll-thin">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-1.5">Workspace</div>
+          <div className="space-y-0.5">
+            {NAV.map(([href, label, I]) => (
+              <a key={href} href={href}
+                className={`w-full text-[12.5px] rounded-lg px-2 py-[5px] transition flex items-center gap-2
+                  ${isActive(href) ? 'bg-slate-900 text-white font-medium' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <I size={12} className="shrink-0" /> {label}
+              </a>
+            ))}
+          </div>
+          <div className="mt-2 pt-2 border-t border-slate-100 space-y-0.5">
+            <div className="text-[10px] text-slate-400 px-2 pb-0.5 truncate" title={TENANT}>{TENANT}</div>
+            <button onClick={reset}
+              className="w-full text-[12px] text-slate-500 rounded-lg px-2 py-[5px] hover:bg-slate-100 transition flex items-center gap-2">
+              <RotateCcw size={12} /> Reset data
+            </button>
+            <button onClick={() => { session.clear(); location.hash = '#/login' }}
+              className="w-full text-[12px] text-slate-500 rounded-lg px-2 py-[5px] hover:bg-slate-100 transition flex items-center gap-2">
+              <LogOut size={12} /> Sign out
+            </button>
+          </div>
         </div>
       </aside>
       {children}
