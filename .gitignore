@@ -43,3 +43,4 @@ simulation/fixtures/
 
 # deploy packaging (simulation/deploy_aws.py)
 build/
+uvicorn.log
