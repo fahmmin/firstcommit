@@ -287,6 +287,25 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
     horizon = (date.today() + timedelta(days=30)).isoformat()
     payables = deps.store.list_payables(tenant_id)
     specs = reg.get_registry(tenant_id).specs()
+    pending = deps.store.list_alerts(tenant_id, status="pending_approval")
+    bookings = [a for a in pending if a.get("kind") == "booking"]
+
+    # "N things need you" — the morning-brief card
+    brief: list[dict] = []
+    if overdue:
+        brief.append({"icon": "receipt", "kind": "overdue",
+                      "title": f"{len(overdue)} invoices overdue",
+                      "detail": f"₹{sum(i['amount'] for i in overdue):,} locked", "ref": "#/app"})
+    if pending:
+        brief.append({"icon": "bell", "kind": "approval",
+                      "title": f"{len(pending)} action{'s' if len(pending) != 1 else ''} waiting for your approval",
+                      "detail": "drafted overnight — nothing sent yet", "ref": "#/notifications"})
+    if bookings:
+        brief.append({"icon": "truck", "kind": "shipment",
+                      "title": "Shipments on the move",
+                      "detail": f"{len(bookings)} pickup{'s' if len(bookings) != 1 else ''} awaiting confirmation",
+                      "ref": "#/calendar"})
+
     return {
         "receivables": {
             "total": sum(i["amount"] for i in open_inv),
@@ -296,11 +315,12 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
         },
         "capital_locked_long_terms": sum(i["amount"] for i in open_inv if i.get("terms_days", 30) >= 60),
         "payables_due_30d": sum(p["amount"] for p in payables if p.get("due", "9999") <= horizon),
-        "pending_approvals": len(deps.store.list_alerts(tenant_id, status="pending_approval")),
+        "pending_approvals": len(pending),
         "agents": {"total": len(specs),
                    "ai_hired": sum(1 for s in specs if s.get("created_by") == "factory")},
         "alerts_unread": sum(1 for n in deps.store.list_notifications(tenant_id)
                              if n.get("status") == "unread"),
+        "brief": brief,
         "recent_activity": deps.store.list_activity(tenant_id, limit=10),
     }
 
@@ -622,6 +642,43 @@ def create_artifact(req: ArtifactReq):
                                     created_by=req.created_by)
     except ValueError as e:
         raise HTTPException(422, str(e))
+
+
+@app.get("/people")
+def people(tenant_id: str = "ramesh_auto"):
+    """Everyone the business touches — customers (from invoices), suppliers, carriers."""
+    invoices = deps.store.list_invoices(tenant_id)
+    by_buyer: dict[str, dict] = {}
+    for i in invoices:
+        buyer = i.get("buyer", "").strip()
+        if not buyer:
+            continue
+        c = by_buyer.setdefault(buyer, {
+            "id": "cust-" + re.sub(r"[^a-z0-9]+", "-", buyer.lower()).strip("-"),
+            "name": buyer, "invoices": 0, "billed": 0, "outstanding": 0, "worst_overdue_days": 0,
+        })
+        c["invoices"] += 1
+        c["billed"] += i.get("amount", 0)
+        if i.get("status") in ("sent", "due_soon", "overdue"):
+            c["outstanding"] += i.get("amount", 0)
+        c["worst_overdue_days"] = max(c["worst_overdue_days"], i.get("days_overdue", 0))
+    customers = sorted(by_buyer.values(), key=lambda c: c["outstanding"], reverse=True)
+    for c in customers:
+        c["defaulter"] = c["worst_overdue_days"] > 30
+    suppliers = deps.store.list_suppliers(tenant_id)
+    carriers = deps.store.list_carriers(tenant_id)
+    return {
+        "summary": {"customers": len(customers), "suppliers": len(suppliers),
+                    "carriers": len(carriers),
+                    "outstanding": sum(c["outstanding"] for c in customers)},
+        "customers": customers, "suppliers": suppliers, "carriers": carriers,
+    }
+
+
+@app.get("/logs")
+def logs(tenant_id: str = "ramesh_auto", limit: int = 50):
+    """Unified activity/audit log (dashboard feed + agent actions)."""
+    return deps.store.list_activity(tenant_id, limit=limit)
 
 
 @app.get("/search")

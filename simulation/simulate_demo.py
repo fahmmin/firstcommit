@@ -151,6 +151,13 @@ def main() -> int:
               f"{art['share_path']}", fetched.get("data", {}).get("order_id") == "ORD-9"
               and art["share_path"] == f"/a/{art['id']}")
 
+        # 16. Phase A — People aggregation + defaulter flag
+        ppl = c.get("/people", params={"tenant_id": TENANT}).json()
+        defaulters = [x for x in ppl["customers"] if x.get("defaulter")]
+        check("people aggregated + defaulter flagged",
+              "customers>0 + >=1 defaulter", f"{ppl['summary']['customers']}/{len(defaulters)}",
+              ppl["summary"]["customers"] > 0 and len(defaulters) >= 1)
+
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{'='*60}\n{passed}/{len(results)} checks passed")
     return 0 if passed == len(results) else 1

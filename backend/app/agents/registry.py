@@ -193,6 +193,7 @@ class AgentRegistry:
                 "Never create before showing a preview. Never claim an agent is live unless "
                 "create_agent succeeded. Only tools from list_available_tools. Draft-only "
                 "guardrails always apply."
+                + build_memory_suffix(self.tenant_id)
             ),
             tools=[list_available_tools, preview_spec, create_agent],
             session_manager=_session_manager(f"{self.tenant_id}-nirmata"),
@@ -228,6 +229,7 @@ class AgentRegistry:
                 "Always call a specialist tool for any business-data question — never answer "
                 "from memory. If unsure, ask one short clarifying question. Reply in the "
                 "owner's language (English/Hinglish), short and concrete."
+                + build_memory_suffix(self.tenant_id)
             ),
             tools=subs,
             session_manager=_session_manager(f"{self.tenant_id}-orchestrator"),

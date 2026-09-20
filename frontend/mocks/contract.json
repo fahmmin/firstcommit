@@ -17,7 +17,11 @@
     "/connectors": { "desc": "Connect existing services — Google Calendar, Airtable, WhatsApp, Tally, Razorpay. connect → syncing → items_synced", "uses": ["GET /connectors", "POST /connectors/{id}/connect", "POST /connectors/{id}/disconnect", "GET /connectors/{id}/sync"] },
     "/settings": { "desc": "Business profile, prefs, business context (memories), skills toggles, MCP servers, connectors", "uses": ["GET /settings", "PATCH /settings", "GET /memories", "POST /memories", "DELETE /memories/{id}", "GET /connectors"] },
     "/search": { "desc": "Global search — topbar input → grouped results across invoices/suppliers/carriers/agents/tasks/memories/documents", "uses": ["GET /search"] },
-    "/a/:id": { "desc": "Shared artifact page — public-looking view of an agent-built mini-app (tracking page, invoice summary, supplier compare). 'Share link' copies the URL", "uses": ["GET /artifacts/{id}"] }
+    "/a/:id": { "desc": "Shared artifact page — public-looking view of an agent-built mini-app (tracking page, invoice summary, supplier compare). 'Share link' copies the URL", "uses": ["GET /artifacts/{id}"] },
+    "/people": { "desc": "Everyone your business touches — Customers/Suppliers/Carriers tabs, outstanding totals, defaulter badges", "uses": ["GET /people"] },
+    "/context": { "desc": "Business context — drop files/notes; auto-tagged 'organized library' fed to agents", "uses": ["POST /context/upload", "GET /context", "DELETE /context/{id}"] },
+    "/templates": { "desc": "Template gallery — categorized prompt/agent templates; install runs on the factory", "uses": ["GET /templates", "POST /templates/{id}/install"] },
+    "/logs": { "desc": "Activity/audit log", "uses": ["GET /logs"] }
   },
 
   "endpoints": {
@@ -244,11 +248,46 @@
       }
     },
 
+    "GET /people?tenant_id= [TODO]": {
+      "$comment": "Everyone the business touches — composed from invoices (customers), suppliers, carriers. defaulter = worst days_overdue > 30.",
+      "response": {
+        "summary": { "customers": 5, "suppliers": 20, "carriers": 6, "outstanding": 645400 },
+        "customers": [{ "id": "cust-sharma-motors", "name": "Sharma Motors", "invoices": 3, "billed": 152700, "outstanding": 152700, "worst_overdue_days": 37, "defaulter": true }],
+        "suppliers": [{ "id": "sup-01", "name": "Balaji Steel Traders", "category": "raw steel coils", "trust_score": 4.2 }],
+        "carriers": [{ "id": "car-1", "name": "VRL Logistics", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.5 }]
+      }
+    },
+    "GET /logs?tenant_id= [TODO]": {
+      "$comment": "Unified activity/audit log — dashboard activity feed + agent actions.",
+      "response": [{ "id": "act-1", "ts": "2026-09-19T02:10:00Z", "kind": "agent_created", "text": "Nirmata hired 'Logistics Agent'" }]
+    },
+    "GET /templates?tenant_id= [TODO]": {
+      "$comment": "Prompt/agent template catalog. category ∈ money|procurement|logistics|new_agent|presence. runs_on names the agent; new_agent/presence carry an agent_spec that /templates/{id}/install feeds to the factory.",
+      "response": [
+        { "id": "chase-overdue", "category": "money", "title": "Chase overdue payments", "prompt": "Show my overdue invoices and draft a polite reminder for the oldest one.", "runs_on": "vasool" },
+        { "id": "digital-presence", "category": "presence", "title": "Digital presence agent", "prompt": "I want to sell online — build me an agent that lists on Facebook Marketplace + IndiaMART and keeps listings SEO-optimized.", "runs_on": "nirmata", "agent_spec": { "name": "Digital Presence Agent", "goal": "Publish products to online marketplaces and keep listings SEO-optimized", "tools": [] } }
+      ]
+    },
+    "POST /templates/{id}/install [TODO]": {
+      "$comment": "Install an agent template — for new_agent/presence templates, creates the agent via the factory.",
+      "request": { "tenant_id": "ramesh_auto" },
+      "response": { "id": "agent-abc123", "status": "active", "created_by": "factory" }
+    },
+    "POST /context/upload [TODO]": {
+      "$comment": "Business context — drop ANY file (pdf/xlsx/image/csv) or a note. Auto-tagged + summarized + fed to agent memory + made searchable. Excel still routes to invoice import.",
+      "request": "multipart/form-data: file=<any> OR text=<note>, tenant_id",
+      "response": { "id": "doc-1", "filename": "GSTR-3B_FY25.xlsx", "kind": "spreadsheet", "tags": ["tax", "finance"], "summary": "GSTR-3B filing data for FY25, 18 rows", "status": "fed_to_agents", "created_at": "2026-09-20T04:00:00Z" }
+    },
+    "GET /context?tenant_id= [TODO]": {
+      "response": [{ "id": "doc-1", "filename": "GSTR-3B_FY25.xlsx", "kind": "spreadsheet", "tags": ["tax", "finance"], "summary": "GSTR-3B filing data for FY25", "status": "fed_to_agents", "created_at": "2026-09-20T04:00:00Z" }]
+    },
+    "DELETE /context/{id} [TODO]": { "response": { "status": "deleted" } },
+
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },
     "GET /health [EXISTS]": { "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" } }
   },
 
-  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported"]
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched"]
 }

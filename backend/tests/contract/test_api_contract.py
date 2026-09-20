@@ -276,3 +276,31 @@ def test_search_grouped(client):
     assert _keys(body["results"]) >= _keys(_ep("GET /search?q=&tenant_id=")["response"]["results"])
     assert len(body["results"]["invoices"]) >= 1  # Sharma Motors invoices
     assert client.get("/search", params={"q": ""}).json()["results"]["invoices"] == []
+
+
+# ---------- Phase A: people / logs / brief ----------
+
+def test_people_aggregation(client):
+    r = client.get("/people", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    body = r.json()
+    assert _keys(body) >= _keys(_ep("GET /people?tenant_id=")["response"])
+    assert _keys(body["summary"]) >= {"customers", "suppliers", "carriers", "outstanding"}
+    assert len(body["customers"]) >= 1
+    assert _keys(body["customers"][0]) >= {"name", "invoices", "outstanding", "defaulter"}
+    # Om Sai Traders is 111 days overdue in seed → defaulter
+    assert any(c["defaulter"] for c in body["customers"])
+
+
+def test_logs(client):
+    r = client.get("/logs", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200 and isinstance(r.json(), list)
+    assert _keys(r.json()[0]) >= {"kind", "text", "ts"}
+
+
+def test_dashboard_brief(client):
+    r = client.get("/dashboard/summary", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    brief = r.json()["brief"]
+    assert isinstance(brief, list) and len(brief) >= 1
+    assert _keys(brief[0]) >= {"icon", "title", "detail", "ref"}
