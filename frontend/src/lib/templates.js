@@ -6,7 +6,7 @@ import {
   CalendarClock, Users, IndianRupee, Store, Globe,
 } from 'lucide-react'
 
-const mesh = (a, b, c) => ({
+export const mesh = (a, b, c) => ({
   background: `radial-gradient(at 15% 25%, ${a} 0, transparent 55%), radial-gradient(at 85% 15%, ${b} 0, transparent 50%), radial-gradient(at 60% 90%, ${c} 0, transparent 55%), linear-gradient(150deg, ${a}44, ${c}33)`,
 })
 

@@ -10,9 +10,9 @@
     "/dashboard": { "desc": "Home: KPI tiles (receivables, capital locked, pending approvals), aging + cashflow charts, activity feed, agent strip", "uses": ["GET /dashboard/summary", "GET /agents", "GET /alerts"] },
     "/agents": { "desc": "Subagents view — grid of all agents incl. AI-hired ones; 'hire agent' button opens factory wizard", "uses": ["GET /agents", "POST /agents/preview", "POST /agents"] },
     "/agents/:id": { "desc": "Agent detail — persona, tools, stats, activity log. RIGHT SIDEBAR is contextual per agent (vasool → invoice summary + capital locked; logistics agent → carriers/bookings)", "uses": ["GET /agents/{id}", "GET /agents/{id}/context", "POST /chat (agent_id)"] },
-    "/tasks": { "desc": "Create task → assign to an agent → watch it run → result", "uses": ["GET /tasks", "POST /tasks", "POST /tasks/{id}/run"] },
+    "/tasks": { "desc": "Kanban — create task → assign → drag between columns → run it → result. Drag sends PATCH /tasks/{id} {col,status}", "uses": ["GET /tasks", "POST /tasks", "PATCH /tasks/{id}", "POST /tasks/{id}/run"] },
     "/calendar": { "desc": "Month view — invoice dues, scheduled alerts, task deadlines", "uses": ["GET /calendar/events"] },
-    "/notifications": { "desc": "Feed — drafted reminders awaiting approval, sent messages, agent-hired events, scheduler promotions", "uses": ["GET /notifications", "POST /alerts/{id}/approve"] },
+    "/notifications": { "desc": "Feed — drafted reminders awaiting approval, sent messages, agent-hired events, scheduler promotions. Mark-read persists via POST /notifications/{id}/read", "uses": ["GET /notifications", "POST /notifications/{id}/read", "POST /alerts/{id}/approve"] },
     "/chat": { "desc": "Full chat view — orchestrator routing badges, agent pinning, action toasts", "uses": ["POST /chat"] },
     "/connectors": { "desc": "Connect existing services — Google Calendar, Airtable, WhatsApp, Tally, Razorpay. connect → syncing → items_synced", "uses": ["GET /connectors", "POST /connectors/{id}/connect", "POST /connectors/{id}/disconnect", "GET /connectors/{id}/sync"] },
     "/settings": { "desc": "Business profile, prefs, business context (memories), skills toggles, MCP servers, connectors", "uses": ["GET /settings", "PATCH /settings", "GET /memories", "POST /memories", "DELETE /memories/{id}", "GET /connectors"] },
@@ -118,6 +118,11 @@
     "POST /tasks/{id}/run [TODO]": {
       "$comment": "Runs the task through the assigned agent — returns chat-shaped result",
       "response": { "task_id": "task-9", "status": "done", "agent_name": "sourcer", "result": "Balaji Steel at ₹62/unit...", "actions": [] }
+    },
+    "PATCH /tasks/{id} [TODO]": {
+      "$comment": "Kanban drag-drop persistence — the Tasks board sends this on every column move. Accepts {status} (todo|in_progress|approval|done); {col} is a frontend alias for the same value. Also allow {title, agent_id, due, details} edits. Frontend sends BOTH col and status — backend should treat col as alias of status.",
+      "request": { "col": "done", "status": "done" },
+      "response": { "id": "task-9", "status": "done" }
     },
 
     "GET /calendar/events?from=&to= [TODO]": {

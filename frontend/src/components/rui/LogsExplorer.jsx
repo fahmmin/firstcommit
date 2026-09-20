@@ -18,6 +18,15 @@ const LEVEL_STYLE = {
 const ts = (d = new Date()) =>
   `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })} ${d.toTimeString().slice(0, 8)}`
 
+// activity row kind → stream level
+const LEVEL_OF = (kind = '') =>
+  /approv|reminder|pending/.test(kind) ? 'APPROVE'
+  : /sync|connector/.test(kind) ? 'SYNC'
+  : /mcp/.test(kind) ? 'MCP'
+  : /fail|error|warn|overdue/.test(kind) ? 'WARN'
+  : /task|tool|agent|hire|spec|invoice|artifact|memory|context|onboard/.test(kind) ? 'TOOL'
+  : 'INFO'
+
 const SYNTH = [
   ['TOOL', 'vasool.list_overdue() → 6 rows · 3 overdue'],
   ['INFO', 'memory injected — 4 owner notes into system prompt'],
@@ -44,15 +53,23 @@ export function LogsExplorer({ maxRows = 60, className = '' }) {
   useEffect(() => {
     let alive = true
     const seed = async () => {
+      // real activity feed (GET /logs) first; alerts+notifications synth as fallback
+      const rows = await api.logs?.(40).catch(() => [])
+      if (rows?.length) {
+        return rows.slice(0, 12).map(a => ({
+          level: LEVEL_OF(a.kind), text: a.text || a.kind,
+          t: ts(a.ts ? new Date(a.ts) : new Date()),
+        }))
+      }
       const seeded = []
       try {
         const [alerts, notifs] = await Promise.all([api.alerts().catch(() => []), api.notifications().catch(() => [])])
-        alerts.forEach(a => seeded.push(['APPROVE', `${a.title} → ${a.status}`]))
-        notifs.forEach(n => seeded.push(['INFO', n.text || n.title || 'notification']))
+        alerts.forEach(a => seeded.push({ level: 'APPROVE', text: `${a.title} → ${a.status}`, t: ts() }))
+        notifs.forEach(n => seeded.push({ level: 'INFO', text: n.text || n.title || 'notification', t: ts() }))
       } catch {}
       return seeded.slice(0, 5)
     }
-    seed().then(s => { if (alive && s.length) setRows(r => [...s.map(([level, text]) => ({ level, text, t: ts() })), ...r]) })
+    seed().then(s => { if (alive && s.length) setRows(r => [...s, ...r]) })
 
     const tick = () => {
       const [level, text] = SYNTH[iRef.current++ % SYNTH.length]

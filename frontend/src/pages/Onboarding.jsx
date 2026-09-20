@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api.js'
 import { session } from '../lib/auth.js'
 import { role } from '../lib/role.js'
+import { toast } from '../lib/toast.js'
 import { Blobs } from '../components/Logo.jsx'
 import { ArrowLeft, ArrowRight, Check, Loader2, Sparkles, Crown, Calculator, Briefcase, HardHat } from 'lucide-react'
 
@@ -22,6 +23,16 @@ const PROBLEMS = [
   'Hard to compare supplier prices',
 ]
 
+// problem chip → backend pain id (drives auto agent-hiring in POST /onboarding)
+const PAIN_ID = {
+  'Payments come late — I keep chasing them': 'late_payments',
+  'Stock runs out before I notice': 'stock_outs',
+  'Deliveries get delayed, nobody tracks them': 'untracked_deliveries',
+  'Too many Excel sheets and registers': 'too_many_excels',
+  'Cash-flow surprises at month end': 'cash_flow',
+  'Hard to compare supplier prices': 'chasing_suppliers',
+}
+
 export default function Onboarding() {
   const [step, setStep] = useState(0)
   const [name, setName] = useState(session.get()?.user?.name || '')
@@ -35,14 +46,27 @@ export default function Onboarding() {
     setBusy(true)
     try {
       // chosen role drives RBAC gates across the app
-      role.set(ROLE_OPTIONS.find(r => r.id === rolePick)?.rbac || 'owner')
-      await api.updateSettings({ business: { name: business, owner: name, city }, onboarded: true })
-      // picked problems + role become real agent memory
+      const rbac = ROLE_OPTIONS.find(r => r.id === rolePick)?.rbac || 'owner'
+      role.set(rbac)
       const pickedRole = ROLE_OPTIONS.find(r => r.id === rolePick)
-      await Promise.all([
-        ...picked.map(p => api.addMemory(`Owner said: "${p}"`, 'onboarding').catch(() => {})),
-        api.addMemory(`${name || 'User'} is the ${pickedRole?.label.toLowerCase() || 'owner'} of ${business || 'the business'}`, 'onboarding').catch(() => {}),
-      ])
+      // one rich call: profile+prefs → settings, answers+pains → memories,
+      // pains → agents auto-hired by the factory. Granular calls are the fallback.
+      const r = await api.onboarding({
+        business: { name: business, owner: name, city },
+        prefs: { role: rbac },
+        pains: picked.map(p => PAIN_ID[p]).filter(Boolean),
+        rules: [...picked,
+                `${name || 'User'} is the ${pickedRole?.label.toLowerCase() || 'owner'} of ${business || 'the business'}`],
+        auto_hire: true,
+      }).catch(() => null)
+      if (!r) {
+        await api.updateSettings({ business: { name: business, owner: name, city }, onboarded: true })
+        await Promise.all([
+          ...picked.map(p => api.addMemory(`Owner said: "${p}"`, 'onboarding').catch(() => {})),
+          api.addMemory(`${name || 'User'} is the ${pickedRole?.label.toLowerCase() || 'owner'} of ${business || 'the business'}`, 'onboarding').catch(() => {}),
+        ])
+      }
+      if (r?.agents_installed?.length) toast.push(`${r.agents_installed.length} agent${r.agents_installed.length > 1 ? 's' : ''} hired for your problems`)
       location.hash = '#/app'
     } catch { setBusy(false) }
   }

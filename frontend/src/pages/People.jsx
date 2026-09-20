@@ -13,17 +13,30 @@ import {
 export default function People() {
   const [tab, setTab] = useState('customers')
   const [q, setQ] = useState('')
-  const [invoices, setInvoices] = useState([])
+  const [remote, setRemote] = useState(null)          // GET /people response
+  const [invoices, setInvoices] = useState([])        // fallback compose path
   const [suppliers, setSuppliers] = useState([])
   const [carriers, setCarriers] = useState([])
 
   useEffect(() => {
-    Promise.all([api.invoices().catch(() => []), api.suppliers().catch(() => []), api.carriers().catch(() => [])])
-      .then(([inv, sup, car]) => { setInvoices(inv); setSuppliers(sup); setCarriers(car) })
+    // real aggregation endpoint first (includes the defaulter flag);
+    // fall back to composing invoices+suppliers+carriers client-side
+    api.people().then(p => {
+      setRemote(p)
+      setSuppliers(p.suppliers || []); setCarriers(p.carriers || [])
+    }).catch(() => {
+      Promise.all([api.invoices().catch(() => []), api.suppliers().catch(() => []), api.carriers().catch(() => [])])
+        .then(([inv, sup, car]) => { setInvoices(inv); setSuppliers(sup); setCarriers(car) })
+    })
   }, [])
 
-  // customers = invoices grouped by buyer
   const customers = useMemo(() => {
+    if (remote) {
+      return (remote.customers || []).map(c => ({
+        name: c.name, billed: c.billed || 0, outstanding: c.outstanding || 0,
+        overdueDays: c.worst_overdue_days || 0, count: c.invoices || 0,
+      }))
+    }
     const map = {}
     invoices.forEach(i => {
       const c = map[i.buyer] ||= { name: i.buyer, billed: 0, outstanding: 0, overdueDays: 0, count: 0, last: i.due_date }
@@ -33,7 +46,7 @@ export default function People() {
       if (i.due_date > c.last) c.last = i.due_date
     })
     return Object.values(map).sort((a, b) => b.outstanding - a.outstanding)
-  }, [invoices])
+  }, [remote, invoices])
 
   const needle = q.toLowerCase()
   const stats = [

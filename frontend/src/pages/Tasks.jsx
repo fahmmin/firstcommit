@@ -49,8 +49,9 @@ export default function Tasks() {
     const title = draft.trim()
     if (!title) return
     setDraft('')
-    const t = await api.addTask(title, col).catch(() => ({ id: `t-${Date.now()}`, title, col, agent: 'sahayak', priority: 'med', due: '—', tags: [] }))
-    setTasks(ts => [...ts, t])
+    // POST /tasks returns only {id, status} — rebuild the card client-side
+    const r = await api.addTask(title, col).catch(() => null)
+    setTasks(ts => [...ts, norm({ id: r?.id || `t-${Date.now()}`, title, col, agent: 'sahayak' })])
   }
 
   const approve = (t) => { move(t.id, 'done') }

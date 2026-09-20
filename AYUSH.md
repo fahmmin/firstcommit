@@ -32,22 +32,21 @@ Done ✅
 Open ⬜ (not done yet)
 
 **Needed by the live frontend** (Fahmin's pages are shipped — these are the real gaps):
-- ⬜ `PATCH /tasks/{id}` — kanban drag-drop persistence (Round-4 §1 below)
-- ⬜ `POST /tasks` field mapping — accept `col`/`agent` → `status`/`agent_id`, return the full row (Round-4 §2)
+- ⬜ `PATCH /tasks/{id}` — kanban drag-drop persistence; now in contract.json (Round-4 §1 below)
+- ⬜ `POST /tasks` field mapping — frontend now sends `col`+`status`+`agent`+`agent_id`; `agent_id` lands, `status`/`col` still dropped server-side (Round-4 §2)
 - ⬜ **UTF-8 charset** on JSON responses — `₹` mojibakes to `â‚¹` on Windows/curl (Round-4 §3)
 - ⬜ `PATCH /settings` accept `role` — onboarding's role→RBAC pick should persist (Round-4 §5)
+- ⬜ `_PAIN_MAP` missing `too_many_excels` — frontend sends it from the wizard (Round-4 "already covered" note below)
 - ⬜ Connector seeds: `facebook_marketplace` (connected) + `indiamart`, `shopify`, `instagram` (available) — demo store covers today (Round-3 §4)
 
-**Reconcile route names** (built, but under different names than Fahmin's spec — pick one, tell him):
-- ⬜ Context docs: built as `POST /context/upload` + `GET /context` + `DELETE /context/{id}`; spec asked `/context/docs`. Frontend doesn't call either yet.
-- ⬜ Activity feed: built as `GET /logs`; spec asked `GET /activity`. Same data — keep `/logs` and update the spec, or alias.
+**Reconcile route names** — ✅ resolved: frontend adopted your routes. Context docs → `POST /context/upload` + `GET /context` + `DELETE /context/{id}` (spec's `/context/docs` dropped). Activity feed → `GET /logs` (spec's `/activity` dropped). contract.json + Round-3 §1 spec updated to match.
 
 **Stretch / open**
 - ⬜ **Real Google Drive / Google Calendar OAuth connectors** (currently simulated — connect flips status, sync counts local rows only). Gmail/Drive/WhatsApp/Tally/Razorpay are stubs. ← revisit for genuine external integration
 - ⬜ **Deploy** (§6): Amplify (frontend) + Lambda URL (`Mangum` ready) + EventBridge rule → `scheduler.run_once`
 - ⬜ **Web search / Deep research** agent tool — `/chat` already receives `mode: "web"|"deep"` (ignored today); needs a `TAVILY_API_KEY`
 - ⬜ Digital-presence template's tools (`publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`) aren't in `TOOL_REGISTRY` — template ships `tools: []` so install converges via Nirmata prompt only
-- ⬜ Frontend wiring of already-built backends (real `/context/*`, `POST /onboarding`, `/people`, `/logs`, `/notifications/{id}/read`, `/connectors/{id}/sync`, `/templates` install) — Fahmin's side; his pages exist but several still run on the demo store
+- ✅ ~~Frontend wiring of already-built backends~~ — DONE (Fahmin, 2026-09-20): `/context/*` → Context page, `POST /onboarding` → wizard (chips→`pains`, auto-hire toast), `/people` → CRM tabs, `/logs` → LogsExplorer stream, `POST /notifications/{id}/read` → mark-read + mark-all, `GET /connectors/{id}/sync` → Settings "Sync now" + post-connect sync, `/templates` + `/templates/{id}/install` → gallery merged catalog + Install buttons (agent_spec → open_agent deep-link; `needs_factory` → prompt prefill). Every screen still falls back to the demo store offline.
 
 ---
 
@@ -235,20 +234,13 @@ chore(deploy): amplify + lambda URL                ← stretch
 
 These landed on the frontend already; the demo store covers them until you ship.
 
-> **Status after `ayush/backend-rounds-2-4`:** §1 ✅ built (as `/context/upload`+`GET /context`+`DELETE /context/{id}` — route names differ, reconcile), §2 ⬜ (`mode` silently ignored today), §3 ✅ nothing needed, §4 ⬜ seeds missing, §5 ⚠️ template exists but `tools: []`.
+> **Status after `ayush/backend-rounds-2-4` + frontend wiring:** §1 ✅ built AND consumed — frontend calls your actual routes (`/context/upload`, `GET /context`, `DELETE /context/{id}`), spec below updated to match. §2 ⬜ (`mode` silently ignored today), §3 ✅ nothing needed, §4 ⬜ seeds missing, §5 ⚠️ template exists but `tools: []`.
 
-### 1. `POST /context/docs` — business-context ingestion (auto-tag)
-Multipart `file` OR JSON `{text}`. On ingest, run the tagger and store:
-```json
-{ "id": "ctx-..", "name": "GSTR-3B_FY25.xlsx", "kind": "Spreadsheet",
-  "tags": ["tax","finance"], "meta": "18 rows · GSTIN linked",
-  "source": "upload", "created_at": "..." }
-```
-Tag rules mirror `frontend/src/lib/context.js` TAG_RULES — filename + extracted
-text keywords → {tax, invoices, procurement, logistics, finance, hr, sales,
-legal}. `GET /context/docs` lists; `DELETE` removes. Fold into `/search`
-documents group (match name + tags + meta). Extracted text also becomes a
-`memories` row with `source: "doc"` so agents genuinely cite it.
+### 1. `POST /context/upload` + `GET /context` + `DELETE /context/{id}` — business-context ingestion (auto-tag) ✅ live
+Frontend sends multipart `file` OR `text` form field (+ `tenant_id`) — exactly what
+you built. Store `{id, filename, kind, tags, summary, status, created_at}`;
+`kind ∈ pdf|spreadsheet|image|note|document` (frontend maps to its own labels).
+Folded into `/search` documents group ✅ and fed to agent memory ✅ — both verified.
 
 ### 2. `POST /chat` — new optional field `mode`
 `"chat" | "web" | "deep"`. Contract-tolerant: ignore if you can't wire it yet —
@@ -276,19 +268,20 @@ goal mentions Facebook Marketplace + IndiaMART + Shopify + SEO/GEO.
 
 All contract-tolerant — demo store covers until you ship. Order by effort.
 
-> **Status after `ayush/backend-rounds-2-4`:** §1 ⬜ missing (kanban moves 404 → demo-store fallback), §2 ⬜ `col`/`agent` silently dropped, §3 ⬜ open, §4 ⚠️ built as `GET /logs` (name differs), §5 ⬜ `role` silently dropped.
+> **Status after `ayush/backend-rounds-2-4` + frontend wiring:** §1 ⬜ missing (kanban moves 404 → demo-store fallback; now IN contract.json), §2 ⬜ frontend now sends BOTH spellings (`col`+`status`, `agent`+`agent_id`) so `agent_id` lands today — but `status`/`col` on create is still dropped (hardcoded `todo`), §3 ⬜ open, §4 ✅ resolved — LogsExplorer now streams `GET /logs`, §5 ⬜ `role` silently dropped (frontend sends `prefs.role` in `/onboarding` AND `PATCH /settings`).
 
-### 1. `PATCH /tasks/{id}` — kanban moves (NEW, needed)
+### 1. `PATCH /tasks/{id}` — kanban moves (NEW, needed — in contract.json)
 The tasks board (`#/tasks`) drags cards between
-`todo | in_progress | approval | done`. Frontend sends
-`{status}` (and a duplicate `col` field — ignore it) + `tenant_id` query.
+`todo | in_progress | approval | done`. Frontend sends `{col, status}` — same
+value twice; treat `col` as alias — + `tenant_id` query.
 Update `status`, return the row. `GET /tasks` already exists and works —
 the board is live on it today; this patch is the missing half.
 
 ### 2. `POST /tasks` field mapping
-Frontend quick-add sends `{tenant_id, title, col, agent}` — map
-`col→status`, `agent→agent_id` (accept both spellings, contract already
-has `status`/`agent_id` canonical). Priority/due/tags optional.
+Frontend sends `{tenant_id, title, col, agent, status, agent_id}` — both
+spellings. `agent_id` already persists; `status`/`col` are dropped today
+(hardcoded `todo` server-side) — accept them so quick-add can land in any column.
+Priority/due/tags optional.
 
 ### 3. UTF-8 bug — FIX BEFORE FILMING
 JSON responses mangle `₹` → `â‚¹` (visible in `/tasks` title
@@ -297,23 +290,33 @@ Fix: ensure every JSON response is `application/json; charset=utf-8` —
 either `JSONResponse(..., media_type="application/json; charset=utf-8")`
 or a tiny middleware. Verify: `curl -s localhost:8000/tasks | grep ₹`.
 
-### 4. `GET /activity` — real feed for the Logs page (optional)
-`#/logs` synthesizes entries from alerts + notifications today. If you have
-the `activity` collection from §1 anyway, expose `GET /activity?tenant_id=`
-→ `[{ts, level, kind, message, agent_id}]` (level ∈ INFO/TOOL/MCP/APPROVE/
-SYNC/WARN) and the page will stream real events instead.
+### 4. `GET /logs` — real feed for the Logs page ✅ consumed
+LogsExplorer now seeds its stream from `GET /logs?limit=` (your `activity`
+collection — `{ts, kind, text}` rows), synthesized entries as fallback.
+No `/activity` alias needed.
 
 ### 5. `PATCH /settings` — accept `role` (optional)
-Onboarding now asks role (owner/accountant/manager/worker) and maps it to
-RBAC client-side. Persist `settings.role` so it survives a re-login.
+Onboarding asks role (owner/accountant/manager/worker) and maps it to RBAC
+client-side. Frontend sends `prefs: {role: "owner|manager|viewer"}` in both
+`POST /onboarding` (✅ persists via prefs merge) and `PATCH /settings` —
+verify a top-level `role` or `prefs.role` survives a re-login.
 
 ### Already covered / no backend work needed
 - Analytics (`#/analytics`) composes `dashboard/summary` + `/cashflow` +
   `/invoices` + `/agents` — all exist.
-- People (`#/people`) aggregates `/invoices` + `/suppliers` + `/carriers`.
-- Notifications page uses `GET /notifications` (+ `read` when it lands).
+- People (`#/people`) calls `GET /people` ✅ — defaulter flags + outstanding
+  totals straight from your aggregation (client-side compose is the fallback).
+- Notifications page uses `GET /notifications` + `POST /notifications/{id}/read` ✅.
 - Approvals drawer uses `GET /alerts` + `POST /alerts/{id}/approve` — exists.
-- Global search `tasks` group is live via the demo merge; your `/search`
-  already lists tasks per Round 2 spec — keep it.
-- Voice input, TTS, command palette, dark mode, kanban DnD, onboarding —
-  all client-side.
+- Templates page merges `GET /templates` with its local gallery — agent_spec
+  templates get a real Install button (`created_by:"factory"` → opens the new
+  agent in the workspace; `needs_factory` → prefills the composer).
+- Onboarding calls `POST /onboarding` ✅ — problem chips map to your `pains`
+  ids (late_payments, stock_outs, untracked_deliveries, too_many_excels,
+  cash_flow, chasing_suppliers), `auto_hire:true`, and it toasts the count
+  from `agents_installed[]`. Heads-up: `too_many_excels` isn't in `_PAIN_MAP`
+  — map it to `compare-suppliers` or add an excel-helper template.
+- Calendar calls `GET /calendar/events` ✅ — maps `invoice_due→invoice`,
+  `alert→reminder` display kinds and filters by the viewed day.
+- Settings "Sync now" + post-connect auto-sync call `GET /connectors/{id}/sync` ✅.
+- Voice input, TTS, command palette, dark mode, kanban DnD — all client-side.

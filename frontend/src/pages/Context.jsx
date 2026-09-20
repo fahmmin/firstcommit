@@ -8,6 +8,13 @@ import {
 } from 'lucide-react'
 
 const KIND_ICON = { PDF: FileText, Spreadsheet: FileSpreadsheet, Image: ImageIcon, Video: FileIcon, Note: StickyNote, Doc: FileText, File: FileIcon }
+// backend doc.kind (lowercase) → UI label
+const KIND_LABEL = { pdf: 'PDF', spreadsheet: 'Spreadsheet', image: 'Image', note: 'Note', document: 'Doc' }
+const docToItem = (d) => ({
+  id: d.id, name: d.filename || d.name, kind: KIND_LABEL[d.kind] || d.kind || 'File',
+  tags: d.tags?.length ? d.tags : ['general'], meta: d.summary || d.meta || '',
+  created_at: d.created_at, remote: true,
+})
 const TAG_TINT = {
   tax: 'bg-rose-50 text-rose-600 border-rose-100', invoices: 'bg-accent/10 text-accent border-accent/20',
   procurement: 'bg-violet-50 text-violet-600 border-violet-100', logistics: 'bg-emerald-50 text-emerald-600 border-emerald-100',
@@ -32,7 +39,9 @@ export default function Context() {
   const fileRef = useRef(null)
 
   const load = () => {
-    setItems(contextStore.list())
+    // real business-context brain first (auto-tag + embeddings + fed to agents);
+    // localStorage store is the offline fallback
+    api.contextDocs().then(docs => setItems(docs.map(docToItem))).catch(() => setItems(contextStore.list()))
     api.memories().then(setMemories).catch(() => setMemories([]))
   }
   useEffect(load, [])
@@ -40,14 +49,21 @@ export default function Context() {
   const addNote = async (t) => {
     const v = (t ?? text).trim()
     if (!v) return
-    contextStore.addNote(v)                       // tagged + searchable instantly
-    await api.addMemory(v).catch(() => {})        // real memory seam for agents
+    // note → real document (tagged, embedded, cited by agents); memory as fallback
+    const ok = await api.uploadContext(v).then(() => true).catch(() => false)
+    if (!ok) { contextStore.addNote(v); await api.addMemory(v).catch(() => {}) }
     setText(''); load()
     setAdded(true); setTimeout(() => setAdded(false), 1400)
   }
 
   const drop = (files) => {
-    Array.from(files || []).forEach(f => contextStore.addFile(f))
+    Array.from(files || []).forEach(f =>
+      api.uploadContext(f).catch(() => contextStore.addFile(f)).finally(load))
+  }
+
+  const remove = async (it) => {
+    if (it.remote) await api.delContext(it.id).catch(() => {})
+    else contextStore.del(it.id)
     load()
   }
 
@@ -114,7 +130,7 @@ export default function Context() {
                     <span className="text-[9px] text-emerald-600 font-medium ml-auto flex items-center gap-0.5"><CheckCircle2 size={8} /> fed to agents</span>
                   </div>
                 </div>
-                <button onClick={() => { contextStore.del(it.id); load() }}
+                <button onClick={() => remove(it)}
                   className="text-slate-300 hover:text-rose-500 transition shrink-0 mt-1"><Trash2 size={13} /></button>
               </div>
             )

@@ -28,7 +28,14 @@ export default function Notifications() {
 
   const isRead = (n) => n.status === 'read' || readIds.has(n.id)
   const unread = items.filter(n => !isRead(n)).length
-  const markAll = () => setReadIds(new Set(items.map(n => n.id)))
+  const markRead = (id) => {
+    setReadIds(s => new Set(s).add(id))
+    api.markRead?.(id).catch(() => {})          // persist server-side; local set covers offline
+  }
+  const markAll = () => {
+    setReadIds(new Set(items.map(n => n.id)))
+    items.forEach(n => api.markRead?.(n.id).catch(() => {}))
+  }
   const sorted = [...items].sort((a, b) => (isRead(a) ? 1 : 0) - (isRead(b) ? 1 : 0) || new Date(b.created_at) - new Date(a.created_at))
 
   return (
@@ -73,7 +80,7 @@ export default function Notifications() {
                   </a>
                 )}
                 {!isRead(n) && (
-                  <button onClick={() => setReadIds(s => new Set(s).add(n.id))} title="Mark read"
+                  <button onClick={() => markRead(n.id)} title="Mark read"
                     className="shrink-0 text-slate-300 hover:text-emerald-500 transition"><CheckCheck size={13} /></button>
                 )}
               </div>

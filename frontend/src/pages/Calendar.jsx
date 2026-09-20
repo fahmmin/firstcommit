@@ -12,6 +12,8 @@ import {
 
 const START_H = 8, END_H = 20, ROW_PX = 56
 const KIND_ICON = { reminder: Bell, invoice: Receipt, logistics: Truck, agent: Sparkles, task: CalendarDays }
+// backend /calendar/events kinds → display kinds
+const KIND_MAP = { invoice_due: 'invoice', alert: 'reminder', booking: 'logistics' }
 const KIND_TINT = {
   reminder: 'bg-accent/10 border-accent/30 text-accent',
   invoice: 'bg-magenta/10 border-magenta/30 text-magenta',
@@ -29,17 +31,19 @@ const DEMO_EVENTS = [
 ]
 
 const toMin = (t) => { const [h, m] = (t || '09:00').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
-// backend events may carry ISO `at`/`date`+`time` instead of HH:MM start/end
+// backend events carry {date: 'YYYY-MM-DD', kind: invoice_due|alert|task} —
+// map kind → display kind, keep `day` for per-day filtering, derive HH:MM slots
 const normEvent = (ev, i) => {
+  const kind = KIND_MAP[ev.kind] || ev.kind || 'task'
   const iso = ev.start?.includes?.('T') ? ev.start : (ev.at || ev.date || '').includes('T') ? (ev.at || ev.date) : null
   if (iso) {
     const d = new Date(iso)
     const start = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     const e2 = new Date(d.getTime() + (ev.duration_min || 30) * 60000)
-    return { ...ev, id: ev.id || `ev-${i}`, kind: ev.kind || 'task', start, end: fmt(e2.getHours() * 60 + e2.getMinutes()) }
+    return { ...ev, id: ev.id || `ev-${i}`, kind, day: ev.date?.slice(0, 10), start, end: fmt(e2.getHours() * 60 + e2.getMinutes()) }
   }
   return {
-    ...ev, id: ev.id || `ev-${i}`, kind: ev.kind || 'task',
+    ...ev, id: ev.id || `ev-${i}`, kind, day: ev.date || ev.day,
     start: ev.start || ev.time || '09:00',
     end: ev.end || fmt(toMin(ev.start || ev.time || '09:00') + 30),
   }
@@ -58,6 +62,10 @@ export default function Calendar() {
 
   const date = useMemo(() => { const d = new Date(); d.setDate(d.getDate() + dayOffset); return d }, [dayOffset])
   const dateLabel = date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+  // real events carry `day` (YYYY-MM-DD) — only show the displayed day's events;
+  // demo/local events have no day → always render (offline fallback)
+  const dayStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const dayEvents = events.filter(ev => !ev.day || ev.day === dayStr)
 
   useEffect(() => {
     api.calendarEvents?.()
@@ -104,7 +112,7 @@ export default function Calendar() {
             <button onClick={() => setDayOffset(d => d - 1)} className="w-8 h-8 rounded-lg border border-slate-200 bg-white grid place-items-center hover:border-slate-300 transition"><ChevronLeft size={14} /></button>
             <div className="min-w-[150px]">
               <div className="text-[18px] font-semibold tracking-tight text-ink">{dateLabel}</div>
-              <div className="text-[10px] text-slate-400">{dayOffset === 0 ? 'today' : dayOffset > 0 ? `in ${dayOffset}d` : `${-dayOffset}d ago`} · {events.length} events</div>
+              <div className="text-[10px] text-slate-400">{dayOffset === 0 ? 'today' : dayOffset > 0 ? `in ${dayOffset}d` : `${-dayOffset}d ago`} · {dayEvents.length} events</div>
             </div>
             <button onClick={() => setDayOffset(d => d + 1)} className="w-8 h-8 rounded-lg border border-slate-200 bg-white grid place-items-center hover:border-slate-300 transition"><ChevronRight size={14} /></button>
             <button onClick={() => setDayOffset(0)} className="text-[11px] font-medium text-accent hover:text-ink transition ml-1">Today</button>
@@ -148,7 +156,7 @@ export default function Calendar() {
               </div>
             )}
             {/* events */}
-            {events.map(ev => {
+            {dayEvents.map(ev => {
               const top = ((toMin(ev.start) - START_H * 60) / 60) * ROW_PX
               const h = Math.max(24, ((toMin(ev.end) - toMin(ev.start)) / 60) * ROW_PX)
               const I = KIND_ICON[ev.kind] || CalendarDays

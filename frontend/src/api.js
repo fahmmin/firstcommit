@@ -77,11 +77,35 @@ export const api = {
   calendarEvents: () => req(`/calendar/events?tenant_id=${TENANT}`).catch(() => []),
   tasks: () =>
     req(`/tasks?tenant_id=${TENANT}`).then(demo.tasks.merge).catch(() => demo.tasks.list()),
+  // backend TaskReq uses agent_id/status — send both vocabularies so it works today
+  // and keeps working when the backend adds status/col support
   addTask: (title, col = 'todo', agent = 'sahayak') =>
     req('/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tenant_id: TENANT, title, col, agent }) })
+                    body: JSON.stringify({ tenant_id: TENANT, title, col, agent, status: col, agent_id: agent }) })
       .catch(() => demo.tasks.add(title, col, agent)),
   updateTask: (id, patch) =>
     req(`/tasks/${id}?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
       .catch(() => demo.tasks.update(id, patch)),
+
+  // ── rounds 3–4 backend — live endpoints wired to real UI ──
+  people: () => req(`/people?tenant_id=${TENANT}`),
+  markRead: (id) => req(`/notifications/${id}/read?tenant_id=${TENANT}`, { method: 'POST' }),
+  syncConnector: (id) => req(`/connectors/${id}/sync?tenant_id=${TENANT}`),
+  logs: (limit = 80) => req(`/logs?tenant_id=${TENANT}&limit=${limit}`).catch(() => []),
+  templates: () => req(`/templates?tenant_id=${TENANT}`).catch(() => []),
+  installTemplate: (id) =>
+    req(`/templates/${id}/install`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ tenant_id: TENANT }) }),
+  onboarding: (body) =>
+    req('/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({ tenant_id: TENANT, ...body }) }),
+  contextDocs: () => req(`/context?tenant_id=${TENANT}`),
+  uploadContext: (fileOrText) => {
+    const fd = new FormData()
+    if (typeof fileOrText === 'string') fd.append('text', fileOrText)
+    else fd.append('file', fileOrText)
+    fd.append('tenant_id', TENANT)
+    return req('/context/upload', { method: 'POST', body: fd })
+  },
+  delContext: (id) => req(`/context/${id}?tenant_id=${TENANT}`, { method: 'DELETE' }),
 }

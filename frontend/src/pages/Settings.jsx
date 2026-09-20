@@ -11,7 +11,7 @@ import { AppShell } from '../components/AppShell.jsx'
 import {
   Building2, SlidersHorizontal, PlugZap, Braces, Server,
   CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store, ShieldCheck,
-  Sun, Moon, Accessibility, Contrast, Zap, Type,
+  Sun, Moon, Accessibility, Contrast, Zap, Type, RefreshCw,
 } from 'lucide-react'
 
 const SKILL_GROUPS = [
@@ -56,9 +56,16 @@ export default function Settings() {
   const toggleConnector = async (c) => {
     setSyncing(true)
     if (c.status === 'connected') await api.disconnectConnector(c.id)
-    else await api.connectConnector(c.id)
-    setTimeout(() => setSyncing(false), 1400)
-    load()
+    else { await api.connectConnector(c.id); await api.syncConnector?.(c.id).catch(() => {}) }
+    load(); setSyncing(false)
+  }
+
+  // real per-connector sync — items_synced counts come back live
+  const syncNow = async () => {
+    setSyncing(true)
+    await Promise.all(connectors.filter(c => c.status === 'connected')
+      .map(c => api.syncConnector?.(c.id).catch(() => {})))
+    load(); setSyncing(false)
   }
 
   const toggleTool = (t) => {
@@ -227,7 +234,15 @@ export default function Settings() {
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 mb-3 flex items-center justify-between">
             <CloudSync syncing={syncing}
               status={syncing ? 'Syncing sources…' : `${connectors.filter(c => c.status === 'connected').length} sources synced`} />
-            <span className="text-[10px] text-slate-400">last sync {connectors.find(c => c.last_sync)?.last_sync ? new Date(connectors.find(c => c.last_sync).last_sync).toLocaleTimeString() : '—'}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-slate-400">last sync {connectors.find(c => c.last_sync)?.last_sync ? new Date(connectors.find(c => c.last_sync).last_sync).toLocaleTimeString() : '—'}</span>
+              {connectors.some(c => c.status === 'connected') && (
+                <button onClick={syncNow} disabled={syncing}
+                  className="text-[11px] font-medium rounded-lg px-3 py-1.5 border border-slate-200 text-slate-600 hover:border-ink hover:text-ink transition flex items-center gap-1.5 disabled:opacity-40">
+                  <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} /> Sync now
+                </button>
+              )}
+            </div>
           </div>
           {/* Excel import — real: parses rows into the ledger */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-3 flex items-center gap-3">

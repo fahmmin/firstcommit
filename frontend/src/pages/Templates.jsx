@@ -1,26 +1,70 @@
 import { api } from '../api.js'
-import { TEMPLATES } from '../lib/templates.js'
+import { TEMPLATES, mesh } from '../lib/templates.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { AppShell } from '../components/AppShell.jsx'
-import { ArrowRight, Search, Sparkles } from 'lucide-react'
-import { useState } from 'react'
+import { toast } from '../lib/toast.js'
+import { ArrowRight, Search, Sparkles, Bot, Globe, Truck, PackageSearch, IndianRupee, Download } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 const CATS = ['All', 'Money', 'Procurement', 'Logistics', 'New agent', 'Presence']
 
-// Template gallery — pick one → prefills the workspace composer → Generate.
+// backend category → card style (mirrors the local mesh-gradient look)
+const CAT_STYLE = {
+  money:       { cat: 'Money',       icon: IndianRupee,   tint: 'text-emerald-600 bg-white/80', bg: mesh('#6ee7b7', '#a7f3d0', '#ecfdf5') },
+  procurement: { cat: 'Procurement', icon: PackageSearch, tint: 'text-blue-600 bg-white/80',    bg: mesh('#93c5fd', '#bfdbfe', '#eff6ff') },
+  logistics:   { cat: 'Logistics',   icon: Truck,         tint: 'text-amber-600 bg-white/80',   bg: mesh('#fcd34d', '#fde68a', '#fffbeb') },
+  new_agent:   { cat: 'New agent',   icon: Bot,           tint: 'text-fuchsia-600 bg-white/80', bg: mesh('#f0abfc', '#f5d0fe', '#fdf4ff') },
+  presence:    { cat: 'Presence',    icon: Globe,         tint: 'text-blue-600 bg-white/80',    bg: mesh('#93c5fd', '#c4b5fd', '#fbcfe8') },
+}
+const remoteToCard = (t) => ({
+  id: t.id, title: t.title, desc: t.desc || '', prompt: t.prompt || '',
+  agent: t.runs_on || 'nirmata', agent_spec: t.agent_spec,
+  ...(CAT_STYLE[t.category] || CAT_STYLE.money),
+})
+
+// Template gallery — real /templates catalog merged with the local set.
+// Agent templates install via the factory; prompt templates prefill the composer.
 export default function Templates() {
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('All')
+  const [remote, setRemote] = useState([])
+  const [installing, setInstalling] = useState(null)
+
+  useEffect(() => { api.templates().then(setRemote).catch(() => {}) }, [])
+
+  const localIds = new Set(TEMPLATES.map(t => t.id))
+  const remoteById = Object.fromEntries(remote.map(t => [t.id, t]))
+  // local cards gain install capability when the backend version carries an agent_spec
+  const all = [
+    ...TEMPLATES.map(t => ({ ...t, agent_spec: remoteById[t.id]?.agent_spec })),
+    ...remote.filter(t => !localIds.has(t.id)).map(remoteToCard),
+  ]
 
   const match = t =>
     (!q || `${t.title} ${t.desc} ${t.prompt}`.toLowerCase().includes(q.toLowerCase())) &&
     (cat === 'All' || t.cat === cat)
-  const featured = TEMPLATES.find(t => t.featured && match(t))
-  const list = TEMPLATES.filter(t => !t.featured && match(t))
+  const featured = all.find(t => t.featured && match(t))
+  const list = all.filter(t => !t.featured && match(t))
 
   const use = (t) => {
     localStorage.setItem('prefill_prompt', t.prompt)
     location.hash = '#/app'
+  }
+
+  // agent_spec → real agent created via /templates/{id}/install;
+  // needs_factory → prompt runs through Nirmata live (the demo hiring moment)
+  const install = async (e, t) => {
+    e.stopPropagation()
+    setInstalling(t.id)
+    const r = await api.installTemplate(t.id).catch(() => null)
+    setInstalling(null)
+    if (r?.created_by === 'factory') {
+      localStorage.setItem('open_agent', r.id)
+      toast.push(`${t.title} installed — agent joined your team`)
+      location.hash = '#/app'
+    } else {
+      use({ ...t, prompt: r?.prompt || t.prompt })
+    }
   }
 
   const Header = ({ t, h = 'h-24' }) => (
@@ -84,9 +128,16 @@ export default function Templates() {
                   <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
                     <AgentAvatar seed={featured.agent} size={18} className="rounded-md" /> runs on {featured.agent}
                   </span>
-                  <span className="text-[11px] font-medium text-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                    Use this <ArrowRight size={11} />
-                  </span>
+                  {featured.agent_spec ? (
+                    <span onClick={(e) => install(e, featured)}
+                      className="text-[11px] font-medium text-magenta flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <Download size={11} /> {installing === featured.id ? 'Installing…' : 'Install agent'}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      Use this <ArrowRight size={11} />
+                    </span>
+                  )}
                 </div>
               </div>
             </button>
@@ -106,9 +157,16 @@ export default function Templates() {
                   <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
                     <AgentAvatar seed={t.agent} size={16} className="rounded" /> {t.agent}
                   </span>
-                  <span className="text-[11px] font-medium text-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                    Use this <ArrowRight size={11} />
-                  </span>
+                  {t.agent_spec ? (
+                    <span onClick={(e) => install(e, t)}
+                      className="text-[11px] font-medium text-magenta flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <Download size={11} /> {installing === t.id ? 'Installing…' : 'Install agent'}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      Use this <ArrowRight size={11} />
+                    </span>
+                  )}
                 </div>
               </div>
             </button>
