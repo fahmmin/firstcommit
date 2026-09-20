@@ -9,10 +9,11 @@
 > **an AI staff, not another dashboard.**
 
 [![Live demo](https://img.shields.io/badge/demo-sahaayak.space-3494f4)](https://www.sahaayak.space/?gate=WJecxdO_WdjZ#/app)
+[![YT-Video](https://img.shields.io/badge/demo-sahaayak.space-3494f4)]([https://www.sahaayak.space/?gate=WJecxdO_WdjZ#/app](https://youtu.be/4jNoelUtQ9Q))
 
 **Live demo:** `https://www.sahaayak.space/?gate=WJecxdO_WdjZ#/app`
 (gate code `WJecxdO_WdjZ` — click **Continue as Ramesh** on the sign-in screen)
-
+**Youtube Video With Audio [EN]:** - `https://youtu.be/4jNoelUtQ9Q`
 ---
 
 ## What does Sahayak do?
