@@ -47,7 +47,7 @@ Open ⬜ (not done yet)
 
 **Stretch / open**
 - ⬜ **Real Google Drive / Google Calendar OAuth connectors** — §OAuth below has the full setup list (env placeholders already in `.env.example`)
-- ✅ **Deploy** (§6): shipped — Amplify frontend live, Lambda + EventBridge deployed (`simulation/deploy_aws.py`); only `lambda:CreateFunctionUrlConfig` IAM grant pending for the permanent public URL
+- ✅ **Deploy** (§6): shipped — frontend live at `https://www.sahaayak.space` (Amplify + custom domain), backend on permanent Lambda Function URL, EventBridge scheduler ticking
 - 🟡 **Web search / Deep research** agent tool — **plumbing DONE**: `/chat` now honors `mode: "web"|"deep"` (prepends a hint), `web_search` tool given to all agents + orchestrator (`tools/websearch.py`, Tavily via httpx), mock rule added. **Activate by setting `TAVILY_API_KEY`** — keyless it returns a graceful "not configured" reply.
 - ⬜ Digital-presence template's tools (`publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`) aren't in `TOOL_REGISTRY` — template ships `tools: []` so install converges via Nirmata prompt only
 - ✅ ~~Frontend wiring of already-built backends~~ — DONE (Fahmin, 2026-09-20): `/context/*` → Context page, `POST /onboarding` → wizard (chips→`pains`, auto-hire toast), `/people` → CRM tabs, `/logs` → LogsExplorer stream, `POST /notifications/{id}/read` → mark-read + mark-all, `GET /connectors/{id}/sync` → Settings "Sync now" + post-connect sync, `/templates` + `/templates/{id}/install` → gallery merged catalog + Install buttons (agent_spec → open_agent deep-link; `needs_factory` → prompt prefill). Every screen still falls back to the demo store offline.
@@ -161,11 +161,13 @@ python simulation/deploy_aws.py --api-url <url>    # frontend pointed at any bac
 ```
 
 **What's live**
-- Frontend: Amplify manual zip-deploy → `https://main.dym7go4p5hfno.amplifyapp.com`
-  (S3 static-website fallback inside the script if Amplify fails)
+- Frontend: Amplify + custom domain → `https://www.sahaayak.space`
+  (apex `sahaayak.space` 301→www; `main.dym7go4p5hfno.amplifyapp.com` still works.
+  DNS delegated to Route53 zone `Z08139571DBKMWY32OTWP` — registrar NS → AWS)
 - Backend: Lambda `sahayak-api` (python3.11 zip, 41MB, handler `app.main.handler`)
-  — verified via direct invoke: `/health` 200, gated routes 401→200 with token,
-  public artifact route open, private artifacts 404
+  public via **Function URL** `https://y23g76b3hmldyftusdfygbnxty0oemmp.lambda-url.ap-south-1.on.aws`
+  — verified end-to-end: `/health` 200, gate 401→200 with token,
+  `/public/artifacts/art-fy26` open, `PATCH /tasks` works
 - Scheduler: EventBridge rule `sahayak-scheduler` (rate 1 min) → same function;
   `handler` detects `detail-type:"Scheduled Event"` and runs `scheduler.run_once`
   instead of HTTP (verified: `{'moved': N}`)
@@ -177,15 +179,12 @@ links must work for recipients). Frontend stores the token once from
 `?gate=CODE` in the URL → sends it on every call; wrong/missing → `#/gate`
 passcode screen. Judge link format: `https://<site>/?gate=<TOKEN>#/app`.
 
-**The one blocked step** — `lambda:CreateFunctionUrlConfig` is denied on the
-`AWSHACKATHON` IAM user (apigateway/ecr/ecs/lightsail/eb all denied too).
-The function is deployed + working; it just has no public URL. To finish:
-grant the user `lambda:CreateFunctionUrlConfig` + `lambda:InvokeFunctionUrl`
-(or attach `AWSLambda_FullAccess`) and re-run the script — it creates the URL,
-rebuilds the frontend against it, done. Until then the demo backend rides an
-ngrok tunnel to the local uvicorn (`ngrok http 8000`), which is why
-`--api-url` exists. API Gateway HTTP-API path is ready in the script's
-fallback if the permission lands there instead.
+**Function URL note** — public access needs TWO resource-policy statements:
+`lambda:InvokeFunctionUrl` (Principal `*`, FunctionUrlAuthType `NONE`) AND
+`lambda:InvokeFunction` (Principal `*`, InvokedViaFunctionUrl `true`) — the
+second is easy to forget and produces a bare `403 Forbidden` from the URL.
+`deploy_aws.py` adds both. The ngrok/`--api-url` path is now just a fallback
+for local-backend demos.
 
 ---
 

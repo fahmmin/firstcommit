@@ -183,12 +183,18 @@ def function_url() -> str | None:
         lam.create_function_url_config(FunctionName=FUNCTION_NAME, AuthType="NONE", Cors=cors)
     except lam.exceptions.ResourceConflictException:
         lam.update_function_url_config(FunctionName=FUNCTION_NAME, AuthType="NONE", Cors=cors)
-    try:
-        lam.add_permission(FunctionName=FUNCTION_NAME, StatementId="public-url",
-                           Action="lambda:InvokeFunctionUrl", Principal="*",
-                           FunctionUrlAuthType="NONE")
-    except lam.exceptions.ResourceConflictException:
-        pass
+    # public URL needs BOTH grants: URL access + actual invocation
+    for sid, kw in [
+        ("FunctionURLAllowPublicAccess", dict(Action="lambda:InvokeFunctionUrl",
+                                            FunctionUrlAuthType="NONE")),
+        ("FunctionURLInvokePublic", dict(Action="lambda:InvokeFunction",
+                                       InvokedViaFunctionUrl=True)),
+    ]:
+        try:
+            lam.add_permission(FunctionName=FUNCTION_NAME, StatementId=sid,
+                               Principal="*", **kw)
+        except lam.exceptions.ResourceConflictException:
+            pass
     url = lam.get_function_url_config(FunctionName=FUNCTION_NAME)["FunctionUrl"]
     print(f"[lambda] Function URL: {url}")
     return url

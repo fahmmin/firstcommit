@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+from dotenv import load_dotenv  # noqa: E402
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")  # before the default
 os.environ.setdefault("USE_AWS", "0")
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 

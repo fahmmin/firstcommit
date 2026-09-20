@@ -6,7 +6,8 @@
 
 ---
 
-## 1. Textract IAM permission (nice-to-have — enables PDF text extraction)
+## 1. Textract IAM permission — ✅ DONE (inline policy `sahayak-demo-unblock`)
+**Verified:** `detect_document_text` call succeeds — PDFs now OCR on ingest.
 **Symptom:** dropping a **PDF** into Business context tags it by filename only (xlsx/CSV unaffected).
 **Why blocked:** IAM user `AWSHACKATHON` lacks `iam:AttachUserPolicy`, so it can't grant itself this — needs a principal with IAM rights (**root user**).
 
@@ -68,11 +69,20 @@ Google Drive / Calendar connectors flip status + count local rows only; no real 
 ---
 
 ## 7. Deploy — ✅ DONE (2026-09-20, `simulation/deploy_aws.py`)
-> Original notes kept below for reference. What actually shipped: Amplify
-> frontend + Lambda `sahayak-api` + EventBridge `sahayak-scheduler` + demo
-> gate (`DEMO_GATE_TOKEN` middleware). Backend currently reachable via ngrok
-> tunnel → local uvicorn until `lambda:CreateFunctionUrlConfig` is granted
-> (then rerun the script for the permanent URL).
+> What shipped: Amplify frontend + Lambda `sahayak-api` + EventBridge
+> `sahayak-scheduler` + demo gate (`DEMO_GATE_TOKEN` middleware).
+>
+> **Final URLs (custom domain live):**
+> - App: `https://www.sahaayak.space/?gate=<DEMO_GATE_TOKEN>#/app`
+>   (apex redirects → www; `main.dym7go4p5hfno.amplifyapp.com` still works)
+> - API: `https://y23g76b3hmldyftusdfygbnxty0oemmp.lambda-url.ap-south-1.on.aws`
+> - Public share: `https://www.sahaayak.space/#/a/art-fy26`
+> - DNS: sahaayak.space NS → Route53 zone `Z08139571DBKMWY32OTWP` (set at registrar)
+>
+> Function-URL gotcha (cost 20 min): public access needs BOTH
+> `lambda:InvokeFunctionUrl` AND `lambda:InvokeFunction` +
+> `InvokedViaFunctionUrl` resource-policy statements — missing the second
+> gives a bare `403 Forbidden`. `deploy_aws.py` adds both.
 Do only when `simulate_demo.py` is green.
 - **Frontend:** `cd frontend && npm run build` → host `dist/` on **Amplify Hosting** (or S3 + CloudFront).
 - **Backend:** `Mangum(app)` handler already exists → zip + **Lambda** + **API Gateway** (or **App Runner** from the repo). Set the same env vars (`USE_AWS=1`, `AWS_REGION`, model ids, `S3_BUCKET`, table names) on the function; give its execution role DynamoDB/S3/SES/Bedrock/Textract access.
