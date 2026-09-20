@@ -41,7 +41,7 @@ FUNCTION_NAME = os.getenv("LAMBDA_FUNCTION_NAME", "sahayak-api")
 ROLE_NAME = os.getenv("LAMBDA_ROLE_NAME", "sahayak-lambda-role")
 RULE_NAME = "sahayak-scheduler"
 RUNTIME_DEPS = [
-    "strands-agents", "fastapi", "mangum", "python-dotenv", "python-multipart",
+    "strands-agents==1.56.0", "fastapi", "mangum", "python-dotenv", "python-multipart",
     "boto3", "pydantic", "openpyxl", "cedarpy", "fpdf2",
     "google-api-python-client", "google-auth",  # gcp.py — google_* connectors
 ]
@@ -60,6 +60,7 @@ LAMBDA_POLICY = {
         {"Effect": "Allow", "Action": "s3:*", "Resource": [
             "arn:aws:s3:::sahayak-*", "arn:aws:s3:::sahayak-*/*"]},
         {"Effect": "Allow", "Action": ["bedrock:InvokeModel", "bedrock:Converse",
+                                       "bedrock:InvokeModelWithResponseStream",
                                        "bedrock:ConverseStream"], "Resource": "*"},
         {"Effect": "Allow", "Action": ["textract:DetectDocumentText",
                                        "textract:AnalyzeDocument"], "Resource": "*"},
@@ -93,6 +94,43 @@ def step(name, fn):
 
 
 # ---------------------------------------------------------------- package
+def _win32_stub_wheels() -> Path:
+    """Stub wheels for Windows-only marker deps that break manylinux resolution.
+
+    pip evaluates `sys_platform == "win32"` markers against THIS host (Windows)
+    even with --platform manylinux… — mcp (a strands dep) then requires pywin32,
+    which has no manylinux wheel, so pip silently backtracks strands-agents to
+    1.1.0 (no Agent.as_tool → /chat 500s on Lambda). Feeding an inert
+    py3-none-any stub lets resolution complete; the marker never activates on
+    Linux, so the empty package is never imported.
+    """
+    import base64
+    import csv
+    import hashlib
+    import io
+
+    stubs = BUILD / "_wheel_stubs"
+    stubs.mkdir(parents=True, exist_ok=True)
+    whl = stubs / "pywin32-999-py3-none-any.whl"
+    if not whl.exists():
+        meta = "Metadata-Version: 2.1\nName: pywin32\nVersion: 999\n"
+        wheel = ("Wheel-Version: 1.0\nGenerator: deploy_aws\n"
+                 "Root-Is-Purelib: true\nTag: py3-none-any\n")
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        for name, data in (("pywin32-999.dist-info/METADATA", meta),
+                           ("pywin32-999.dist-info/WHEEL", wheel)):
+            digest = base64.urlsafe_b64encode(
+                hashlib.sha256(data.encode()).digest()).rstrip(b"=").decode()
+            w.writerow([name, f"sha256={digest}", len(data)])
+        w.writerow(["pywin32-999.dist-info/RECORD", "", ""])
+        with zipfile.ZipFile(whl, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("pywin32-999.dist-info/METADATA", meta)
+            z.writestr("pywin32-999.dist-info/WHEEL", wheel)
+            z.writestr("pywin32-999.dist-info/RECORD", buf.getvalue())
+    return stubs
+
+
 def package() -> Path:
     if PKG.exists():
         shutil.rmtree(PKG)
@@ -101,7 +139,15 @@ def package() -> Path:
     subprocess.run([
         sys.executable, "-m", "pip", "install", "--quiet", "--upgrade",
         "--target", str(PKG), "--platform", "manylinux2014_x86_64",
-        "--python-version", "3.11", "--only-binary=:all:", *RUNTIME_DEPS], check=True)
+        "--python-version", "3.11", "--only-binary=:all:",
+        "--find-links", str(_win32_stub_wheels()), *RUNTIME_DEPS], check=True)
+    # guard: fail loudly if dep resolution ever drifts strands below the
+    # version with Agent.as_tool (the silent-1.1.0 failure mode above)
+    agent_py = PKG / "strands" / "agent" / "agent.py"
+    if not agent_py.exists() or "as_tool" not in agent_py.read_text(encoding="utf-8"):
+        raise RuntimeError(
+            "packaged strands-agents lacks Agent.as_tool — dep resolution "
+            "backtracked; check pywin32 stub / pin in RUNTIME_DEPS")
     shutil.copytree(BACKEND / "app", PKG / "app",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "data", "uploads"))
     if ZIP.exists():
