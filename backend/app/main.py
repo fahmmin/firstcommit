@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import uuid
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -42,7 +43,19 @@ _PKG_ROOT = Path("/tmp") if ON_LAMBDA else Path(__file__).resolve().parent.paren
 UPLOAD_DIR = _PKG_ROOT / "uploads"          # Lambda FS is read-only outside /tmp
 SEED_PATH = Path(__file__).resolve().parent / "seed" / "seed.json"
 
-app = FastAPI(title="Sahayak AI", default_response_class=UTF8JSONResponse)
+@asynccontextmanager
+async def _lifespan(_app):
+    deps.init_deps(get_store(), get_notifier())
+    if not deps.store.list_invoices("ramesh_auto"):
+        _load_seed("ramesh_auto")
+    # local-only daemon — on Lambda, EventBridge invokes the handler directly;
+    # a background thread inside a frozen execution environment would race it.
+    if not ON_LAMBDA:
+        scheduler_start()
+    yield
+
+
+app = FastAPI(title="Sahayak AI", default_response_class=UTF8JSONResponse, lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
@@ -65,14 +78,6 @@ async def _demo_gate(request, call_next):
     return await call_next(request)
 
 
-@app.on_event("startup")
-def _startup():
-    deps.init_deps(get_store(), get_notifier())
-    if not deps.store.list_invoices("ramesh_auto"):
-        _load_seed("ramesh_auto")
-    scheduler_start()
-
-
 def _load_seed(tenant_id: str):
     seed = json.loads(SEED_PATH.read_text(encoding="utf-8"))
     deps.store.reset(tenant_id, seed)
@@ -83,6 +88,7 @@ class ChatReq(BaseModel):
     text: str
     agent_id: str | None = None
     mode: str = "chat"   # chat | web | deep — web/deep enable the web_search tool
+    scope: list[str] | None = None  # owner's capability pick — restrict this reply's tools
 
 
 class SpecReq(BaseModel):
@@ -120,17 +126,24 @@ def chat(req: ChatReq):
     token = deps.current_actions.set(actions)
     try:
         if req.agent_id:
-            agent = registry.get_agent(req.agent_id)
+            agent = (registry.get_agent(req.agent_id, only_tools=req.scope)
+                     if req.scope else registry.get_agent(req.agent_id))
             if not agent:
                 raise HTTPException(404, f"unknown agent {req.agent_id}")
             result = _invoke(agent, text)
             agent_name = req.agent_id
             registry.bump_stats(req.agent_id)
         else:
-            agent = registry.orchestrator()
+            agent = registry.orchestrator(only=req.scope)
             result = _invoke(agent, text)
+            # credit the specialist that actually ran — last invoked tool that
+            # maps to a spec or nirmata (utility tools like web_search must not
+            # steal the byline, and nirmata isn't a stored spec)
             tool_names = list(result.metrics.tool_metrics.keys()) if result.metrics else []
-            agent_name = tool_names[-1] if tool_names else "sahayak"
+            agent_name = next((n for n in reversed(tool_names)
+                               if n == "nirmata" or registry.get_spec(n)), "sahayak")
+            if agent_name != "sahayak":
+                registry.bump_stats(agent_name)
     finally:
         deps.current_actions.reset(token)
 
@@ -168,8 +181,11 @@ def preview_agent(req: SpecReq):
 
 @app.post("/agents")
 def create_agent(req: SpecReq):
+    valid = [t for t in req.tools if t in ALL_TOOL_NAMES]
+    if not valid:
+        raise HTTPException(400, f"no valid tools — allowed: {sorted(ALL_TOOL_NAMES)}")
     spec = reg.get_registry(req.tenant_id).create_spec(
-        name=req.name, goal=req.goal, tools=req.tools, hindi_tagline=req.hindi_tagline
+        name=req.name, goal=req.goal, tools=valid, hindi_tagline=req.hindi_tagline
     )
     return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"], "spec": spec}
 
@@ -289,7 +305,7 @@ def demo_reset(tenant_id: str = "ramesh_auto"):
     return {"status": "reseeded", "tenants": [tenant_id]}
 
 
-# ================= [TODO] surface — contract.json-tagged endpoints =================
+# ================= demo surface — auth, dashboard, notifications, tasks =================
 
 
 class LoginReq(BaseModel):
@@ -975,7 +991,9 @@ def context_preview(doc_id: str, tenant_id: str = "ramesh_auto"):
            "summary": doc.get("summary"), "tags": doc.get("tags") or [],
            "has_file": bool(doc.get("s3_key") or doc.get("file_path"))}
     if _use_aws() and not out["has_file"]:
-        out["has_file"] = True  # legacy seed files resolve by filename fallback
+        # legacy seed files resolve by filename fallback — but a text note has
+        # no bytes anywhere, so it must not claim has_file (same rule as /context)
+        out["has_file"] = doc.get("kind") != "note"
     if doc.get("kind") == "spreadsheet":
         data = _doc_bytes(tenant_id, doc)
         if data is not None:

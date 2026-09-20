@@ -34,7 +34,8 @@ def comms_tools(tenant_id: str) -> list:
 
     @tool
     def send_reminder(alert_id: str = "") -> dict:
-        """Send an APPROVED reminder alert. Refuses pending ones — owner must approve in UI."""
+        """Send an owner-APPROVED reminder/booking. Drafts (pending_approval) and
+        future-scheduled alerts are refused — only the owner's Approve tap sends."""
         targets = [a for a in deps.store.list_alerts(tenant_id)
                    if (not alert_id or a["id"] == alert_id) and a.get("kind") in ("reminder", "booking")]
         if not targets:
@@ -42,6 +43,10 @@ def comms_tools(tenant_id: str) -> list:
         a = targets[0]
         if a["status"] == "pending_approval":
             return {"reply": f"'{a['title']}' is still a draft — approve it in the Alerts panel first.",
+                    "blocked": True}
+        if a["status"] == "scheduled":
+            return {"reply": f"'{a['title']}' is scheduled for {a.get('fires_at', '')[:10]} — "
+                             "it isn't due yet, and sending needs your approval anyway.",
                     "blocked": True}
         return send_alert_impl(tenant_id, a["id"])
 

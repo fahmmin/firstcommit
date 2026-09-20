@@ -374,7 +374,7 @@ export default function Settings() {
             right={<a href="#/marketplace" className="text-[11px] text-accent hover:text-ink flex items-center gap-1 transition"><Store size={11} /> Browse marketplace</a>} />
           <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
             <p className="text-[12px] text-slate-500 leading-relaxed">
-              Plug in external MCP endpoints — agents can call their tools after owner approval.
+              Save external MCP endpoints here — live tool activation for agents ships post-demo.
             </p>
             {mcps.map(m => (
               <div key={m.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-2.5">
@@ -383,7 +383,7 @@ export default function Settings() {
                   <div className="text-[12px] font-medium text-ink">{m.name}</div>
                   <div className="text-[10px] text-slate-400 truncate">{m.url}</div>
                 </div>
-                <span className="text-[9px] font-medium text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">{m.status}</span>
+                <span className="text-[9px] font-medium text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">saved</span>
                 <button onClick={() => setMcps(mcps.filter(x => x.id !== m.id))} className="text-slate-300 hover:text-rose-500 transition"><Trash2 size={13} /></button>
               </div>
             ))}

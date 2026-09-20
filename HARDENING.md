@@ -2,88 +2,83 @@
 
 > Branch `hardening`. Ordered by demo-criticality: **P0** breaks or lies on
 > camera, **P1** is a real inconsistency a judge could poke, **P2** is cleanup.
+> ✅ = fixed + test-locked in `backend/tests/contract/test_hardening.py`.
 
 ## P0 — demo blockers / live lies
 
-- [ ] **Scheduler double-fires on AWS.** `main.py:73` calls `scheduler_start()`
-  unconditionally — the 30 s daemon thread runs inside Lambda *and* EventBridge
-  hits `run_once` every minute. Guard `start()` behind `USE_AWS=0` so only the
-  local path uses the thread.
-- [ ] **Scope tabs are cosmetic.** `Skills 3` / `MCP 3` exclusion tabs in
-  Workspace render hardcoded `installedSkills` / `mcpServers` fallbacks
-  (`Workspace.jsx:99-102`) and the selected `scope` is **never sent** to
-  `/chat` — the request body is `{tenant_id, text, agent_id, mode}` only.
-  Either wire scope → backend (tool filter on the agent call) or cut the tabs.
-- [ ] **Marketplace install is theatre.** `install()` writes `mcp_servers` /
-  `prefs.installed_skills` into settings, but no agent/tool ever reads them —
-  nothing actually gets installed. Catalog entries + install counts
-  (`48.2k`…) are fabricated. Either honour installs as real capability flags
-  or mark the page "preview".
-- [ ] **`/reports` + context file endpoints have zero tests.** New in the last
-  push: `GET /reports/types`, `POST /reports/generate`, `GET /reports/{id}/pdf`,
-  `GET /public/artifacts/{id}/pdf`, `GET /context/{id}/file`,
-  `GET /context/{id}/preview` — none in `test_api_contract.py`. Add contract +
-  PDF-bytes assertions.
-- [ ] **`Calendar` falls back to `DEMO_EVENTS` silently.** When the API returns
-  empty or fails, five hardcoded events render as if real (`Calendar.jsx:25-31`,
-  `72-73`). Label it or drop it — right now it's invisible fake data.
+- [x] **Scheduler double-fires on AWS.** `scheduler_start()` now only runs when
+  `not ON_LAMBDA` — EventBridge owns scheduled ticks in AWS, the 30 s daemon
+  owns them locally. Idempotency test locks `run_once` → second pass moves 0.
+- [x] **Scope tabs were cosmetic.** Fake `Skills 3`/`MCP 3` inventories deleted.
+  Chips now list **real** capabilities — agents Sahayak can route to, or the
+  active specialist's tools — and selections go to `/chat` as `scope`, which
+  filters the actual tool set for that reply (`ChatReq.scope`).
+- [x] **Marketplace install was theatre.** Install → **Save**; toasts and copy
+  now say "saved to your workspace — live MCP activation ships post-demo".
+  Settings shows saved servers as `saved`, not `configured`.
+- [x] **`/reports` + context file endpoints had zero tests.** Contract tests
+  cover all 5 report types (generate → artifact → `%PDF` bytes → public gate),
+  context file/preview happy paths + 404s, and the note-no-file case.
+- [x] **`Calendar` silently rendered `DEMO_EVENTS`.** Fallback deleted — empty
+  days show an honest "nothing scheduled" state. Date-only backend events now
+  stagger through the morning instead of stacking at 09:00.
+- [x] **Wrong-customer reminder.** `POST /invoices/NOPE/reminder` used to draft
+  for the *oldest overdue* invoice. Now 404s; `invoice_no` (INV-1026) resolves
+  too, since callers pass the visible number, not the row id.
+- [x] **`send_reminder` sent `scheduled` alerts.** A future reminder could be
+  pushed out by an agent with no owner approval. Now refused with the fire
+  date; only pending→owner-approve→sent remains.
+- [x] **Hired agents were unreachable.** Orchestrator hardcoded
+  vasool/sourcer/khata — a Nirmata hire could never be routed to. Router now
+  wires every spec in the registry + dynamic mock rules; `create_spec`
+  invalidates the cached orchestrator.
+- [x] **Nirmata created the wrong agent.** Mock always built "Logistics Agent"
+  and treated a *new request* as a confirm (stale preview → wrong hire).
+  Preview now derives name/goal/tools from the owner's intent; create mirrors
+  exactly the previewed spec; confirm keywords are pure affirmatives.
 
 ## P1 — real inconsistencies
 
+- [x] **`agent_name` credited the wrong agent.** Last tool metric won — a
+  trailing `web_search`/`recall_context` stole the byline, and `nirmata` (not a
+  spec) showed as "sahayak". Now: last tool that maps to a spec or nirmata.
+- [x] **`POST /agents` accepted garbage tools.** All-invalid tool lists created
+  a useless agent; now 400 with the allowed set (preview already warned).
+- [x] **Notes claimed file bytes on AWS.** `context_preview` forced
+  `has_file=True` under AWS — an uploaded note's iframe then 404'd. Notes
+  excluded, matching `/context`.
+- [x] **"Backend may be cold-starting" on every error.** Chat errors now
+  distinguish unreachable (cold-start hint) from real API errors (status shown).
+- [x] **TimelineProgress named fake MCPs** ("via tally-mcp"). `via` labels are
+  now real subsystems (invoice ledger, supplier catalog, carrier board…).
+- [x] **Deprecated `@app.on_event("startup")`** → `lifespan` handler.
+- [x] **Stale `# [TODO] surface` comment** removed — those endpoints are live.
 - [ ] **Tenant is hardcoded everywhere.** `TENANT = 'ramesh_auto'` in api.js and
-  `tenant_id: "ramesh_auto"` defaults across `main.py`. Onboarding creates a new
-  tenant that the UI never switches to — sign up as a new business and you still
-  see Ramesh's data. Decide: single-tenant demo (hide onboarding tenant) or real
-  multi-tenant (session carries tenant_id).
-- [ ] **Login is a token vending machine.** `POST /auth/login` returns a session
-  for any name — the gate (`?gate=`) is the only barrier and it's shared. Fine
-  for demo, but document it as demo-auth, not auth.
-- [ ] **Two sources of truth for connector state.** `connectors` list lives in
-  the store; `demo.js` ships a parallel hardcoded connector array with stale
-  statuses — if the API fails, the UI silently shows the fake list. Make the
-  offline path render `unavailable`, not stale `connected`.
-- [ ] **`draft_reminder` mock rule fires without an invoice arg.** Keywords
-  `remind/reminder/chase/draft` match broadly; `args: {}` means the tool guesses
-  the invoice. Works in the canned demo, breaks on real phrasing ("remind me
-  about the rent agreement" → drafts a payment reminder).
-- [ ] **`send_reminder` sends `scheduled` alerts too.** The guard blocks
-  `pending_approval` only — a `scheduled` alert (not yet due) gets sent
-  immediately by an agent, skipping the owner's calendar intent. Should send
-  only `status == "approved"`... or require approve→sent flow via the endpoint.
-- [ ] **ThinkingOrb size is a preset key, not px.** Only `20 | 64` are valid —
-  any other number crashes the whole React tree (already fixed in Context +
-  Reports; audit every callsite once — CloudWave 64, Workspace 20 are the only
-  legal values).
-- [ ] **`agent_name` comes from tool-metrics order.** `main.py:133` takes the
-  last tool name as the responding agent — if a specialist calls
-  `recall_context`/`create_artifact` last, the chat header credits the wrong
-  agent. Track the actual sub-agent invocation instead.
+  `tenant_id` defaults across `main.py`. Onboarding creates a tenant the UI
+  never switches to. **Decision needed:** single-tenant demo (hide onboarding
+  tenant) or real multi-tenant (session carries tenant_id).
+- [ ] **Login is a token vending machine.** `POST /auth/login` returns a
+  session for any name; the `?gate=` passcode is the only barrier. Documented
+  as demo-auth — keep until real auth.
+- [ ] **`demo.js` merges demo rows into live lists** (connectors, tasks) even
+  on success — extras render alongside real data. Deliberate offline layer;
+  left as-is but documented.
 
 ## P2 — cleanup / robustness
 
-- [ ] **`@app.on_event("startup")` deprecated** → move to lifespan handlers.
-- [ ] **`role.js` is UI-only RBAC** — `viewer` can still hit every API; enforce
-  or relabel as display preference.
-- [ ] **No request timeouts/retries** on `api.js` fetches — a hung Lambda leaves
-  the composer spinning forever. Add AbortController + the existing cold-start
-  message.
-- [ ] **`UPLOAD_DIR` on Lambda** writes to package dir (read-only risk) — uploads
-  go to S3 anyway; make local write `/tmp` or skip when `USE_AWS=1`.
+- [ ] **`role.js` is UI-only RBAC** — `viewer` can still hit every API.
+- [ ] **No request timeouts** on `api.js` fetches — AbortController + retry.
 - [ ] **Big main bundle** — 1.25 MB / 356 KB gzip; `manualChunks` for recharts +
   framer-motion + metal-fx.
-- [ ] **Voice overlay** only works on Chrome (Web Speech API) — non-Chrome gets
-  a dead overlay; show the unsupported note earlier.
-- [ ] **`nul` / stray artifacts keep getting committed** — the gitignore now
-  covers `*.log` + `.playwright-mcp/`; add `nul` + `vite.config.js.timestamp-*`.
-- [ ] **No `GET /agents/{id}` refresh on template install** — sidebar groups are
-  computed once at mount; a Nirmata-hired agent needs a manual refresh to appear
-  in the right group (verify — `refresh()` is called on `agent_created` action
-  already, confirm grouping re-runs).
+- [ ] **Voice overlay** is Chrome-only (Web Speech API) — dead button elsewhere.
+- [ ] **`nul` / stray artifacts keep getting committed** — gitignore covers
+  `*.log` + `.playwright-mcp/`; add `nul` + `vite.config.js.timestamp-*`.
 
-## Done / verified this session
+## Verified live this session
 - strands-agents pinned 1.56.0 + pywin32 stub → `as_tool` exists on Lambda.
 - `bedrock:InvokeModelWithResponseStream` added to role.
 - Double CORS headers removed (Function URL Cors cleared; FastAPI owns it).
-- UTF-8 file IO fixed; ₹ / Devanagari clean in DynamoDB.
 - Doc preview endpoints + S3 byte persistence wired.
 - Reports page + fpdf2 export + public/private artifact sharing.
+- Route sweep: all 59 endpoints exercised via TestClient — errors caught and
+  fixed above; contract suite at 105 tests.

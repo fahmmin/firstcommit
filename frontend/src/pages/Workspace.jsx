@@ -56,7 +56,7 @@ export default function Workspace() {
   const [voice, setVoice] = useState(false)
   // exclusion tabs — which capability surface the next message should use
   const [scopeTab, setScopeTab] = useState('all')
-  const [scope, setScope] = useState({ skills: [], mcps: [] })
+  const [scope, setScope] = useState({ agents: [], tools: [] })
   const [mode, setMode] = useState('chat')           // chat | web | deep
   const [files, setFiles] = useState([])             // composer attachments
   const attachRef = useRef(null)
@@ -95,15 +95,15 @@ export default function Workspace() {
     setActiveMsg(best)
   }
 
-  // fall back to seeded surfaces so the scope tabs are explorable before installs
-  const installedSkills = settings?.prefs?.installed_skills?.length
-    ? settings.prefs.installed_skills : ['gst-reconcile', 'hindi-voice-notes', 'upi-payment-links']
-  const mcpServers = settings?.mcp_servers?.length
-    ? settings.mcp_servers : [{ id: 'd-tally', name: 'tally-mcp' }, { id: 'd-wa', name: 'whatsapp-mcp' }, { id: 'd-log', name: 'india-logistics-mcp' }]
+  // capability scope — real inventory only: agents Sahayak can route to, or the
+  // active specialist's tools. Selections are sent to /chat as `scope`, so the
+  // next reply genuinely runs with only the picked capabilities.
+  const scopeAgents = activeAgent ? [] : agents
+  const scopeTools = activeAgent?.tools || []
   const scopeTabs = [
     { id: 'all', label: 'Everything' },
-    { id: 'skills', label: 'Skills', icon: <Braces size={10} />, count: installedSkills.length },
-    { id: 'mcp', label: 'MCP', icon: <Server size={10} />, count: mcpServers.length },
+    ...(scopeAgents.length ? [{ id: 'agents', label: 'Agents', icon: <Server size={10} />, count: scopeAgents.length }] : []),
+    ...(scopeTools.length ? [{ id: 'tools', label: 'Tools', icon: <Braces size={10} />, count: scopeTools.length }] : []),
   ]
   const toggleScopeItem = (kind, id) => setScope(s => ({
     ...s,
@@ -166,7 +166,10 @@ export default function Workspace() {
           }
         }
       }
-      const r = await api.chat(msg || 'What did you just receive?', activeAgent, sentMode)
+      // picked capabilities → real scope on the request (empty pick = no limit)
+      const scopePick = activeAgent ? scope.tools : scope.agents
+      const r = await api.chat(msg || 'What did you just receive?', activeAgent, sentMode,
+        scopePick.length ? scopePick : null)
       setMessages(m => [...m, {
         role: 'agent', agent: r.agent_name, tagline: r.agent_tagline,
         text: r.reply, trace: r.trace, actions: r.actions, mode: sentMode,
@@ -174,7 +177,11 @@ export default function Workspace() {
       if (r.actions?.some(a => a.type === 'agent_created' || a.type === 'reminder_drafted')) refresh()
       if (r.agent_name === 'nirmata') setActiveAgent(null)
     } catch (e) {
-      setMessages(m => [...m, { role: 'agent', agent: 'system', text: `Error: ${e.message} — the backend may be cold-starting; try again in a few seconds.` }])
+      const unreachable = /Failed to fetch|NetworkError|Load failed|fetch/i.test(e.message)
+      setMessages(m => [...m, { role: 'agent', agent: 'system',
+        text: unreachable
+          ? 'Backend unreachable — it may be cold-starting; try again in a few seconds.'
+          : `Error: ${e.message}` }])
     } finally {
       setBusy(false)
     }
@@ -356,31 +363,31 @@ export default function Workspace() {
               </span>
             )}
             <ExclusionTabs tabs={scopeTabs} active={scopeTab} onChange={setScopeTab} />
-            {scopeTab === 'skills' && installedSkills.length > 0 && (
+            {scopeTab === 'agents' && scopeAgents.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
-                {installedSkills.map(s => (
-                  <button key={s} onClick={() => toggleScopeItem('skills', s)}
+                {scopeAgents.map(a => (
+                  <button key={a.id} onClick={() => toggleScopeItem('agents', a.id)}
                     className={`text-[10px] px-2 py-1 rounded-full border font-medium transition
-                      ${scope.skills.includes(s) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
-                    {s}
+                      ${scope.agents.includes(a.id) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
+                    {a.name}
                   </button>
                 ))}
               </div>
             )}
-            {scopeTab === 'mcp' && mcpServers.length > 0 && (
+            {scopeTab === 'tools' && scopeTools.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
-                {mcpServers.map(m => (
-                  <button key={m.id} onClick={() => toggleScopeItem('mcps', m.name)}
-                    className={`text-[10px] px-2 py-1 rounded-full border font-medium transition flex items-center gap-1
-                      ${scope.mcps.includes(m.name) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
-                    <Server size={9} />{m.name}
+                {scopeTools.map(t => (
+                  <button key={t} onClick={() => toggleScopeItem('tools', t)}
+                    className={`text-[10px] px-2 py-1 rounded-full border font-medium transition
+                      ${scope.tools.includes(t) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
+                    {t.replace(/_/g, ' ')}
                   </button>
                 ))}
               </div>
             )}
-            {scopeTab !== 'all' && (scope.skills.length + scope.mcps.length) > 0 && (
+            {scopeTab !== 'all' && (scope.agents.length + scope.tools.length) > 0 && (
               <span className="text-[9px] text-slate-400">
-                next reply uses: {[...scope.skills, ...scope.mcps].join(', ')}
+                next reply uses only: {[...scope.agents, ...scope.tools].join(', ')}
               </span>
             )}
           </div>

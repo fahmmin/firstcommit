@@ -7,28 +7,28 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Brain, Database, Wrench, Quote, Sparkles, Check, Loader2, Globe, ListChecks, BookOpen } from 'lucide-react'
 
 const TOOL_ROUTES = [
-  [/invoice|overdue|payment|reminder|vasool|bhej/i, { tool: 'list_overdue', via: 'tally-mcp', sources: 'invoices · reminders' }],
-  [/supplier|buy|order|price|stock|moq|source/i, { tool: 'search_catalog', via: 'sheets-mcp', sources: 'suppliers · catalog' }],
-  [/transport|deliver|track|shipment|carrier|logistic|pickup/i, { tool: 'list_carriers', via: 'india-logistics-mcp', sources: 'carriers · bookings' }],
-  [/cash|flow|term|gap|90.?day/i, { tool: 'term_gap_analysis', via: 'khata-engine', sources: 'receivables · payables' }],
-  [/hire|agent|nirmata|build|create/i, { tool: 'create_agent', via: 'agent-factory', sources: 'registry · tool map' }],
-  [/search|find|where/i, { tool: 'workspace_search', via: 'enterprise-search', sources: 'all collections' }],
+  [/invoice|overdue|payment|reminder|vasool|bhej/i, { tool: 'list_overdue', via: 'invoice ledger', sources: 'invoices · reminders' }],
+  [/supplier|buy|order|price|stock|moq|source/i, { tool: 'search_catalog', via: 'supplier catalog', sources: 'suppliers · catalog' }],
+  [/transport|deliver|track|shipment|carrier|logistic|pickup/i, { tool: 'list_carriers', via: 'carrier board', sources: 'carriers · bookings' }],
+  [/cash|flow|term|gap|90.?day/i, { tool: 'term_gap_analysis', via: 'cash-flow engine', sources: 'receivables · payables' }],
+  [/hire|agent|nirmata|build|create/i, { tool: 'create_agent', via: 'agent registry', sources: 'registry · tool map' }],
+  [/search|find|where/i, { tool: 'workspace_search', via: 'workspace index', sources: 'all collections' }],
 ]
-const DEFAULT_ROUTE = { tool: 'read_ledger', via: 'tally-mcp', sources: 'invoices · memory' }
+const DEFAULT_ROUTE = { tool: 'read_ledger', via: 'invoice ledger', sources: 'invoices · memory' }
 
-// scope: { skills: [..], mcps: [..] } from the exclusion tabs — the trace
+// scope: { agents: [..], tools: [..] } from the exclusion tabs — the trace
 // honestly names the selected surface instead of the default route.
 // mode: chat | web | deep — changes which steps appear (web adds a Perplexity
 // search hop; deep expands to a multi-query research plan).
 export function TimelineProgress({ text, scope, mode = 'chat' }) {
   const route = useMemo(() => {
     const r = TOOL_ROUTES.find(([re]) => re.test(text || ''))?.[1] || DEFAULT_ROUTE
-    const mcp = scope?.mcps?.[0]
-    const skill = scope?.skills?.[0]
+    const agent = scope?.agents?.[0]
+    const tool = scope?.tools?.[0]
     return {
       ...r,
-      via: mcp ? mcp : r.via,
-      sources: skill ? `${skill} · ${r.sources}` : r.sources,
+      via: agent || r.via,
+      sources: tool ? `${tool.replace(/_/g, ' ')} · ${r.sources}` : r.sources,
     }
   }, [text, scope])
 

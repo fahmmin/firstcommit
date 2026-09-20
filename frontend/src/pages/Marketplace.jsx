@@ -56,13 +56,13 @@ export default function Marketplace() {
       await api.updateSettings({ mcp_servers: next }).catch(() => {})
       setSettings(s => ({ ...s, mcp_servers: next }))
       setInstalled(p => new Set(p).add(item.id))
-      toast.push(`${item.name} installed — agents can use it now`)
+      toast.push(`${item.name} saved — live MCP activation ships post-demo`)
     } else {
       const next = [...(settings?.prefs?.installed_skills || []), item.name]
       await api.updateSettings({ prefs: { installed_skills: next } }).catch(() => {})
       setSettings(s => ({ ...s, prefs: { ...s?.prefs, installed_skills: next } }))
       setInstalled(p => new Set(p).add(item.name))
-      toast.push(`${item.name} installed — agents can use it now`)
+      toast.push(`${item.name} saved — live activation ships post-demo`)
     }
   }
 
@@ -76,7 +76,7 @@ export default function Marketplace() {
         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
           <div>
             <h1 className="text-[24px] font-semibold tracking-tight text-ink">Extend your agents</h1>
-            <p className="text-[12px] text-slate-500 mt-1">MCP servers and skills from the open registry — install once, every agent can use them.</p>
+            <p className="text-[12px] text-slate-500 mt-1">MCP servers and skills from the open registry — saved to your workspace now, live tool activation ships post-demo.</p>
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 w-64 focus-within:border-ink transition">
             <Search size={13} className="text-slate-400" />
@@ -118,7 +118,7 @@ export default function Marketplace() {
                 <button onClick={() => install(item, tab)} disabled={isInstalled}
                   className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition flex items-center gap-1
                     ${isInstalled ? 'bg-emerald-50 text-emerald-600 cursor-default' : 'bg-ink text-white hover:bg-ink/85'}`}>
-                  {isInstalled ? <><Check size={11} /> Installed</> : <><Download size={11} /> Install</>}
+                  {isInstalled ? <><Check size={11} /> Saved</> : <><Download size={11} /> Save</>}
                 </button>
               </div>
             )

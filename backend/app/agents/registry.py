@@ -99,6 +99,7 @@ class AgentRegistry:
         )
         stored = deps.store.put_spec(self.tenant_id, spec.model_dump())
         self.get_agent(spec.id)  # warm
+        self._orchestrator = None  # rebuild the routing table — the new hire must be reachable
         deps.log_activity(self.tenant_id, "agent_created", f"Nirmata hired '{spec.name}' for you")
         deps.notify(self.tenant_id, "info", f"{spec.name} hired",
                     body="Nirmata created this specialist from your description",
@@ -107,26 +108,36 @@ class AgentRegistry:
 
     # ---- agent instantiation ----
 
-    def get_agent(self, spec_id: str) -> Agent | None:
-        if spec_id in self._agents:
-            return self._agents[spec_id]
-        raw = self.get_spec(spec_id)
-        if not raw:
-            return None
+    def _build_agent(self, raw: dict, only_tools: set[str] | None = None) -> Agent:
         spec = AgentSpec(**raw)
+        resolved = spec.resolved_tools(self.tenant_id)
         extra = (artifact_tools(self.tenant_id, created_by=spec.id)
                  + memory_tools(self.tenant_id) + web_search_tools(self.tenant_id))
-        agent = Agent(
+        if only_tools is not None:
+            name_of = lambda t: getattr(t, "tool_name", None) or t.__name__
+            resolved = [t for t in resolved if name_of(t) in only_tools]
+            extra = [t for t in extra if name_of(t) in only_tools]
+        return Agent(
             name=spec.name,
             model=make_model(rules=mock_rules.rules_for_tools(spec.tools), role="worker"),
             system_prompt=f"{spec.persona_prompt}\nYour goal: {spec.goal}"
                           + build_memory_suffix(self.tenant_id),
-            tools=spec.resolved_tools(self.tenant_id) + extra,
-            session_manager=_session_manager(f"{self.tenant_id}-{spec_id}"),
+            tools=resolved + extra,
+            session_manager=_session_manager(f"{self.tenant_id}-{spec.id}"),
             callback_handler=None,
         )
-        self._agents[spec_id] = agent
-        return agent
+
+    def get_agent(self, spec_id: str, only_tools: list[str] | None = None) -> Agent | None:
+        """only_tools=None → cached full agent. A scope list builds an uncached
+        variant restricted to the named tools (owner's per-reply capability pick)."""
+        raw = self.get_spec(spec_id)
+        if not raw:
+            return None
+        if only_tools is not None:
+            return self._build_agent(raw, only_tools=set(only_tools))
+        if spec_id not in self._agents:
+            self._agents[spec_id] = self._build_agent(raw)
+        return self._agents[spec_id]
 
     # ---- nirmata (the factory) ----
 
@@ -205,23 +216,34 @@ class AgentRegistry:
 
     # ---- orchestrator ----
 
-    def orchestrator(self) -> Agent:
-        if self._orchestrator:
-            return self._orchestrator
+    def _build_orchestrator(self, only: set[str] | None = None) -> Agent:
+        """Routing table = every spec in the registry (builtins + factory hires)
+        + Nirmata + web search. `only` scopes the reply to named sub-tools."""
         subs = []
-        for spec_id in ("vasool", "sourcer", "khata"):
-            a = self.get_agent(spec_id)
-            raw = self.get_spec(spec_id)
-            subs.append(a.as_tool(name=spec_id, description=raw["description"], preserve_context=True))
-        subs.append(self.nirmata().as_tool(
-            name="nirmata",
-            description="Hires new specialist agents when the owner describes a problem the team can't solve — new agent requests, logistics help, anything needing a specialist that doesn't exist yet.",
-            preserve_context=True,
-        ))
-        subs += web_search_tools(self.tenant_id)  # web/deep mode
-        self._orchestrator = Agent(
+        for s in self.specs():
+            sid = s["id"]
+            if only is not None and sid not in only:
+                continue
+            a = self.get_agent(sid)
+            if not a:
+                continue
+            subs.append(a.as_tool(
+                name=sid,
+                description=s.get("description") or s.get("goal", ""),
+                preserve_context=True,
+            ))
+        if only is None or "nirmata" in only:
+            subs.append(self.nirmata().as_tool(
+                name="nirmata",
+                description="Hires new specialist agents when the owner describes a problem the team can't solve — new agent requests, logistics help, anything needing a specialist that doesn't exist yet.",
+                preserve_context=True,
+            ))
+        if only is None or "web_search" in only:
+            subs += web_search_tools(self.tenant_id)  # web/deep mode
+        return Agent(
             name="Sahayak",
-            model=make_model(rules=mock_rules.ORCHESTRATOR_RULES, role="orchestrator"),
+            model=make_model(
+                rules=mock_rules.orchestrator_rules(self.specs()), role="orchestrator"),
             system_prompt=(
                 "You are Sahayak (सहायक), the front-desk AI for a small Indian manufacturer. "
                 "Route every request to the right specialist:\n"
@@ -238,6 +260,14 @@ class AgentRegistry:
             session_manager=_session_manager(f"{self.tenant_id}-orchestrator"),
             callback_handler=None,
         )
+
+    def orchestrator(self, only: list[str] | None = None) -> Agent:
+        """only=None → the cached full router. A scope list builds an uncached
+        variant whose tool set is restricted to the named sub-agents/tools."""
+        if only:
+            return self._build_orchestrator(only=set(only))
+        if not self._orchestrator:
+            self._orchestrator = self._build_orchestrator()
         return self._orchestrator
 
 

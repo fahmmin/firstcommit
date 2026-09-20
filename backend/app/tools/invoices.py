@@ -89,11 +89,20 @@ def _parse_via_bedrock(file_path: str) -> dict:
 
 
 def draft_reminder_impl(tenant_id: str, invoice_id: str = "", buyer: str = "") -> dict:
-    """Shared reminder logic — used by the draft_reminder tool AND the API."""
+    """Shared reminder logic — used by the draft_reminder tool AND the API.
+    An explicit invoice_id that doesn't resolve is an error — never fall back
+    to a different customer's invoice (a typo must not email the wrong buyer)."""
     inv = None
     if invoice_id:
         inv = deps.store.get_invoice(tenant_id, invoice_id)
-    if not inv:
+        if not inv:  # callers often pass the visible number (INV-1026), not the row id
+            inv = next((i for i in deps.store.list_invoices(tenant_id)
+                        if i.get("invoice_no", "").lower() == invoice_id.lower()), None)
+        if not inv:
+            return {"reply": f"No invoice '{invoice_id}' in the ledger — "
+                             "ask me to list overdue invoices and pick from those.",
+                    "error": True}
+    else:
         overdue = deps.store.list_invoices(tenant_id, status="overdue")
         if buyer:
             overdue = [o for o in overdue if buyer.lower() in o["buyer"].lower()]
@@ -190,14 +199,6 @@ def invoice_tools(tenant_id: str) -> list:
     @tool
     def draft_reminder(invoice_id: str = "", buyer: str = "") -> dict:
         """Draft a payment reminder for an overdue invoice. DRAFT ONLY — owner approves before sending."""
-        inv = None
-        if invoice_id:
-            inv = deps.store.get_invoice(tenant_id, invoice_id)
-        if not inv:
-            overdue = deps.store.list_invoices(tenant_id, status="overdue")
-            if buyer:
-                overdue = [o for o in overdue if buyer.lower() in o["buyer"].lower()]
-            inv = max(overdue, key=lambda r: r.get("days_overdue", 0), default=None)
         return draft_reminder_impl(tenant_id, invoice_id, buyer)
 
     return [list_overdue, aging_report, create_invoice, draft_reminder]
