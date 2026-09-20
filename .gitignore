@@ -48,3 +48,7 @@ uvicorn.log
 
 # vite temp
 vite.config.js.timestamp-*.mjs
+
+# playwright mcp + debug artifacts
+.playwright-mcp/
+*.log
