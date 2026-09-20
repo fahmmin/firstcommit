@@ -181,6 +181,19 @@ def main() -> int:
               len(cats) >= 5 and inst.get("created_by") == "factory"
               and inst["id"] in after_agents and inst["id"] not in before_agents)
 
+        # 19. Round 4 — onboarding: rich answers → memory + auto-hire → agent cites it
+        onb = c.post("/onboarding", json={"tenant_id": TENANT,
+              "business": {"city": "Faridabad"}, "prefs": {"credit_terms_days": 60},
+              "pains": ["gst", "no_online_presence"],
+              "slow_payers": ["Verma Traders"], "auto_hire": True}).json()
+        rv = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                    "text": "what do you remember about Verma Traders?"}).json()
+        check("onboarding → memory + auto-hire + fed",
+              "mem>0 + agent installed + cited",
+              f"{onb['memories_created']}/{len(onb['agents_installed'])}/{'verma' in rv['reply'].lower()}",
+              onb["memories_created"] >= 1 and len(onb["agents_installed"]) >= 1
+              and "verma" in rv["reply"].lower())
+
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{'='*60}\n{passed}/{len(results)} checks passed")
     return 0 if passed == len(results) else 1

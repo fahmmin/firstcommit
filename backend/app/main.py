@@ -683,6 +683,98 @@ def templates(tenant_id: str = "ramesh_auto"):
     return TEMPLATES
 
 
+# pain-chip → template id + human reason (drives onboarding agent setup)
+_PAIN_MAP = {
+    "late_payments": ("collections-agent", "chasing late payments"),
+    "gst": ("compliance-agent", "GST / compliance deadlines"),
+    "compliance": ("compliance-agent", "GST / compliance deadlines"),
+    "untracked_deliveries": ("hire-logistics", "untracked deliveries"),
+    "no_online_presence": ("digital-presence", "no online presence"),
+    "stock_outs": ("compare-suppliers", "stock-outs / sourcing"),
+    "cash_flow": ("cashflow-check", "cash-flow surprises"),
+    "chasing_suppliers": ("compare-suppliers", "chasing suppliers"),
+    "pricing": ("should-i-take-90d", "pricing decisions"),
+}
+
+
+class OnboardingReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    business: dict = {}
+    prefs: dict = {}
+    pains: list[str] = []
+    slow_payers: list[str] = []
+    key_buyers: list[str] = []
+    key_suppliers: list[str] = []
+    rules: list[str] = []
+    tools_today: list[str] = []
+    auto_hire: bool = False
+
+
+@app.post("/onboarding")
+def onboarding(req: OnboardingReq):
+    """Rich first-run wizard — one call: profile + prefs + memories + agent setup."""
+    from .agents.specs import ALL_TOOL_NAMES
+    from .templates_catalog import get_template
+    tid = req.tenant_id
+
+    # 1. business profile + prefs
+    cur = deps.store.get_settings(tid) or {}
+    deps.store.put_settings(tid, {
+        "business": {**cur.get("business", {}), **req.business},
+        "prefs": {**cur.get("prefs", {}), **req.prefs},
+        "onboarded": True,
+        "mcp_servers": cur.get("mcp_servers", []),
+    })
+
+    # 2. free-text answers → real agent memories
+    def _mem(text: str, source: str = "onboarding"):
+        deps.store.put_memory(tid, {"id": f"mem-{uuid.uuid4().hex[:6]}", "text": text,
+                                    "source": source,
+                                    "created_at": datetime.now(timezone.utc).isoformat()})
+    memories = 0
+    for name in req.slow_payers:
+        _mem(f"{name} is a slow payer — follow up carefully, don't push too hard"); memories += 1
+    for name in req.key_buyers:
+        _mem(f"{name} is a key buyer — prioritize their orders"); memories += 1
+    for name in req.key_suppliers:
+        _mem(f"{name} is a trusted key supplier"); memories += 1
+    for rule in req.rules:
+        _mem(rule); memories += 1
+
+    # 3. pains → agents (auto-hire the magic, or suggest)
+    registry = reg.get_registry(tid)
+    existing_names = {s.get("name", "").lower() for s in registry.specs()}
+    agents_installed, suggested, seen = [], [], set()
+    for pain in req.pains:
+        entry = _PAIN_MAP.get(pain)
+        if not entry or entry[0] in seen:
+            continue
+        tmpl_id, reason = entry
+        seen.add(tmpl_id)
+        t = get_template(tmpl_id) or {}
+        spec_def = t.get("agent_spec")
+        valid = [x for x in (spec_def or {}).get("tools", []) if x in ALL_TOOL_NAMES]
+        if req.auto_hire and spec_def and valid and spec_def["name"].lower() not in existing_names:
+            spec = registry.create_spec(name=spec_def["name"], goal=spec_def["goal"],
+                                        tools=valid, hindi_tagline=spec_def.get("hindi_tagline", ""))
+            agents_installed.append({"id": spec["id"], "name": spec["name"]})
+        else:
+            suggested.append({"template_id": tmpl_id, "title": t.get("title", tmpl_id),
+                              "reason": reason})
+
+    next_steps = []
+    if "excel" in req.tools_today or "tally" in req.tools_today:
+        next_steps.append("Import your existing ledger from Excel")
+    deps.record_action("onboarding_completed",
+                       {"memories": memories, "agents": len(agents_installed)})
+    deps.log_activity(tid, "onboarding_completed",
+                      f"Onboarding done — {memories} context notes, {len(agents_installed)} agents hired")
+    registry.reset_agents()  # so new memories/agents take effect
+    return {"tenant_id": tid, "onboarded": True, "memories_created": memories,
+            "agents_installed": agents_installed, "suggested_agents": suggested,
+            "next_steps": next_steps}
+
+
 class TemplateInstallReq(BaseModel):
     tenant_id: str = "ramesh_auto"
 

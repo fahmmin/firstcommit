@@ -369,3 +369,35 @@ def test_install_factory_template_returns_prompt(client):
     r = client.post("/templates/digital-presence/install", json={"tenant_id": "ramesh_auto"})
     assert r.status_code == 200
     assert r.json()["status"] == "needs_factory" and r.json()["prompt"]
+
+
+# ---------- Round 4: onboarding ----------
+
+def test_onboarding_autohire(client):
+    before = {a["id"] for a in client.get("/agents").json()}
+    r = client.post("/onboarding", json={
+        "tenant_id": "ramesh_auto",
+        "business": {"name": "Ramesh Auto Components", "city": "Faridabad"},
+        "prefs": {"language": "hinglish", "credit_terms_days": 45},
+        "pains": ["late_payments", "no_online_presence"],
+        "slow_payers": ["Verma Traders"], "rules": ["Big orders via GST invoice only"],
+        "tools_today": ["excel"], "auto_hire": True})
+    assert r.status_code == 200
+    body = r.json()
+    assert _keys(body) >= _keys(_ep("POST /onboarding")["response"])
+    assert body["onboarded"] is True and body["memories_created"] >= 2
+    # late_payments (tool-backed) → installed; no_online_presence (no tools) → suggested
+    assert len(body["agents_installed"]) >= 1
+    assert any(s["template_id"] == "digital-presence" for s in body["suggested_agents"])
+    assert any(a["id"] not in before for a in body["agents_installed"])
+    # settings persisted + memory searchable
+    assert client.get("/settings").json()["prefs"]["credit_terms_days"] == 45
+    assert any("verma" in m["text"].lower() for m in client.get("/memories").json())
+
+
+def test_onboarding_suggest_only(client):
+    r = client.post("/onboarding", json={"tenant_id": "ramesh_auto",
+        "pains": ["late_payments", "gst"], "auto_hire": False})
+    assert r.status_code == 200
+    assert r.json()["agents_installed"] == []
+    assert len(r.json()["suggested_agents"]) >= 2

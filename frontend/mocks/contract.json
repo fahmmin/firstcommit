@@ -283,11 +283,30 @@
     },
     "DELETE /context/{id} [TODO]": { "response": { "status": "deleted" } },
 
+    "POST /onboarding [TODO]": {
+      "$comment": "Rich first-run wizard → one atomic call. Writes business profile + prefs, turns free-text answers (slow payers, key buyers/suppliers, rules) + pain chips into agent memories, and maps pains → agents. auto_hire:true installs matched specialists (the 'set up my team' magic); false returns suggestions the user installs via /templates/{id}/install.",
+      "request": {
+        "tenant_id": "ramesh_auto",
+        "business": { "name": "Ramesh Auto Components", "owner": "Ramesh Gupta", "city": "Faridabad", "phone": "", "type": "manufacturer", "line": "auto components", "products": "brake pads", "materials": "steel coils", "years": 12 },
+        "prefs": { "language": "hinglish", "reminder_tone": "polite", "approval_mode": "manual", "notify_email": "ramesh@rameshauto.in", "credit_terms_days": 45, "uses_gst": true },
+        "pains": ["late_payments", "gst", "no_online_presence"],
+        "slow_payers": ["Sharma Motors"], "key_buyers": ["Khanna Industries"],
+        "key_suppliers": ["Balaji Steel"], "rules": ["Big orders go through GST invoice only"],
+        "tools_today": ["excel", "whatsapp"], "auto_hire": true
+      },
+      "response": {
+        "tenant_id": "ramesh_auto", "onboarded": true, "memories_created": 4,
+        "agents_installed": [{ "id": "agent-abc123", "name": "Collections Agent" }],
+        "suggested_agents": [{ "template_id": "digital-presence", "title": "Digital presence agent", "reason": "no online presence" }],
+        "next_steps": ["Import your existing ledger from Excel"]
+      }
+    },
+
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },
     "GET /health [EXISTS]": { "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" } }
   },
 
-  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched"]
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched", "onboarding_completed"]
 }
