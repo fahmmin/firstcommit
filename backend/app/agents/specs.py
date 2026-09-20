@@ -12,6 +12,7 @@ from ..tools.cashflow import cashflow_tools
 from ..tools.comms import comms_tools
 from ..tools.invoices import invoice_tools
 from ..tools.logistics import logistics_tools
+from ..tools.presence import presence_tools
 from ..tools.suppliers import supplier_tools
 
 TOOL_REGISTRY = {
@@ -20,6 +21,7 @@ TOOL_REGISTRY = {
     "cashflow": ["timeline", "term_gap_analysis", "order_advisor"],
     "logistics": ["list_carriers", "quote_pickup", "book_pickup"],
     "comms": ["send_reminder", "schedule_alert", "list_alerts"],
+    "presence": ["sync_catalog", "publish_listing", "seo_audit", "storefront_builder"],
 }
 ALL_TOOL_NAMES = {t for group in TOOL_REGISTRY.values() for t in group}
 
@@ -28,7 +30,7 @@ def build_tool_map(tenant_id: str) -> dict:
     """Instantiate every registry tool bound to a tenant, keyed by tool name."""
     funcs = (
         invoice_tools(tenant_id) + supplier_tools(tenant_id) + cashflow_tools(tenant_id)
-        + logistics_tools(tenant_id) + comms_tools(tenant_id)
+        + logistics_tools(tenant_id) + comms_tools(tenant_id) + presence_tools(tenant_id)
     )
     return {getattr(f, "tool_name", None) or f.__name__: f for f in funcs}
 

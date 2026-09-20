@@ -114,6 +114,14 @@ class Store(ABC):
     @abstractmethod
     def update_artifact(self, tenant_id: str, artifact_id: str, **fields) -> dict | None: ...
 
+    # listings (digital-presence: products pushed to marketplaces/storefront)
+    @abstractmethod
+    def list_listings(self, tenant_id: str, status: str | None = None) -> list[dict]: ...
+    @abstractmethod
+    def put_listing(self, tenant_id: str, listing: dict) -> dict: ...
+    @abstractmethod
+    def update_listing(self, tenant_id: str, listing_id: str, **fields) -> dict | None: ...
+
     # documents (business-context brain: any file/note, auto-tagged + searchable)
     @abstractmethod
     def list_documents(self, tenant_id: str) -> list[dict]: ...
@@ -134,7 +142,7 @@ class LocalStore(Store):
 
     _COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
                     "tasks", "notifications", "connectors", "settings", "activity",
-                    "memories", "artifacts", "documents")
+                    "memories", "artifacts", "documents", "listings")
 
     def __init__(self, data_dir: Path | None = None):
         self.dir = data_dir or DATA_DIR
@@ -280,6 +288,17 @@ class LocalStore(Store):
     def update_connector(self, tenant_id, conn_id, **fields):
         return self._update("connectors", tenant_id, conn_id, **fields)
 
+    # listings
+    def list_listings(self, tenant_id, status=None):
+        rows = self._rows("listings", tenant_id)
+        return [r for r in rows if status is None or r.get("status") == status]
+
+    def put_listing(self, tenant_id, listing):
+        return self._put("listings", tenant_id, listing)
+
+    def update_listing(self, tenant_id, listing_id, **fields):
+        return self._update("listings", tenant_id, listing_id, **fields)
+
     # settings
     def get_settings(self, tenant_id):
         return next((r for r in self._rows("settings", tenant_id) if r.get("id") == "settings"), None)
@@ -382,6 +401,7 @@ class DynamoStore(Store):
         "memories": "DDB_TABLE_MEMORIES",
         "artifacts": "DDB_TABLE_ARTIFACTS",
         "documents": "DDB_TABLE_DOCUMENTS",
+        "listings": "DDB_TABLE_LISTINGS",
     }
 
     def __init__(self, region: str | None = None):
@@ -503,6 +523,17 @@ class DynamoStore(Store):
 
     def update_connector(self, tenant_id, conn_id, **fields):
         return self._update("connectors", tenant_id, conn_id, **fields)
+
+    # listings
+    def list_listings(self, tenant_id, status=None):
+        rows = self._all("listings", tenant_id)
+        return [r for r in rows if status is None or r.get("status") == status]
+
+    def put_listing(self, tenant_id, listing):
+        return self._put("listings", tenant_id, listing)
+
+    def update_listing(self, tenant_id, listing_id, **fields):
+        return self._update("listings", tenant_id, listing_id, **fields)
 
     # settings
     def get_settings(self, tenant_id):

@@ -40,7 +40,7 @@ Open ⬜ (not done yet)
 - ✅ **UTF-8 charset** on JSON responses — `UTF8JSONResponse` (`ensure_ascii=False`, `charset=utf-8`); `₹` verified on the wire
 - ✅ `PATCH /settings` accept `role` — persists to `prefs.role`
 - ✅ `_PAIN_MAP` `too_many_excels` — handled as an "import your ledger" next-step (no specialist agent)
-- ⬜ **Textract IAM** — user `AWSHACKATHON` lacks `textract:DetectDocumentText`/`AnalyzeDocument`; PDF ingest falls back to filename-only. **Needs the IAM policy attached in the AWS console** (a security-settings change — do this yourself; xlsx unaffected — openpyxl path works).
+- ✅ **Textract IAM** — granted via inline policy; PDFs OCR for real on ingest (verified in seeded docs)
 - ⬜ **Real auth + OAuth connectors** — see §OAuth below (login is demo-only; connector connect/sync are stubs; artifact private ACL needs auth to be real)
 
 **Reconcile route names** — ✅ resolved: frontend adopted your routes. Context docs → `POST /context/upload` + `GET /context` + `DELETE /context/{id}` (spec's `/context/docs` dropped). Activity feed → `GET /logs` (spec's `/activity` dropped). contract.json + Round-3 §1 spec updated to match.
@@ -49,7 +49,7 @@ Open ⬜ (not done yet)
 - ⬜ **Real Google Drive / Google Calendar OAuth connectors** — §OAuth below has the full setup list (env placeholders already in `.env.example`)
 - ✅ **Deploy** (§6): shipped — frontend live at `https://www.sahaayak.space` (Amplify + custom domain), backend on permanent Lambda Function URL, EventBridge scheduler ticking
 - 🟡 **Web search / Deep research** agent tool — **plumbing DONE**: `/chat` now honors `mode: "web"|"deep"` (prepends a hint), `web_search` tool given to all agents + orchestrator (`tools/websearch.py`, Tavily via httpx), mock rule added. **Activate by setting `TAVILY_API_KEY`** — keyless it returns a graceful "not configured" reply.
-- ⬜ Digital-presence template's tools (`publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`) aren't in `TOOL_REGISTRY` — template ships `tools: []` so install converges via Nirmata prompt only
+- ✅ Digital-presence tools built (`tools/presence.py` + `listings` collection): `sync_catalog` (product lines from supplier categories, 18% markup), `publish_listing` (honest — only `connected` channels get pushes), `seo_audit` (title/score fixes), `storefront_builder` (mints a PUBLIC `storefront` artifact → shareable `/a/{id}`). Template spec now carries real tools; mock rules + 2 new contract tests added.
 - ✅ ~~Frontend wiring of already-built backends~~ — DONE (Fahmin, 2026-09-20): `/context/*` → Context page, `POST /onboarding` → wizard (chips→`pains`, auto-hire toast), `/people` → CRM tabs, `/logs` → LogsExplorer stream, `POST /notifications/{id}/read` → mark-read + mark-all, `GET /connectors/{id}/sync` → Settings "Sync now" + post-connect sync, `/templates` + `/templates/{id}/install` → gallery merged catalog + Install buttons (agent_spec → open_agent deep-link; `needs_factory` → prompt prefill). Every screen still falls back to the demo store offline.
 
 ---

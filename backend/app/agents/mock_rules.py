@@ -61,6 +61,13 @@ TOOL_BEHAVIORS: dict[str, dict] = {
     "send_reminder": {"keywords": ["send", "bhejo", "dispatch"], "args": lambda t: {}},
     "schedule_alert": {"keywords": ["schedule", "alert", "remind me", "notify"], "args": lambda t: {"title": "Check overdue payments"}},
     "list_alerts": {"keywords": ["alerts", "notifications", "scheduled"], "args": lambda t: {}},
+    # presence (digital-presence agent)
+    "sync_catalog": {"keywords": ["catalog", "sync", "products", "product list", "stock list"], "args": lambda t: {}},
+    "publish_listing": {"keywords": ["publish", "listing", "marketplace", "indiamart", "facebook",
+                                     "sell online", "bechna", "online bech"], "args": lambda t: {"title": "all"}},
+    "seo_audit": {"keywords": ["seo", "audit", "optimize", "ranking", "search rank"], "args": lambda t: {}},
+    "storefront_builder": {"keywords": ["storefront", "web store", "shopify", "website",
+                                        "online store", "store page", "shop page"], "args": lambda t: {}},
 }
 
 

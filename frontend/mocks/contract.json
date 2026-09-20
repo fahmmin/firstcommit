@@ -242,7 +242,7 @@
     },
 
     "GET /artifacts?tenant_id= [DONE]": {
-      "$comment": "Mini-apps agents build from chat via the create_artifact TOOL. TEMPLATE-BOUND, never raw HTML: template ∈ {tracking_page, invoice_summary, supplier_compare, payment_card, financial_report}. Agent picks template + fills data; per-template pydantic schema validates (dual-vocabulary: supplier_compare accepts suppliers|quotes, payment_card payer|business, tracking_page from|from_ — normalized at create).",
+      "$comment": "Mini-apps agents build from chat via the create_artifact TOOL. TEMPLATE-BOUND, never raw HTML: template ∈ {tracking_page, invoice_summary, supplier_compare, payment_card, financial_report, storefront}. Agent picks template + fills data; per-template pydantic schema validates (dual-vocabulary: supplier_compare accepts suppliers|quotes, payment_card payer|business, tracking_page from|from_ — normalized at create).",
       "response": [{ "id": "art-1", "title": "Tracking — ORD-1042", "template": "tracking_page", "visibility": "public", "created_by": "agent-l7x2", "created_at": "2026-09-19T03:00:00Z", "share_path": "/a/art-1" }]
     },
     "GET /artifacts/{id} [DONE]": {

@@ -7,144 +7,1221 @@
     "line": "hardware & electrical supplies — fasteners, GI pipes, wires, switches, paints, tools"
   },
   "invoices": [
-    { "id": "inv-001", "invoice_no": "INV-1031", "buyer": "Sharma Constructions", "amount": 45200, "gst": 8136, "issue_date": "2026-06-20", "due_date": "2026-09-18", "status": "overdue", "days_overdue": 2, "items": "GI pipes 2\" x60 lengths" },
-    { "id": "inv-002", "invoice_no": "INV-1033", "buyer": "Patel Furniture House", "amount": 78800, "gst": 14184, "issue_date": "2026-06-10", "due_date": "2026-09-09", "status": "overdue", "days_overdue": 11, "items": "Plywood 19mm x85 sheets + hinges" },
-    { "id": "inv-003", "invoice_no": "INV-1035", "buyer": "Khanna Builders", "amount": 124500, "gst": 22410, "issue_date": "2026-07-01", "due_date": "2026-09-29", "status": "due_soon", "days_overdue": 0, "items": "Copper wire 1.5mm x180 coils + MCBs" },
-    { "id": "inv-004", "invoice_no": "INV-1029", "buyer": "Sharma Constructions", "amount": 36200, "gst": 6516, "issue_date": "2026-05-15", "due_date": "2026-08-13", "status": "overdue", "days_overdue": 38, "items": "Cement OPC-53 x120 bags" },
-    { "id": "inv-005", "invoice_no": "INV-1040", "buyer": "Delhi Metro Contractors", "amount": 96500, "gst": 17370, "issue_date": "2026-07-10", "due_date": "2026-10-08", "status": "due_soon", "days_overdue": 0, "items": "Fastener assortment x500 boxes" },
-    { "id": "inv-006", "invoice_no": "INV-1026", "buyer": "Om Sai Electric Works", "amount": 28700, "gst": 5166, "issue_date": "2026-05-01", "due_date": "2026-05-31", "status": "overdue", "days_overdue": 112, "items": "Modular switches x400 + PVC conduit" },
-    { "id": "inv-007", "invoice_no": "INV-1041", "buyer": "Khanna Builders", "amount": 56000, "gst": 10080, "issue_date": "2026-08-25", "due_date": "2026-09-24", "status": "due_soon", "days_overdue": 0, "items": "Asian Paints emulsion x45 buckets" },
-    { "id": "inv-008", "invoice_no": "INV-1022", "buyer": "Patel Furniture House", "amount": 41200, "gst": 7416, "issue_date": "2026-04-18", "due_date": "2026-07-17", "status": "paid", "paid_on": "2026-07-15", "days_overdue": 0, "items": "Teak plywood x60 sheets" },
-    { "id": "inv-009", "invoice_no": "INV-1018", "buyer": "Delhi Metro Contractors", "amount": 63900, "gst": 11502, "issue_date": "2026-03-10", "due_date": "2026-06-08", "status": "paid", "paid_on": "2026-06-02", "days_overdue": 0, "items": "Hex bolts M12 x2000 + anchors" },
-    { "id": "inv-010", "invoice_no": "INV-1043", "buyer": "Om Sai Electric Works", "amount": 19500, "gst": 3510, "issue_date": "2026-09-05", "due_date": "2026-10-05", "status": "sent", "days_overdue": 0, "items": "LED panels 18W x150 + drivers" },
-    { "id": "inv-011", "invoice_no": "INV-1037", "buyer": "Sharma Constructions", "amount": 71300, "gst": 12834, "issue_date": "2026-08-01", "due_date": "2026-09-15", "status": "overdue", "days_overdue": 5, "items": "MS angles + channels x2.1 tonnes" },
-    { "id": "inv-012", "invoice_no": "INV-1044", "buyer": "Patel Furniture House", "amount": 88700, "gst": 15966, "issue_date": "2026-09-10", "due_date": "2026-12-09", "status": "sent", "terms_days": 90, "days_overdue": 0, "items": "MDF boards x200 + edge banding" },
-    { "id": "inv-013", "invoice_no": "INV-1045", "buyer": "Verma Interiors", "amount": 34800, "gst": 6264, "issue_date": "2026-09-12", "due_date": "2026-09-22", "status": "sent", "days_overdue": 0, "items": "Mortise locks x80 + door closers" },
-    { "id": "inv-014", "invoice_no": "INV-1046", "buyer": "Gupta Builders & Co", "amount": 152400, "gst": 27432, "issue_date": "2026-09-15", "due_date": "2026-10-15", "status": "sent", "days_overdue": 0, "items": "TMT rebar 12mm x3.2 tonnes" },
-    { "id": "inv-015", "invoice_no": "INV-1042", "buyer": "Verma Interiors", "amount": 22100, "gst": 3978, "issue_date": "2026-08-28", "due_date": "2026-09-27", "status": "due_soon", "days_overdue": 0, "items": "Sanitary fittings — CP taps x60 sets" },
-    { "id": "inv-016", "invoice_no": "INV-1024", "buyer": "Gupta Builders & Co", "amount": 94600, "gst": 17028, "issue_date": "2026-04-25", "due_date": "2026-07-24", "status": "paid", "paid_on": "2026-07-20", "days_overdue": 0, "items": "Cement + river sand bulk order" }
+    {
+      "id": "inv-001",
+      "invoice_no": "INV-1031",
+      "buyer": "Sharma Constructions",
+      "amount": 45200,
+      "gst": 8136,
+      "issue_date": "2026-06-20",
+      "due_date": "2026-09-18",
+      "status": "overdue",
+      "days_overdue": 2,
+      "items": "GI pipes 2\" x60 lengths"
+    },
+    {
+      "id": "inv-002",
+      "invoice_no": "INV-1033",
+      "buyer": "Patel Furniture House",
+      "amount": 78800,
+      "gst": 14184,
+      "issue_date": "2026-06-10",
+      "due_date": "2026-09-09",
+      "status": "overdue",
+      "days_overdue": 11,
+      "items": "Plywood 19mm x85 sheets + hinges"
+    },
+    {
+      "id": "inv-003",
+      "invoice_no": "INV-1035",
+      "buyer": "Khanna Builders",
+      "amount": 124500,
+      "gst": 22410,
+      "issue_date": "2026-07-01",
+      "due_date": "2026-09-29",
+      "status": "due_soon",
+      "days_overdue": 0,
+      "items": "Copper wire 1.5mm x180 coils + MCBs"
+    },
+    {
+      "id": "inv-004",
+      "invoice_no": "INV-1029",
+      "buyer": "Sharma Constructions",
+      "amount": 36200,
+      "gst": 6516,
+      "issue_date": "2026-05-15",
+      "due_date": "2026-08-13",
+      "status": "overdue",
+      "days_overdue": 38,
+      "items": "Cement OPC-53 x120 bags"
+    },
+    {
+      "id": "inv-005",
+      "invoice_no": "INV-1040",
+      "buyer": "Delhi Metro Contractors",
+      "amount": 96500,
+      "gst": 17370,
+      "issue_date": "2026-07-10",
+      "due_date": "2026-10-08",
+      "status": "due_soon",
+      "days_overdue": 0,
+      "items": "Fastener assortment x500 boxes"
+    },
+    {
+      "id": "inv-006",
+      "invoice_no": "INV-1026",
+      "buyer": "Om Sai Electric Works",
+      "amount": 28700,
+      "gst": 5166,
+      "issue_date": "2026-05-01",
+      "due_date": "2026-05-31",
+      "status": "overdue",
+      "days_overdue": 112,
+      "items": "Modular switches x400 + PVC conduit"
+    },
+    {
+      "id": "inv-007",
+      "invoice_no": "INV-1041",
+      "buyer": "Khanna Builders",
+      "amount": 56000,
+      "gst": 10080,
+      "issue_date": "2026-08-25",
+      "due_date": "2026-09-24",
+      "status": "due_soon",
+      "days_overdue": 0,
+      "items": "Asian Paints emulsion x45 buckets"
+    },
+    {
+      "id": "inv-008",
+      "invoice_no": "INV-1022",
+      "buyer": "Patel Furniture House",
+      "amount": 41200,
+      "gst": 7416,
+      "issue_date": "2026-04-18",
+      "due_date": "2026-07-17",
+      "status": "paid",
+      "paid_on": "2026-07-15",
+      "days_overdue": 0,
+      "items": "Teak plywood x60 sheets"
+    },
+    {
+      "id": "inv-009",
+      "invoice_no": "INV-1018",
+      "buyer": "Delhi Metro Contractors",
+      "amount": 63900,
+      "gst": 11502,
+      "issue_date": "2026-03-10",
+      "due_date": "2026-06-08",
+      "status": "paid",
+      "paid_on": "2026-06-02",
+      "days_overdue": 0,
+      "items": "Hex bolts M12 x2000 + anchors"
+    },
+    {
+      "id": "inv-010",
+      "invoice_no": "INV-1043",
+      "buyer": "Om Sai Electric Works",
+      "amount": 19500,
+      "gst": 3510,
+      "issue_date": "2026-09-05",
+      "due_date": "2026-10-05",
+      "status": "sent",
+      "days_overdue": 0,
+      "items": "LED panels 18W x150 + drivers"
+    },
+    {
+      "id": "inv-011",
+      "invoice_no": "INV-1037",
+      "buyer": "Sharma Constructions",
+      "amount": 71300,
+      "gst": 12834,
+      "issue_date": "2026-08-01",
+      "due_date": "2026-09-15",
+      "status": "overdue",
+      "days_overdue": 5,
+      "items": "MS angles + channels x2.1 tonnes"
+    },
+    {
+      "id": "inv-012",
+      "invoice_no": "INV-1044",
+      "buyer": "Patel Furniture House",
+      "amount": 88700,
+      "gst": 15966,
+      "issue_date": "2026-09-10",
+      "due_date": "2026-12-09",
+      "status": "sent",
+      "terms_days": 90,
+      "days_overdue": 0,
+      "items": "MDF boards x200 + edge banding"
+    },
+    {
+      "id": "inv-013",
+      "invoice_no": "INV-1045",
+      "buyer": "Verma Interiors",
+      "amount": 34800,
+      "gst": 6264,
+      "issue_date": "2026-09-12",
+      "due_date": "2026-09-22",
+      "status": "sent",
+      "days_overdue": 0,
+      "items": "Mortise locks x80 + door closers"
+    },
+    {
+      "id": "inv-014",
+      "invoice_no": "INV-1046",
+      "buyer": "Gupta Builders & Co",
+      "amount": 152400,
+      "gst": 27432,
+      "issue_date": "2026-09-15",
+      "due_date": "2026-10-15",
+      "status": "sent",
+      "days_overdue": 0,
+      "items": "TMT rebar 12mm x3.2 tonnes"
+    },
+    {
+      "id": "inv-015",
+      "invoice_no": "INV-1042",
+      "buyer": "Verma Interiors",
+      "amount": 22100,
+      "gst": 3978,
+      "issue_date": "2026-08-28",
+      "due_date": "2026-09-27",
+      "status": "due_soon",
+      "days_overdue": 0,
+      "items": "Sanitary fittings — CP taps x60 sets"
+    },
+    {
+      "id": "inv-016",
+      "invoice_no": "INV-1024",
+      "buyer": "Gupta Builders & Co",
+      "amount": 94600,
+      "gst": 17028,
+      "issue_date": "2026-04-25",
+      "due_date": "2026-07-24",
+      "status": "paid",
+      "paid_on": "2026-07-20",
+      "days_overdue": 0,
+      "items": "Cement + river sand bulk order"
+    }
   ],
   "suppliers": [
-    { "id": "sup-01", "name": "Balaji Steel Traders", "category": "GI pipes & MS sections", "trust_score": 4.2, "moq": 500, "price_per_unit": 62, "stock": "in_stock", "lead_days": 4, "verified": true },
-    { "id": "sup-02", "name": "Khurana Metals", "category": "GI pipes & MS sections", "trust_score": 3.6, "moq": 1000, "price_per_unit": 58, "stock": "in_stock", "lead_days": 7, "verified": true },
-    { "id": "sup-03", "name": "Shree PVC Udyog", "category": "PVC conduit & fittings", "trust_score": 4.5, "moq": 200, "price_per_unit": 95, "stock": "in_stock", "lead_days": 3, "verified": true },
-    { "id": "sup-04", "name": "Gupta Paints Depot", "category": "paints & thinners", "trust_score": 4.0, "moq": 300, "price_per_unit": 140, "stock": "low_stock", "lead_days": 10, "verified": true },
-    { "id": "sup-05", "name": "National Fastener Co", "category": "fasteners", "trust_score": 4.7, "moq": 1000, "price_per_unit": 3.2, "stock": "in_stock", "lead_days": 2, "verified": true },
-    { "id": "sup-06", "name": "Apex Alloys", "category": "alloy & special steel", "trust_score": 3.1, "moq": 5000, "price_per_unit": 71, "stock": "in_stock", "lead_days": 14, "verified": false },
-    { "id": "sup-07", "name": "Vishnu Packaging", "category": "packaging material", "trust_score": 4.3, "moq": 500, "price_per_unit": 8.5, "stock": "in_stock", "lead_days": 2, "verified": true },
-    { "id": "sup-08", "name": "Rathi Copper House", "category": "copper wire & cables", "trust_score": 3.9, "moq": 2000, "price_per_unit": 2.1, "stock": "in_stock", "lead_days": 5, "verified": true },
-    { "id": "sup-09", "name": "Jain Chemicals", "category": "adhesives & sealants", "trust_score": 4.1, "moq": 100, "price_per_unit": 310, "stock": "in_stock", "lead_days": 6, "verified": true },
-    { "id": "sup-10", "name": "Metro Spring Industries", "category": "springs & hardware fittings", "trust_score": 4.4, "moq": 400, "price_per_unit": 18, "stock": "in_stock", "lead_days": 4, "verified": true },
-    { "id": "sup-11", "name": "Aggarwal Sanitary Ware", "category": "sanitary & CP fittings", "trust_score": 2.8, "moq": 800, "price_per_unit": 45, "stock": "delayed", "lead_days": 21, "verified": false },
-    { "id": "sup-12", "name": "Precision Bearings Delhi", "category": "bearings", "trust_score": 4.6, "moq": 250, "price_per_unit": 88, "stock": "in_stock", "lead_days": 3, "verified": true },
-    { "id": "sup-13", "name": "Sona Lubricants", "category": "grease & machine oils", "trust_score": 4.0, "moq": 50, "price_per_unit": 420, "stock": "in_stock", "lead_days": 3, "verified": true },
-    { "id": "sup-14", "name": "Haryana Wire Products", "category": "wire mesh & chain link", "trust_score": 3.5, "moq": 600, "price_per_unit": 33, "stock": "low_stock", "lead_days": 8, "verified": true },
-    { "id": "sup-15", "name": "Trident Abrasives", "category": "grinding & cutting wheels", "trust_score": 4.8, "moq": 150, "price_per_unit": 175, "stock": "in_stock", "lead_days": 5, "verified": true },
-    { "id": "sup-16", "name": "Bharat Bolts", "category": "fasteners", "trust_score": 3.3, "moq": 2000, "price_per_unit": 2.8, "stock": "in_stock", "lead_days": 6, "verified": true },
-    { "id": "sup-17", "name": "New India Plywood", "category": "plywood & boards", "trust_score": 3.0, "moq": 1000, "price_per_unit": 79, "stock": "in_stock", "lead_days": 12, "verified": false },
-    { "id": "sup-18", "name": "Lakshmi Cement Agency", "category": "cement & aggregates", "trust_score": 4.5, "moq": 750, "price_per_unit": 60, "stock": "in_stock", "lead_days": 5, "verified": true },
-    { "id": "sup-19", "name": "Kalsi Power Tools", "category": "power tools & spares", "trust_score": 4.2, "moq": 300, "price_per_unit": 26, "stock": "in_stock", "lead_days": 4, "verified": true },
-    { "id": "sup-20", "name": "Punjab Welding Works", "category": "welding rods & equipment", "trust_score": 3.7, "moq": 200, "price_per_unit": 55, "stock": "in_stock", "lead_days": 6, "verified": true }
+    {
+      "id": "sup-01",
+      "name": "Balaji Steel Traders",
+      "category": "GI pipes & MS sections",
+      "trust_score": 4.2,
+      "moq": 500,
+      "price_per_unit": 62,
+      "stock": "in_stock",
+      "lead_days": 4,
+      "verified": true
+    },
+    {
+      "id": "sup-02",
+      "name": "Khurana Metals",
+      "category": "GI pipes & MS sections",
+      "trust_score": 3.6,
+      "moq": 1000,
+      "price_per_unit": 58,
+      "stock": "in_stock",
+      "lead_days": 7,
+      "verified": true
+    },
+    {
+      "id": "sup-03",
+      "name": "Shree PVC Udyog",
+      "category": "PVC conduit & fittings",
+      "trust_score": 4.5,
+      "moq": 200,
+      "price_per_unit": 95,
+      "stock": "in_stock",
+      "lead_days": 3,
+      "verified": true
+    },
+    {
+      "id": "sup-04",
+      "name": "Gupta Paints Depot",
+      "category": "paints & thinners",
+      "trust_score": 4.0,
+      "moq": 300,
+      "price_per_unit": 140,
+      "stock": "low_stock",
+      "lead_days": 10,
+      "verified": true
+    },
+    {
+      "id": "sup-05",
+      "name": "National Fastener Co",
+      "category": "fasteners",
+      "trust_score": 4.7,
+      "moq": 1000,
+      "price_per_unit": 3.2,
+      "stock": "in_stock",
+      "lead_days": 2,
+      "verified": true
+    },
+    {
+      "id": "sup-06",
+      "name": "Apex Alloys",
+      "category": "alloy & special steel",
+      "trust_score": 3.1,
+      "moq": 5000,
+      "price_per_unit": 71,
+      "stock": "in_stock",
+      "lead_days": 14,
+      "verified": false
+    },
+    {
+      "id": "sup-07",
+      "name": "Vishnu Packaging",
+      "category": "packaging material",
+      "trust_score": 4.3,
+      "moq": 500,
+      "price_per_unit": 8.5,
+      "stock": "in_stock",
+      "lead_days": 2,
+      "verified": true
+    },
+    {
+      "id": "sup-08",
+      "name": "Rathi Copper House",
+      "category": "copper wire & cables",
+      "trust_score": 3.9,
+      "moq": 2000,
+      "price_per_unit": 2.1,
+      "stock": "in_stock",
+      "lead_days": 5,
+      "verified": true
+    },
+    {
+      "id": "sup-09",
+      "name": "Jain Chemicals",
+      "category": "adhesives & sealants",
+      "trust_score": 4.1,
+      "moq": 100,
+      "price_per_unit": 310,
+      "stock": "in_stock",
+      "lead_days": 6,
+      "verified": true
+    },
+    {
+      "id": "sup-10",
+      "name": "Metro Spring Industries",
+      "category": "springs & hardware fittings",
+      "trust_score": 4.4,
+      "moq": 400,
+      "price_per_unit": 18,
+      "stock": "in_stock",
+      "lead_days": 4,
+      "verified": true
+    },
+    {
+      "id": "sup-11",
+      "name": "Aggarwal Sanitary Ware",
+      "category": "sanitary & CP fittings",
+      "trust_score": 2.8,
+      "moq": 800,
+      "price_per_unit": 45,
+      "stock": "delayed",
+      "lead_days": 21,
+      "verified": false
+    },
+    {
+      "id": "sup-12",
+      "name": "Precision Bearings Delhi",
+      "category": "bearings",
+      "trust_score": 4.6,
+      "moq": 250,
+      "price_per_unit": 88,
+      "stock": "in_stock",
+      "lead_days": 3,
+      "verified": true
+    },
+    {
+      "id": "sup-13",
+      "name": "Sona Lubricants",
+      "category": "grease & machine oils",
+      "trust_score": 4.0,
+      "moq": 50,
+      "price_per_unit": 420,
+      "stock": "in_stock",
+      "lead_days": 3,
+      "verified": true
+    },
+    {
+      "id": "sup-14",
+      "name": "Haryana Wire Products",
+      "category": "wire mesh & chain link",
+      "trust_score": 3.5,
+      "moq": 600,
+      "price_per_unit": 33,
+      "stock": "low_stock",
+      "lead_days": 8,
+      "verified": true
+    },
+    {
+      "id": "sup-15",
+      "name": "Trident Abrasives",
+      "category": "grinding & cutting wheels",
+      "trust_score": 4.8,
+      "moq": 150,
+      "price_per_unit": 175,
+      "stock": "in_stock",
+      "lead_days": 5,
+      "verified": true
+    },
+    {
+      "id": "sup-16",
+      "name": "Bharat Bolts",
+      "category": "fasteners",
+      "trust_score": 3.3,
+      "moq": 2000,
+      "price_per_unit": 2.8,
+      "stock": "in_stock",
+      "lead_days": 6,
+      "verified": true
+    },
+    {
+      "id": "sup-17",
+      "name": "New India Plywood",
+      "category": "plywood & boards",
+      "trust_score": 3.0,
+      "moq": 1000,
+      "price_per_unit": 79,
+      "stock": "in_stock",
+      "lead_days": 12,
+      "verified": false
+    },
+    {
+      "id": "sup-18",
+      "name": "Lakshmi Cement Agency",
+      "category": "cement & aggregates",
+      "trust_score": 4.5,
+      "moq": 750,
+      "price_per_unit": 60,
+      "stock": "in_stock",
+      "lead_days": 5,
+      "verified": true
+    },
+    {
+      "id": "sup-19",
+      "name": "Kalsi Power Tools",
+      "category": "power tools & spares",
+      "trust_score": 4.2,
+      "moq": 300,
+      "price_per_unit": 26,
+      "stock": "in_stock",
+      "lead_days": 4,
+      "verified": true
+    },
+    {
+      "id": "sup-20",
+      "name": "Punjab Welding Works",
+      "category": "welding rods & equipment",
+      "trust_score": 3.7,
+      "moq": 200,
+      "price_per_unit": 55,
+      "stock": "in_stock",
+      "lead_days": 6,
+      "verified": true
+    }
   ],
   "carriers": [
-    { "id": "car-1", "name": "VRL Logistics", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.5, "next_slot": "tomorrow 7:00 AM", "reliability": 4.6, "capacity_kg": 2000 },
-    { "id": "car-2", "name": "TCI Express", "route": "Faridabad→Ludhiana", "rate_per_kg": 5.2, "next_slot": "today 9:00 PM", "reliability": 4.4, "capacity_kg": 1500 },
-    { "id": "car-3", "name": "SafeRoad Carriers", "route": "Faridabad→Ludhiana", "rate_per_kg": 3.9, "next_slot": "tomorrow 2:00 PM", "reliability": 3.8, "capacity_kg": 3000 },
-    { "id": "car-4", "name": "VRL Logistics", "route": "Faridabad→Delhi", "rate_per_kg": 2.8, "next_slot": "today 6:00 PM", "reliability": 4.6, "capacity_kg": 2000 },
-    { "id": "car-5", "name": "Delhi Punjab Roadlines", "route": "Faridabad→Jaipur", "rate_per_kg": 4.1, "next_slot": "day-after 6:00 AM", "reliability": 4.1, "capacity_kg": 2500 },
-    { "id": "car-6", "name": "Gati Shakti Transport", "route": "Faridabad→Ludhiana", "rate_per_kg": 4.8, "next_slot": "tomorrow 10:00 AM", "reliability": 4.3, "capacity_kg": 1800 }
+    {
+      "id": "car-1",
+      "name": "VRL Logistics",
+      "route": "Faridabad→Ludhiana",
+      "rate_per_kg": 4.5,
+      "next_slot": "tomorrow 7:00 AM",
+      "reliability": 4.6,
+      "capacity_kg": 2000
+    },
+    {
+      "id": "car-2",
+      "name": "TCI Express",
+      "route": "Faridabad→Ludhiana",
+      "rate_per_kg": 5.2,
+      "next_slot": "today 9:00 PM",
+      "reliability": 4.4,
+      "capacity_kg": 1500
+    },
+    {
+      "id": "car-3",
+      "name": "SafeRoad Carriers",
+      "route": "Faridabad→Ludhiana",
+      "rate_per_kg": 3.9,
+      "next_slot": "tomorrow 2:00 PM",
+      "reliability": 3.8,
+      "capacity_kg": 3000
+    },
+    {
+      "id": "car-4",
+      "name": "VRL Logistics",
+      "route": "Faridabad→Delhi",
+      "rate_per_kg": 2.8,
+      "next_slot": "today 6:00 PM",
+      "reliability": 4.6,
+      "capacity_kg": 2000
+    },
+    {
+      "id": "car-5",
+      "name": "Delhi Punjab Roadlines",
+      "route": "Faridabad→Jaipur",
+      "rate_per_kg": 4.1,
+      "next_slot": "day-after 6:00 AM",
+      "reliability": 4.1,
+      "capacity_kg": 2500
+    },
+    {
+      "id": "car-6",
+      "name": "Gati Shakti Transport",
+      "route": "Faridabad→Ludhiana",
+      "rate_per_kg": 4.8,
+      "next_slot": "tomorrow 10:00 AM",
+      "reliability": 4.3,
+      "capacity_kg": 1800
+    }
   ],
   "payables": [
-    { "id": "pay-1", "vendor": "Balaji Steel Traders", "amount": 31000, "due": "2026-09-25", "terms_days": 30 },
-    { "id": "pay-2", "vendor": "National Fastener Co", "amount": 12400, "due": "2026-09-22", "terms_days": 30 },
-    { "id": "pay-3", "vendor": "Gupta Paints Depot", "amount": 42000, "due": "2026-10-05", "terms_days": 30 },
-    { "id": "pay-4", "vendor": "Shree PVC Udyog", "amount": 19000, "due": "2026-09-28", "terms_days": 30 },
-    { "id": "pay-5", "vendor": "Lakshmi Cement Agency", "amount": 55800, "due": "2026-09-30", "terms_days": 15 },
-    { "id": "pay-6", "vendor": "Kalsi Power Tools", "amount": 21600, "due": "2026-10-12", "terms_days": 45 }
+    {
+      "id": "pay-1",
+      "vendor": "Balaji Steel Traders",
+      "amount": 31000,
+      "due": "2026-09-25",
+      "terms_days": 30
+    },
+    {
+      "id": "pay-2",
+      "vendor": "National Fastener Co",
+      "amount": 12400,
+      "due": "2026-09-22",
+      "terms_days": 30
+    },
+    {
+      "id": "pay-3",
+      "vendor": "Gupta Paints Depot",
+      "amount": 42000,
+      "due": "2026-10-05",
+      "terms_days": 30
+    },
+    {
+      "id": "pay-4",
+      "vendor": "Shree PVC Udyog",
+      "amount": 19000,
+      "due": "2026-09-28",
+      "terms_days": 30
+    },
+    {
+      "id": "pay-5",
+      "vendor": "Lakshmi Cement Agency",
+      "amount": 55800,
+      "due": "2026-09-30",
+      "terms_days": 15
+    },
+    {
+      "id": "pay-6",
+      "vendor": "Kalsi Power Tools",
+      "amount": 21600,
+      "due": "2026-10-12",
+      "terms_days": 45
+    }
   ],
   "alerts": [
-    { "id": "alert-1", "kind": "reminder", "title": "INV-1035 (₹1,24,500) due in 9 days", "status": "scheduled", "fires_at": "2026-09-26T06:00:00Z", "invoice_id": "inv-003" },
-    { "id": "alert-2", "kind": "reminder", "title": "INV-1041 (₹56,000) due in 4 days", "status": "scheduled", "fires_at": "2026-09-21T06:00:00Z", "invoice_id": "inv-007" },
-    { "id": "alert-3", "kind": "warning", "title": "Cash gap ~₹58,000 expected first week of Oct", "status": "sent", "fires_at": "2026-09-18T06:00:00Z", "body": "Payables of ₹1,60,800 fall due before receivables arrive — Khanna Builders pays on 90-day terms." },
-    { "id": "alert-4", "kind": "reminder", "title": "Reminder: INV-1026 (Om Sai Electric Works)", "status": "pending_approval", "fires_at": "2026-09-19T08:00:00Z", "invoice_id": "inv-006", "channel": "whatsapp", "to": "+91-98110-24680", "subject": "Payment reminder — INV-1026", "body": "Namaste Om Sai ji,\n\nThis is a gentle reminder that invoice INV-1026 for ₹28,700 was due on 2026-05-31 (112 days ago).\n\nKindly release the payment at your earliest convenience.\n— Ramesh Hardware & Electricals" },
-    { "id": "alert-5", "kind": "booking", "title": "Pickup booked: SafeRoad — Ludhiana delivery", "status": "pending_approval", "fires_at": "2026-09-20T14:00:00Z", "channel": "internal", "body": "ORD-1042 · 480 kg hardware consignment · SafeRoad Carriers @ ₹3.9/kg = ₹1,872. Pickup tomorrow 2:00 PM." },
-    { "id": "alert-6", "kind": "reminder", "title": "INV-1045 (₹34,800) due tomorrow — Verma Interiors", "status": "scheduled", "fires_at": "2026-09-22T05:30:00Z", "invoice_id": "inv-013" }
+    {
+      "id": "alert-1",
+      "kind": "reminder",
+      "title": "INV-1035 (₹1,24,500) due in 9 days",
+      "status": "scheduled",
+      "fires_at": "2026-09-26T06:00:00Z",
+      "invoice_id": "inv-003"
+    },
+    {
+      "id": "alert-2",
+      "kind": "reminder",
+      "title": "INV-1041 (₹56,000) due in 4 days",
+      "status": "scheduled",
+      "fires_at": "2026-09-21T06:00:00Z",
+      "invoice_id": "inv-007"
+    },
+    {
+      "id": "alert-3",
+      "kind": "warning",
+      "title": "Cash gap ~₹58,000 expected first week of Oct",
+      "status": "sent",
+      "fires_at": "2026-09-18T06:00:00Z",
+      "body": "Payables of ₹1,60,800 fall due before receivables arrive — Khanna Builders pays on 90-day terms."
+    },
+    {
+      "id": "alert-4",
+      "kind": "reminder",
+      "title": "Reminder: INV-1026 (Om Sai Electric Works)",
+      "status": "pending_approval",
+      "fires_at": "2026-09-19T08:00:00Z",
+      "invoice_id": "inv-006",
+      "channel": "whatsapp",
+      "to": "+91-98110-24680",
+      "subject": "Payment reminder — INV-1026",
+      "body": "Namaste Om Sai ji,\n\nThis is a gentle reminder that invoice INV-1026 for ₹28,700 was due on 2026-05-31 (112 days ago).\n\nKindly release the payment at your earliest convenience.\n— Ramesh Hardware & Electricals"
+    },
+    {
+      "id": "alert-5",
+      "kind": "booking",
+      "title": "Pickup booked: SafeRoad — Ludhiana delivery",
+      "status": "pending_approval",
+      "fires_at": "2026-09-20T14:00:00Z",
+      "channel": "internal",
+      "body": "ORD-1042 · 480 kg hardware consignment · SafeRoad Carriers @ ₹3.9/kg = ₹1,872. Pickup tomorrow 2:00 PM."
+    },
+    {
+      "id": "alert-6",
+      "kind": "reminder",
+      "title": "INV-1045 (₹34,800) due tomorrow — Verma Interiors",
+      "status": "scheduled",
+      "fires_at": "2026-09-22T05:30:00Z",
+      "invoice_id": "inv-013"
+    }
   ],
   "tasks": [
-    { "id": "task-1", "title": "Chase all invoices >30 days overdue", "agent_id": "vasool", "status": "done", "due": "2026-09-19", "result": "Drafted reminders for the 2 oldest invoices", "created_at": "2026-09-18T09:00:00Z" },
-    { "id": "task-2", "title": "Get GI pipe quotes under ₹62/kg", "agent_id": "sourcer", "status": "in_progress", "due": "2026-09-21", "details": "2\" GI pipes, ~800 kg for Khanna Builders order", "created_at": "2026-09-19T01:00:00Z" },
-    { "id": "task-3", "title": "Chase INV-1029 — Sharma Constructions ₹36.2K overdue", "agent_id": "vasool", "status": "in_progress", "due": "2026-09-20", "details": "38 days overdue — second reminder this month", "created_at": "2026-09-18T14:00:00Z" },
-    { "id": "task-4", "title": "WhatsApp reminder draft — INV-1026 Om Sai Electric", "agent_id": "vasool", "status": "approval", "due": "2026-09-20", "details": "112 days overdue — needs owner's haan before it goes out", "created_at": "2026-09-19T08:00:00Z" },
-    { "id": "task-5", "title": "Track ORD-1042 — SafeRoad, Faridabad → Ludhiana", "agent_id": "logistics-agent", "status": "in_progress", "due": "2026-09-21", "details": "480 kg fasteners + switches consignment", "created_at": "2026-09-19T06:00:00Z" },
-    { "id": "task-6", "title": "90-day terms call — Khanna Builders ₹88.7K order", "agent_id": "khata", "status": "todo", "due": "2026-09-23", "details": "INV-1044 payment terms — weigh against Oct cash gap", "created_at": "2026-09-19T09:00:00Z" },
-    { "id": "task-7", "title": "Publish 12 products to IndiaMART", "agent_id": "presence-agent", "status": "todo", "due": "2026-09-25", "details": "fasteners, GI pipes, switch ranges — photos ready in Drive", "created_at": "2026-09-18T16:00:00Z" },
-    { "id": "task-8", "title": "Reorder fasteners before Diwali stock-out", "agent_id": "festival-stock", "status": "todo", "due": "2026-10-02", "details": "hex bolts + anchors below reorder level", "created_at": "2026-09-17T11:00:00Z" },
-    { "id": "task-9", "title": "Compare steel rod quotes — 3 suppliers", "agent_id": "sourcer", "status": "done", "due": "2026-09-16", "result": "Khurana cheapest at ₹58/kg but 7d lead; Balaji ₹62/kg 4d lead — recommended Balaji", "created_at": "2026-09-15T10:00:00Z" },
-    { "id": "task-10", "title": "Aging report shared with accountant", "agent_id": "vasool", "status": "done", "due": "2026-09-15", "result": "0-30: ₹1.9L · 31-60: ₹36K · 90+: ₹28.7K", "created_at": "2026-09-14T09:00:00Z" },
-    { "id": "task-11", "title": "Approve storefront theme for Shopify draft", "agent_id": "presence-agent", "status": "approval", "due": "2026-09-24", "details": "2 themes shortlisted — pick one before listings go live", "created_at": "2026-09-18T18:00:00Z" }
+    {
+      "id": "task-1",
+      "title": "Chase all invoices >30 days overdue",
+      "agent_id": "vasool",
+      "status": "done",
+      "due": "2026-09-19",
+      "result": "Drafted reminders for the 2 oldest invoices",
+      "created_at": "2026-09-18T09:00:00Z"
+    },
+    {
+      "id": "task-2",
+      "title": "Get GI pipe quotes under ₹62/kg",
+      "agent_id": "sourcer",
+      "status": "in_progress",
+      "due": "2026-09-21",
+      "details": "2\" GI pipes, ~800 kg for Khanna Builders order",
+      "created_at": "2026-09-19T01:00:00Z"
+    },
+    {
+      "id": "task-3",
+      "title": "Chase INV-1029 — Sharma Constructions ₹36.2K overdue",
+      "agent_id": "vasool",
+      "status": "in_progress",
+      "due": "2026-09-20",
+      "details": "38 days overdue — second reminder this month",
+      "created_at": "2026-09-18T14:00:00Z"
+    },
+    {
+      "id": "task-4",
+      "title": "WhatsApp reminder draft — INV-1026 Om Sai Electric",
+      "agent_id": "vasool",
+      "status": "approval",
+      "due": "2026-09-20",
+      "details": "112 days overdue — needs owner's haan before it goes out",
+      "created_at": "2026-09-19T08:00:00Z"
+    },
+    {
+      "id": "task-5",
+      "title": "Track ORD-1042 — SafeRoad, Faridabad → Ludhiana",
+      "agent_id": "logistics-agent",
+      "status": "in_progress",
+      "due": "2026-09-21",
+      "details": "480 kg fasteners + switches consignment",
+      "created_at": "2026-09-19T06:00:00Z"
+    },
+    {
+      "id": "task-6",
+      "title": "90-day terms call — Khanna Builders ₹88.7K order",
+      "agent_id": "khata",
+      "status": "todo",
+      "due": "2026-09-23",
+      "details": "INV-1044 payment terms — weigh against Oct cash gap",
+      "created_at": "2026-09-19T09:00:00Z"
+    },
+    {
+      "id": "task-7",
+      "title": "Publish 12 products to IndiaMART",
+      "agent_id": "presence-agent",
+      "status": "todo",
+      "due": "2026-09-25",
+      "details": "fasteners, GI pipes, switch ranges — photos ready in Drive",
+      "created_at": "2026-09-18T16:00:00Z"
+    },
+    {
+      "id": "task-8",
+      "title": "Reorder fasteners before Diwali stock-out",
+      "agent_id": "festival-stock",
+      "status": "todo",
+      "due": "2026-10-02",
+      "details": "hex bolts + anchors below reorder level",
+      "created_at": "2026-09-17T11:00:00Z"
+    },
+    {
+      "id": "task-9",
+      "title": "Compare steel rod quotes — 3 suppliers",
+      "agent_id": "sourcer",
+      "status": "done",
+      "due": "2026-09-16",
+      "result": "Khurana cheapest at ₹58/kg but 7d lead; Balaji ₹62/kg 4d lead — recommended Balaji",
+      "created_at": "2026-09-15T10:00:00Z"
+    },
+    {
+      "id": "task-10",
+      "title": "Aging report shared with accountant",
+      "agent_id": "vasool",
+      "status": "done",
+      "due": "2026-09-15",
+      "result": "0-30: ₹1.9L · 31-60: ₹36K · 90+: ₹28.7K",
+      "created_at": "2026-09-14T09:00:00Z"
+    },
+    {
+      "id": "task-11",
+      "title": "Approve storefront theme for Shopify draft",
+      "agent_id": "presence-agent",
+      "status": "approval",
+      "due": "2026-09-24",
+      "details": "2 themes shortlisted — pick one before listings go live",
+      "created_at": "2026-09-18T18:00:00Z"
+    }
   ],
   "notifications": [
-    { "id": "n-1", "kind": "action_required", "title": "Reminder ready to send: INV-1026", "body": "Oldest overdue invoice — Om Sai Electric Works, ₹28,700 (112 days)", "ref_id": "alert-4", "created_at": "2026-09-19T08:00:00Z", "status": "unread" },
-    { "id": "n-2", "kind": "warning", "title": "₹58,000 cash gap first week of Oct", "body": "Payables due before receivables arrive — see cashflow", "created_at": "2026-09-18T06:00:00Z", "status": "read" },
-    { "id": "n-3", "kind": "info", "title": "5 invoices overdue, ₹2.6L stuck", "body": "Vasool can draft reminders for all of them", "created_at": "2026-09-18T09:00:00Z", "status": "unread" },
-    { "id": "n-4", "kind": "action_required", "title": "Pickup booking needs approval", "body": "ORD-1042 → Ludhiana via SafeRoad @ ₹1,872 — confirm before 2 PM slot", "ref_id": "alert-5", "created_at": "2026-09-19T10:30:00Z", "status": "unread" },
-    { "id": "n-5", "kind": "info", "title": "Logistics Agent hired", "body": "Nirmata created it after your transporter issue", "created_at": "2026-09-18T16:00:00Z", "status": "read" },
-    { "id": "n-6", "kind": "warning", "title": "Hex bolts below reorder level", "body": "M12 hex bolts at 340 pcs — reorder point is 500. Festival demand in 3 weeks.", "created_at": "2026-09-19T04:00:00Z", "status": "unread" },
-    { "id": "n-7", "kind": "info", "title": "Gmail connector synced", "body": "212 emails parsed — 3 new PO attachments found", "created_at": "2026-09-19T01:00:00Z", "status": "read" },
-    { "id": "n-8", "kind": "action_required", "title": "GSTR-3B filing due in 2 days", "body": "August return ready — output tax ₹1.94L, ITC ₹1.31L, net payable ₹63K", "created_at": "2026-09-18T20:00:00Z", "status": "unread" }
+    {
+      "id": "n-1",
+      "kind": "action_required",
+      "title": "Reminder ready to send: INV-1026",
+      "body": "Oldest overdue invoice — Om Sai Electric Works, ₹28,700 (112 days)",
+      "ref_id": "alert-4",
+      "created_at": "2026-09-19T08:00:00Z",
+      "status": "unread"
+    },
+    {
+      "id": "n-2",
+      "kind": "warning",
+      "title": "₹58,000 cash gap first week of Oct",
+      "body": "Payables due before receivables arrive — see cashflow",
+      "created_at": "2026-09-18T06:00:00Z",
+      "status": "read"
+    },
+    {
+      "id": "n-3",
+      "kind": "info",
+      "title": "5 invoices overdue, ₹2.6L stuck",
+      "body": "Vasool can draft reminders for all of them",
+      "created_at": "2026-09-18T09:00:00Z",
+      "status": "unread"
+    },
+    {
+      "id": "n-4",
+      "kind": "action_required",
+      "title": "Pickup booking needs approval",
+      "body": "ORD-1042 → Ludhiana via SafeRoad @ ₹1,872 — confirm before 2 PM slot",
+      "ref_id": "alert-5",
+      "created_at": "2026-09-19T10:30:00Z",
+      "status": "unread"
+    },
+    {
+      "id": "n-5",
+      "kind": "info",
+      "title": "Logistics Agent hired",
+      "body": "Nirmata created it after your transporter issue",
+      "created_at": "2026-09-18T16:00:00Z",
+      "status": "read"
+    },
+    {
+      "id": "n-6",
+      "kind": "warning",
+      "title": "Hex bolts below reorder level",
+      "body": "M12 hex bolts at 340 pcs — reorder point is 500. Festival demand in 3 weeks.",
+      "created_at": "2026-09-19T04:00:00Z",
+      "status": "unread"
+    },
+    {
+      "id": "n-7",
+      "kind": "info",
+      "title": "Gmail connector synced",
+      "body": "212 emails parsed — 3 new PO attachments found",
+      "created_at": "2026-09-19T01:00:00Z",
+      "status": "read"
+    },
+    {
+      "id": "n-8",
+      "kind": "action_required",
+      "title": "GSTR-3B filing due in 2 days",
+      "body": "August return ready — output tax ₹1.94L, ITC ₹1.31L, net payable ₹63K",
+      "created_at": "2026-09-18T20:00:00Z",
+      "status": "unread"
+    }
   ],
   "connectors": [
-    { "id": "google_calendar", "name": "Google Calendar", "icon": "calendar", "status": "available", "description": "Push invoice dues + reminders to your calendar", "items_synced": 0 },
-    { "id": "airtable", "name": "Airtable", "icon": "table", "status": "connected", "connected_at": "2026-09-18T10:00:00Z", "last_sync": "2026-09-19T01:00:00Z", "items_synced": 32, "description": "Sync ledger + suppliers to your base" },
-    { "id": "whatsapp", "name": "WhatsApp Business", "icon": "whatsapp", "status": "connected", "connected_at": "2026-09-15T10:00:00Z", "last_sync": "2026-09-19T02:00:00Z", "items_synced": 128, "description": "Send payment reminders + order updates on WhatsApp" },
-    { "id": "gmail", "name": "Gmail", "icon": "gmail", "status": "connected", "connected_at": "2026-09-15T10:00:00Z", "last_sync": "2026-09-19T01:00:00Z", "items_synced": 212, "description": "Read invoices and POs straight from your inbox" },
-    { "id": "google_drive", "name": "Google Drive", "icon": "google_drive", "status": "connected", "connected_at": "2026-09-15T10:00:00Z", "last_sync": "2026-09-19T01:30:00Z", "items_synced": 56, "description": "Ledger exports and uploaded docs live in Drive" },
-    { "id": "facebook_marketplace", "name": "Facebook Marketplace", "icon": "facebook", "status": "connected", "connected_at": "2026-09-16T10:00:00Z", "last_sync": "2026-09-19T01:30:00Z", "items_synced": 42, "description": "Publish product listings where local buyers browse" },
-    { "id": "indiamart", "name": "IndiaMART", "icon": "indiamart", "status": "available", "items_synced": 0, "description": "B2B marketplace — 7.7 crore buyers" },
-    { "id": "shopify", "name": "Shopify Storefront", "icon": "shopify", "status": "available", "items_synced": 0, "description": "Your own web store — agents build and stock it" },
-    { "id": "instagram", "name": "Instagram Shop", "icon": "instagram", "status": "available", "items_synced": 0, "description": "Shoppable posts synced from your catalogue" },
-    { "id": "tally", "name": "Tally Prime", "icon": "tally", "status": "available", "description": "Two-way sync with your existing accounting", "items_synced": 0 },
-    { "id": "razorpay", "name": "Razorpay", "icon": "razorpay", "status": "available", "description": "Payment links inside reminders", "items_synced": 0 },
-    { "id": "slack", "name": "Slack", "icon": "slack", "status": "available", "description": "Agent alerts in your team channel", "items_synced": 0 }
+    {
+      "id": "google_calendar",
+      "name": "Google Calendar",
+      "icon": "calendar",
+      "status": "available",
+      "description": "Push invoice dues + reminders to your calendar",
+      "items_synced": 0
+    },
+    {
+      "id": "airtable",
+      "name": "Airtable",
+      "icon": "table",
+      "status": "connected",
+      "connected_at": "2026-09-18T10:00:00Z",
+      "last_sync": "2026-09-19T01:00:00Z",
+      "items_synced": 32,
+      "description": "Sync ledger + suppliers to your base"
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp Business",
+      "icon": "whatsapp",
+      "status": "connected",
+      "connected_at": "2026-09-15T10:00:00Z",
+      "last_sync": "2026-09-19T02:00:00Z",
+      "items_synced": 128,
+      "description": "Send payment reminders + order updates on WhatsApp"
+    },
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "icon": "gmail",
+      "status": "connected",
+      "connected_at": "2026-09-15T10:00:00Z",
+      "last_sync": "2026-09-19T01:00:00Z",
+      "items_synced": 212,
+      "description": "Read invoices and POs straight from your inbox"
+    },
+    {
+      "id": "google_drive",
+      "name": "Google Drive",
+      "icon": "google_drive",
+      "status": "connected",
+      "connected_at": "2026-09-15T10:00:00Z",
+      "last_sync": "2026-09-19T01:30:00Z",
+      "items_synced": 56,
+      "description": "Ledger exports and uploaded docs live in Drive"
+    },
+    {
+      "id": "facebook_marketplace",
+      "name": "Facebook Marketplace",
+      "icon": "facebook",
+      "status": "connected",
+      "connected_at": "2026-09-16T10:00:00Z",
+      "last_sync": "2026-09-19T01:30:00Z",
+      "items_synced": 42,
+      "description": "Publish product listings where local buyers browse"
+    },
+    {
+      "id": "indiamart",
+      "name": "IndiaMART",
+      "icon": "indiamart",
+      "status": "available",
+      "items_synced": 0,
+      "description": "B2B marketplace — 7.7 crore buyers"
+    },
+    {
+      "id": "shopify",
+      "name": "Shopify Storefront",
+      "icon": "shopify",
+      "status": "available",
+      "items_synced": 0,
+      "description": "Your own web store — agents build and stock it"
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram Shop",
+      "icon": "instagram",
+      "status": "available",
+      "items_synced": 0,
+      "description": "Shoppable posts synced from your catalogue"
+    },
+    {
+      "id": "tally",
+      "name": "Tally Prime",
+      "icon": "tally",
+      "status": "available",
+      "description": "Two-way sync with your existing accounting",
+      "items_synced": 0
+    },
+    {
+      "id": "razorpay",
+      "name": "Razorpay",
+      "icon": "razorpay",
+      "status": "available",
+      "description": "Payment links inside reminders",
+      "items_synced": 0
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "icon": "slack",
+      "status": "available",
+      "description": "Agent alerts in your team channel",
+      "items_synced": 0
+    }
   ],
   "memories": [
-    { "id": "mem-1", "text": "Sharma Constructions always pays around 45 days — don't push too hard, they're a long-term buyer", "source": "owner", "created_at": "2026-09-19T03:00:00Z" },
-    { "id": "mem-2", "text": "Big orders (over ₹50,000) must go through a GST invoice only", "source": "owner", "created_at": "2026-09-19T03:05:00Z" },
-    { "id": "mem-3", "text": "Never source pipes from Apex Alloys — quality issues last monsoon", "source": "owner", "created_at": "2026-09-19T03:10:00Z" },
-    { "id": "mem-4", "text": "VRL is our backup transporter for the Ludhiana route", "source": "owner", "created_at": "2026-09-16T09:00:00Z" },
-    { "id": "mem-5", "text": "Diwali season: stock fasteners + LED panels + paints 3 weeks early", "source": "onboarding", "created_at": "2026-09-15T10:06:00Z" },
-    { "id": "mem-6", "text": "Khanna Builders negotiates hard — quote 5% higher first", "source": "owner", "created_at": "2026-09-17T14:00:00Z" },
-    { "id": "mem-7", "text": "Om Sai Electric Works is a chronic late payer — advance payment only for new orders", "source": "owner", "created_at": "2026-09-18T11:00:00Z" },
-    { "id": "mem-8", "text": "Godown B stores cement and paints — keep it dry, repaint racks in October", "source": "owner", "created_at": "2026-09-16T16:00:00Z" }
+    {
+      "id": "mem-1",
+      "text": "Sharma Constructions always pays around 45 days — don't push too hard, they're a long-term buyer",
+      "source": "owner",
+      "created_at": "2026-09-19T03:00:00Z"
+    },
+    {
+      "id": "mem-2",
+      "text": "Big orders (over ₹50,000) must go through a GST invoice only",
+      "source": "owner",
+      "created_at": "2026-09-19T03:05:00Z"
+    },
+    {
+      "id": "mem-3",
+      "text": "Never source pipes from Apex Alloys — quality issues last monsoon",
+      "source": "owner",
+      "created_at": "2026-09-19T03:10:00Z"
+    },
+    {
+      "id": "mem-4",
+      "text": "VRL is our backup transporter for the Ludhiana route",
+      "source": "owner",
+      "created_at": "2026-09-16T09:00:00Z"
+    },
+    {
+      "id": "mem-5",
+      "text": "Diwali season: stock fasteners + LED panels + paints 3 weeks early",
+      "source": "onboarding",
+      "created_at": "2026-09-15T10:06:00Z"
+    },
+    {
+      "id": "mem-6",
+      "text": "Khanna Builders negotiates hard — quote 5% higher first",
+      "source": "owner",
+      "created_at": "2026-09-17T14:00:00Z"
+    },
+    {
+      "id": "mem-7",
+      "text": "Om Sai Electric Works is a chronic late payer — advance payment only for new orders",
+      "source": "owner",
+      "created_at": "2026-09-18T11:00:00Z"
+    },
+    {
+      "id": "mem-8",
+      "text": "Godown B stores cement and paints — keep it dry, repaint racks in October",
+      "source": "owner",
+      "created_at": "2026-09-16T16:00:00Z"
+    }
   ],
   "artifacts": [
-    { "id": "art-1042", "title": "Tracking — ORD-1042", "template": "tracking_page", "visibility": "public", "created_by": "Logistics Agent", "created_at": "2026-09-19T03:00:00Z", "share_path": "/a/art-1042", "data": { "order_id": "ORD-1042", "carrier": "SafeRoad Carriers", "from": "Faridabad", "to": "Ludhiana", "eta": "Tomorrow 11 AM", "status": "in_transit", "progress_pct": 62 } },
-    { "id": "art-1031", "title": "INV-1031 — Sharma Constructions", "template": "payment_card", "visibility": "public", "created_by": "vasool", "created_at": "2026-09-18T18:00:00Z", "share_path": "/a/art-1031", "data": { "business": "Ramesh Hardware & Electricals", "payer": "Sharma Constructions", "buyer": "Sharma Constructions", "amount": 45200, "invoice_no": "INV-1031", "due_date": "2026-09-18", "pay_link": "upi://pay?pa=rameshhw@upi", "upi": "rameshhw@upi" } },
-    { "id": "art-steel", "title": "GI pipes — quote comparison", "template": "supplier_compare", "visibility": "private", "created_by": "sourcer", "created_at": "2026-09-18T16:00:00Z", "share_path": "/a/art-steel", "data": { "category": "GI pipes 2\"", "item": "GI pipes 2\"", "suppliers": [ { "name": "Balaji Steel Traders", "price": 62, "moq": 500, "lead_days": 4, "trust": 4.2 }, { "name": "Khurana Metals", "price": 58, "moq": 1000, "lead_days": 7, "trust": 3.8 }, { "name": "Lakshmi Cement Agency", "price": 65, "moq": 250, "lead_days": 2, "trust": 4.5 } ], "quotes": [ { "name": "Balaji Steel Traders", "price": 62, "moq": 500, "lead_days": 4, "trust": 4.2 }, { "name": "Khurana Metals", "price": 58, "moq": 1000, "lead_days": 7, "trust": 3.8 }, { "name": "Lakshmi Cement Agency", "price": 65, "moq": 250, "lead_days": 2, "trust": 4.5 } ], "recommendation": "Balaji — best mix of price, lead time and trust" } },
-    { "id": "art-fy26", "title": "FY26 financial projection — investor update", "template": "financial_report", "visibility": "public", "created_by": "khata", "created_at": "2026-09-19T05:00:00Z", "share_path": "/a/art-fy26", "data": { "business": "Ramesh Hardware & Electricals", "period": "FY2026-27 projection", "revenue": 8640000, "expenses": 6120000, "net_margin_pct": 18.4, "cash_on_hand": 412000, "projections": [ { "month": "Oct", "revenue": 780000, "expenses": 590000 }, { "month": "Nov", "revenue": 940000, "expenses": 640000 }, { "month": "Dec", "revenue": 880000, "expenses": 610000 }, { "month": "Jan", "revenue": 720000, "expenses": 560000 }, { "month": "Feb", "revenue": 810000, "expenses": 595000 }, { "month": "Mar", "revenue": 860000, "expenses": 605000 } ], "highlights": [ "Revenue up 18% QoQ — Diwali restocking drove fasteners + LED", "Receivables down from 62d to 41d average after Vasool started chasing", "New IndiaMART + Marketplace channels added 2 recurring B2B buyers" ], "ask": "Seeking ₹15L working-capital line to pre-buy festival stock" } }
+    {
+      "id": "art-1042",
+      "title": "Tracking — ORD-1042",
+      "template": "tracking_page",
+      "visibility": "public",
+      "created_by": "Logistics Agent",
+      "created_at": "2026-09-19T03:00:00Z",
+      "share_path": "/a/art-1042",
+      "data": {
+        "order_id": "ORD-1042",
+        "carrier": "SafeRoad Carriers",
+        "from": "Faridabad",
+        "to": "Ludhiana",
+        "eta": "Tomorrow 11 AM",
+        "status": "in_transit",
+        "progress_pct": 62
+      }
+    },
+    {
+      "id": "art-1031",
+      "title": "INV-1031 — Sharma Constructions",
+      "template": "payment_card",
+      "visibility": "public",
+      "created_by": "vasool",
+      "created_at": "2026-09-18T18:00:00Z",
+      "share_path": "/a/art-1031",
+      "data": {
+        "business": "Ramesh Hardware & Electricals",
+        "payer": "Sharma Constructions",
+        "buyer": "Sharma Constructions",
+        "amount": 45200,
+        "invoice_no": "INV-1031",
+        "due_date": "2026-09-18",
+        "pay_link": "upi://pay?pa=rameshhw@upi",
+        "upi": "rameshhw@upi"
+      }
+    },
+    {
+      "id": "art-steel",
+      "title": "GI pipes — quote comparison",
+      "template": "supplier_compare",
+      "visibility": "private",
+      "created_by": "sourcer",
+      "created_at": "2026-09-18T16:00:00Z",
+      "share_path": "/a/art-steel",
+      "data": {
+        "category": "GI pipes 2\"",
+        "item": "GI pipes 2\"",
+        "suppliers": [
+          {
+            "name": "Balaji Steel Traders",
+            "price": 62,
+            "moq": 500,
+            "lead_days": 4,
+            "trust": 4.2
+          },
+          {
+            "name": "Khurana Metals",
+            "price": 58,
+            "moq": 1000,
+            "lead_days": 7,
+            "trust": 3.8
+          },
+          {
+            "name": "Lakshmi Cement Agency",
+            "price": 65,
+            "moq": 250,
+            "lead_days": 2,
+            "trust": 4.5
+          }
+        ],
+        "quotes": [
+          {
+            "name": "Balaji Steel Traders",
+            "price": 62,
+            "moq": 500,
+            "lead_days": 4,
+            "trust": 4.2
+          },
+          {
+            "name": "Khurana Metals",
+            "price": 58,
+            "moq": 1000,
+            "lead_days": 7,
+            "trust": 3.8
+          },
+          {
+            "name": "Lakshmi Cement Agency",
+            "price": 65,
+            "moq": 250,
+            "lead_days": 2,
+            "trust": 4.5
+          }
+        ],
+        "recommendation": "Balaji — best mix of price, lead time and trust"
+      }
+    },
+    {
+      "id": "art-fy26",
+      "title": "FY26 financial projection — investor update",
+      "template": "financial_report",
+      "visibility": "public",
+      "created_by": "khata",
+      "created_at": "2026-09-19T05:00:00Z",
+      "share_path": "/a/art-fy26",
+      "data": {
+        "business": "Ramesh Hardware & Electricals",
+        "period": "FY2026-27 projection",
+        "revenue": 8640000,
+        "expenses": 6120000,
+        "net_margin_pct": 18.4,
+        "cash_on_hand": 412000,
+        "projections": [
+          {
+            "month": "Oct",
+            "revenue": 780000,
+            "expenses": 590000
+          },
+          {
+            "month": "Nov",
+            "revenue": 940000,
+            "expenses": 640000
+          },
+          {
+            "month": "Dec",
+            "revenue": 880000,
+            "expenses": 610000
+          },
+          {
+            "month": "Jan",
+            "revenue": 720000,
+            "expenses": 560000
+          },
+          {
+            "month": "Feb",
+            "revenue": 810000,
+            "expenses": 595000
+          },
+          {
+            "month": "Mar",
+            "revenue": 860000,
+            "expenses": 605000
+          }
+        ],
+        "highlights": [
+          "Revenue up 18% QoQ — Diwali restocking drove fasteners + LED",
+          "Receivables down from 62d to 41d average after Vasool started chasing",
+          "New IndiaMART + Marketplace channels added 2 recurring B2B buyers"
+        ],
+        "ask": "Seeking ₹15L working-capital line to pre-buy festival stock"
+      }
+    }
   ],
   "settings": [
-    { "id": "settings",
-      "business": { "name": "Ramesh Hardware & Electricals", "owner": "Ramesh Gupta", "city": "Faridabad", "line": "hardware & electrical supplies" },
-      "prefs": { "reminder_cadence_days": 7, "auto_draft_reminders": true, "approval_mode": "manual", "language": "hinglish", "notify_email": "ramesh@rameshhardware.in", "role": "owner" } }
+    {
+      "id": "settings",
+      "business": {
+        "name": "Ramesh Hardware & Electricals",
+        "owner": "Ramesh Gupta",
+        "city": "Faridabad",
+        "line": "hardware & electrical supplies"
+      },
+      "prefs": {
+        "reminder_cadence_days": 7,
+        "auto_draft_reminders": true,
+        "approval_mode": "manual",
+        "language": "hinglish",
+        "notify_email": "ramesh@rameshhardware.in",
+        "role": "owner"
+      }
+    }
   ],
   "activity": [
-    { "id": "act-1", "ts": "2026-09-19T01:44:00Z", "kind": "reminder_sent", "text": "Reminder sent to Sharma Constructions (INV-1031)" },
-    { "id": "act-2", "ts": "2026-09-18T22:30:00Z", "kind": "invoice_parsed", "text": "Invoice INV-1043 parsed from photo → ledger" },
-    { "id": "act-3", "ts": "2026-09-18T09:05:00Z", "kind": "task_completed", "text": "Vasool finished 'Chase all invoices >30 days overdue'" },
-    { "id": "act-4", "ts": "2026-09-19T05:00:00Z", "kind": "artifact_created", "text": "Khata built artifact 'FY26 financial projection — investor update'" },
-    { "id": "act-5", "ts": "2026-09-19T04:00:00Z", "kind": "stock_warning", "text": "Hex bolts M12 below reorder level (340 < 500)" },
-    { "id": "act-6", "ts": "2026-09-18T16:00:00Z", "kind": "agent_hired", "text": "Nirmata hired 'Logistics Agent' — Faridabad→Ludhiana route coverage" },
-    { "id": "act-7", "ts": "2026-09-19T01:00:00Z", "kind": "connector_synced", "text": "Gmail synced — 212 emails, 3 new PO attachments" },
-    { "id": "act-8", "ts": "2026-09-18T20:00:00Z", "kind": "compliance", "text": "GSTR-3B for August ready — net payable ₹63,240" },
-    { "id": "act-9", "ts": "2026-09-19T06:30:00Z", "kind": "context_added", "text": "Added 'Sales_Register_Aug2026.xlsx' to business context (invoices, finance)" },
-    { "id": "act-10", "ts": "2026-09-19T08:00:00Z", "kind": "reminder_drafted", "text": "WhatsApp reminder drafted for INV-1026 — awaiting approval" },
-    { "id": "act-11", "ts": "2026-09-18T18:00:00Z", "kind": "artifact_created", "text": "Vasool built artifact 'INV-1031 — Sharma Constructions' (payment card)" },
-    { "id": "act-12", "ts": "2026-09-17T15:00:00Z", "kind": "memory_added", "text": "Owner note saved — Khanna Builders negotiates hard" },
-    { "id": "act-13", "ts": "2026-09-18T14:00:00Z", "kind": "task_started", "text": "Vasool started 'Chase INV-1029 — Sharma Constructions'" },
-    { "id": "act-14", "ts": "2026-09-18T11:30:00Z", "kind": "excel_imported", "text": "Imported 34 invoices from Tally export.xlsx" },
-    { "id": "act-15", "ts": "2026-09-19T10:30:00Z", "kind": "booking_drafted", "text": "SafeRoad pickup drafted for ORD-1042 — needs owner approval" }
+    {
+      "id": "act-1",
+      "ts": "2026-09-19T01:44:00Z",
+      "kind": "reminder_sent",
+      "text": "Reminder sent to Sharma Constructions (INV-1031)"
+    },
+    {
+      "id": "act-2",
+      "ts": "2026-09-18T22:30:00Z",
+      "kind": "invoice_parsed",
+      "text": "Invoice INV-1043 parsed from photo → ledger"
+    },
+    {
+      "id": "act-3",
+      "ts": "2026-09-18T09:05:00Z",
+      "kind": "task_completed",
+      "text": "Vasool finished 'Chase all invoices >30 days overdue'"
+    },
+    {
+      "id": "act-4",
+      "ts": "2026-09-19T05:00:00Z",
+      "kind": "artifact_created",
+      "text": "Khata built artifact 'FY26 financial projection — investor update'"
+    },
+    {
+      "id": "act-5",
+      "ts": "2026-09-19T04:00:00Z",
+      "kind": "stock_warning",
+      "text": "Hex bolts M12 below reorder level (340 < 500)"
+    },
+    {
+      "id": "act-6",
+      "ts": "2026-09-18T16:00:00Z",
+      "kind": "agent_hired",
+      "text": "Nirmata hired 'Logistics Agent' — Faridabad→Ludhiana route coverage"
+    },
+    {
+      "id": "act-7",
+      "ts": "2026-09-19T01:00:00Z",
+      "kind": "connector_synced",
+      "text": "Gmail synced — 212 emails, 3 new PO attachments"
+    },
+    {
+      "id": "act-8",
+      "ts": "2026-09-18T20:00:00Z",
+      "kind": "compliance",
+      "text": "GSTR-3B for August ready — net payable ₹63,240"
+    },
+    {
+      "id": "act-9",
+      "ts": "2026-09-19T06:30:00Z",
+      "kind": "context_added",
+      "text": "Added 'Sales_Register_Aug2026.xlsx' to business context (invoices, finance)"
+    },
+    {
+      "id": "act-10",
+      "ts": "2026-09-19T08:00:00Z",
+      "kind": "reminder_drafted",
+      "text": "WhatsApp reminder drafted for INV-1026 — awaiting approval"
+    },
+    {
+      "id": "act-11",
+      "ts": "2026-09-18T18:00:00Z",
+      "kind": "artifact_created",
+      "text": "Vasool built artifact 'INV-1031 — Sharma Constructions' (payment card)"
+    },
+    {
+      "id": "act-12",
+      "ts": "2026-09-17T15:00:00Z",
+      "kind": "memory_added",
+      "text": "Owner note saved — Khanna Builders negotiates hard"
+    },
+    {
+      "id": "act-13",
+      "ts": "2026-09-18T14:00:00Z",
+      "kind": "task_started",
+      "text": "Vasool started 'Chase INV-1029 — Sharma Constructions'"
+    },
+    {
+      "id": "act-14",
+      "ts": "2026-09-18T11:30:00Z",
+      "kind": "excel_imported",
+      "text": "Imported 34 invoices from Tally export.xlsx"
+    },
+    {
+      "id": "act-15",
+      "ts": "2026-09-19T10:30:00Z",
+      "kind": "booking_drafted",
+      "text": "SafeRoad pickup drafted for ORD-1042 — needs owner approval"
+    }
   ],
   "documents": [],
-  "specs": []
+  "specs": [],
+  "listings": [
+    {
+      "id": "lst-001",
+      "title": "GI pipes & MS sections — wholesale & retail",
+      "category": "GI pipes & MS sections",
+      "price": 73.16,
+      "unit": "unit",
+      "status": "live",
+      "marketplaces": [
+        "facebook_marketplace"
+      ],
+      "urls": {
+        "facebook_marketplace": "https://facebook-marketplace.example.in/gi-pipes-ms-sections-l001"
+      },
+      "desc": "GI pipes, MS angles & channels — Balaji Steel stock, ISI marked.",
+      "seo_score": 85,
+      "source_supplier": "Balaji Steel Traders",
+      "published_at": "2026-09-18T14:00:00Z",
+      "created_at": "2026-09-17T09:00:00Z"
+    },
+    {
+      "id": "lst-002",
+      "title": "Copper wires & cables",
+      "category": "Copper wires & cables",
+      "price": 0,
+      "unit": "coil",
+      "status": "draft",
+      "marketplaces": [],
+      "urls": {},
+      "desc": "",
+      "seo_score": 40,
+      "source_supplier": "",
+      "created_at": "2026-09-18T10:00:00Z"
+    },
+    {
+      "id": "lst-003",
+      "title": "Cement & masonry supplies",
+      "category": "Cement & masonry",
+      "price": 0,
+      "unit": "bag",
+      "status": "draft",
+      "marketplaces": [],
+      "urls": {},
+      "desc": "",
+      "seo_score": 35,
+      "source_supplier": "",
+      "created_at": "2026-09-18T10:05:00Z"
+    }
+  ]
 }

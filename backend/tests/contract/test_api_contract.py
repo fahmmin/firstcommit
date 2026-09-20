@@ -366,9 +366,20 @@ def test_install_agent_template(client):
 
 
 def test_install_factory_template_returns_prompt(client):
-    r = client.post("/templates/digital-presence/install", json={"tenant_id": "ramesh_auto"})
+    # prompt-only template (no agent_spec) → still takes the needs_factory path
+    r = client.post("/templates/chase-overdue/install", json={"tenant_id": "ramesh_auto"})
     assert r.status_code == 200
     assert r.json()["status"] == "needs_factory" and r.json()["prompt"]
+
+
+def test_install_digital_presence_creates_agent(client):
+    # presence tools exist now — installs a real agent like the other agent_specs
+    before = {a["id"] for a in client.get("/agents").json()}
+    r = client.post("/templates/digital-presence/install", json={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    assert r.json()["created_by"] == "factory"
+    after = {a["id"] for a in client.get("/agents").json()}
+    assert r.json()["id"] in after and r.json()["id"] not in before
 
 
 # ---------- Round 4: onboarding ----------
@@ -386,9 +397,9 @@ def test_onboarding_autohire(client):
     body = r.json()
     assert _keys(body) >= _keys(_ep("POST /onboarding")["response"])
     assert body["onboarded"] is True and body["memories_created"] >= 2
-    # late_payments (tool-backed) → installed; no_online_presence (no tools) → suggested
-    assert len(body["agents_installed"]) >= 1
-    assert any(s["template_id"] == "digital-presence" for s in body["suggested_agents"])
+    # late_payments → installed; no_online_presence → installed too (presence tools exist)
+    assert len(body["agents_installed"]) >= 2
+    assert any(a["name"] == "Digital Presence Agent" for a in body["agents_installed"])
     assert any(a["id"] not in before for a in body["agents_installed"])
     # settings persisted + memory searchable
     assert client.get("/settings").json()["prefs"]["credit_terms_days"] == 45

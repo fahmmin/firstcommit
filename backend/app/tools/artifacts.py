@@ -77,12 +77,23 @@ class FinancialReport(BaseModel):
     ask: str = ""                        # e.g. "Seeking ₹15L working-capital line"
 
 
+class Storefront(BaseModel):
+    """Public product-catalog page — the digital-presence agent's shareable storefront."""
+    business: str = ""
+    tagline: str = ""
+    contact: str = ""
+    products: list = []                # [{title, price, unit, category, desc}]
+    marketplaces: list = []            # ["facebook_marketplace", "indiamart", ...]
+    note: str = ""
+
+
 TEMPLATES: dict[str, type[BaseModel]] = {
     "tracking_page": TrackingPage,
     "invoice_summary": InvoiceSummary,
     "supplier_compare": SupplierCompare,
     "payment_card": PaymentCard,
     "financial_report": FinancialReport,
+    "storefront": Storefront,
 }
 
 
@@ -152,7 +163,9 @@ def artifact_tools(tenant_id: str, created_by: str = "agent") -> list:
         supplier_compare (category, suppliers[], recommendation),
         payment_card (payer, amount, invoice_no, due_date, pay_link),
         financial_report (business, period, revenue, expenses, net_margin_pct,
-        cash_on_hand, projections[{month,revenue,expenses}], highlights[], ask).
+        cash_on_hand, projections[{month,revenue,expenses}], highlights[], ask),
+        storefront (business, tagline, contact, products[{title,price,unit,category,desc}],
+        marketplaces[], note).
         Fill `data` for the chosen template; returns a share link."""
         try:
             row = create_artifact_impl(tenant_id, title, template, data, created_by=created_by)
