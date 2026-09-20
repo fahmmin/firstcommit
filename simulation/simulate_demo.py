@@ -185,6 +185,19 @@ def main() -> int:
               len(cats) >= 5 and inst.get("created_by") == "factory"
               and inst["id"] in after_agents and inst["id"] not in before_agents)
 
+        # 18b. Round 4 fix — kanban drag persists via PATCH /tasks/{id} (col↔status)
+        tk = c.post("/tasks", json={"tenant_id": TENANT, "title": "Kanban card",
+                                    "agent": "vasool", "col": "todo"}).json()
+        moved = c.patch(f"/tasks/{tk['id']}", json={"tenant_id": TENANT, "col": "done"}).json()
+        check("kanban drag persists", "status→done via col",
+              f"{moved.get('status')}/{moved.get('col')}",
+              moved.get("status") == "done" and moved.get("col") == "done")
+
+        # 18c. Round 4 fix — ₹ is real UTF-8 (not mojibaked) on the wire
+        raw = c.post("/chat", json={"tenant_id": TENANT, "text": "show overdue invoices"}).content
+        check("utf-8 rupee on the wire", "₹ present", "u20b9" ,
+              "₹".encode("utf-8") in raw)
+
         # 19. Round 4 — onboarding: rich answers → memory + auto-hire → agent cites it
         onb = c.post("/onboarding", json={"tenant_id": TENANT,
               "business": {"city": "Faridabad"}, "prefs": {"credit_terms_days": 60},

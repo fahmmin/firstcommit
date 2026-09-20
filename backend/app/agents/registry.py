@@ -18,6 +18,7 @@ from ..models import MockModel, make_model
 from ..store import DATA_DIR
 from ..tools.artifacts import artifact_tools
 from ..tools.context import build_memory_suffix, memory_tools
+from ..tools.websearch import web_search_tools
 from . import mock_rules
 from .specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec, BUILTIN_SPECS, build_tool_map
 
@@ -113,7 +114,8 @@ class AgentRegistry:
         if not raw:
             return None
         spec = AgentSpec(**raw)
-        extra = artifact_tools(self.tenant_id, created_by=spec.id) + memory_tools(self.tenant_id)
+        extra = (artifact_tools(self.tenant_id, created_by=spec.id)
+                 + memory_tools(self.tenant_id) + web_search_tools(self.tenant_id))
         agent = Agent(
             name=spec.name,
             model=make_model(rules=mock_rules.rules_for_tools(spec.tools), role="worker"),
@@ -216,6 +218,7 @@ class AgentRegistry:
             description="Hires new specialist agents when the owner describes a problem the team can't solve — new agent requests, logistics help, anything needing a specialist that doesn't exist yet.",
             preserve_context=True,
         ))
+        subs += web_search_tools(self.tenant_id)  # web/deep mode
         self._orchestrator = Agent(
             name="Sahayak",
             model=make_model(rules=mock_rules.ORCHESTRATOR_RULES, role="orchestrator"),
