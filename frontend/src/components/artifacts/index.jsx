@@ -271,6 +271,98 @@ function Storefront({ data = {} }) {
   )
 }
 
+/* ── business_report ───────────────────────────────────────── */
+// Generic report document — KPI tiles + sections (table | bars | list | text).
+// Rendered on the Reports page AND the public share view; the backend PDF
+// renderer consumes the same {kpis, sections} shape.
+function BusinessReport({ data = {} }) {
+  return (
+    <div className="space-y-5">
+      {(data.period || data.subtitle) && (
+        <div className="text-[11px] text-slate-500 -mt-1">
+          {[data.period, data.subtitle].filter(Boolean).join(' · ')}
+        </div>
+      )}
+
+      {(data.kpis || []).length > 0 && (
+        <div className={`grid gap-2 ${data.kpis.length > 4 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {data.kpis.map((k, i) => (
+            <div key={i} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+              <div className="text-[9px] text-slate-400 uppercase tracking-wide">{k.label}</div>
+              <div className="text-[15px] font-semibold text-ink mt-1 leading-none">{k.value}</div>
+              {k.sub && <div className="text-[9px] text-slate-400 mt-1">{k.sub}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(data.sections || []).map((sec, i) => (
+        <div key={i}>
+          <div className="text-[12px] font-semibold text-ink mb-2 pb-1.5 border-b border-slate-100">
+            {sec.heading}
+          </div>
+
+          {sec.kind === 'table' && (sec.columns || []).length > 0 && (
+            <div className="rounded-xl border border-slate-100 overflow-hidden">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-ink text-white">
+                    {sec.columns.map((c, j) => (
+                      <th key={j} className={`px-3 py-2 font-medium ${j === sec.columns.length - 1 ? 'text-right' : 'text-left'}`}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(sec.rows || []).map((r, ri) => (
+                    <tr key={ri} className={ri % 2 ? 'bg-slate-50/70' : 'bg-white'}>
+                      {r.map((c, j) => (
+                        <td key={j} className={`px-3 py-2 text-slate-600 ${j === r.length - 1 ? 'text-right font-medium text-ink' : ''}`}>{c}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {sec.kind === 'bars' && (
+            <div className="space-y-2">
+              {(sec.items || []).map((it, j) => {
+                const mx = Math.max(1, ...sec.items.map(x => x.value || 0))
+                return (
+                  <div key={j} className="flex items-center gap-3 text-[11px]">
+                    <span className="w-[32%] truncate text-slate-600">{it.label}</span>
+                    <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${(it.value / mx) * 100}%` }} />
+                    </div>
+                    <span className="w-[18%] text-right font-semibold text-ink">{it.display}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {sec.kind === 'list' && (
+            <ul className="space-y-1.5">
+              {(sec.items || []).map((it, j) => (
+                <li key={j} className="flex items-start gap-2 text-[12px] text-slate-600">
+                  <CheckCircle2 size={12} className="text-accent mt-0.5 shrink-0" /> {it}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {(!sec.kind || sec.kind === 'text') && sec.text && (
+            <p className="text-[12px] leading-relaxed text-slate-600">{sec.text}</p>
+          )}
+
+          {sec.note && <div className="text-[9px] italic text-slate-400 mt-1.5">{sec.note}</div>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export const ARTIFACT_TEMPLATES = {
   tracking_page: TrackingPage,
   invoice_summary: InvoiceSummary,
@@ -278,4 +370,5 @@ export const ARTIFACT_TEMPLATES = {
   payment_card: PaymentCard,
   financial_report: FinancialReport,
   storefront: Storefront,
+  business_report: BusinessReport,
 }

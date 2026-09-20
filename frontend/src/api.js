@@ -140,4 +140,19 @@ export const api = {
     return req('/context/upload', { method: 'POST', body: fd })
   },
   delContext: (id) => req(`/context/${id}?tenant_id=${TENANT}`, { method: 'DELETE' }),
+
+  // ── reports — real-data docs persisted as business_report artifacts ──
+  reportTypes: () => req('/reports/types').catch(() => demo.reports.types()),
+  generateReport: (reportType, title = '', visibility = 'private') =>
+    req('/reports/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenant_id: TENANT, report_type: reportType, title, visibility }) })
+      .catch(() => demo.reports.generate(reportType, title)),
+  // binary download — returns {blob, filename}; caller does URL.createObjectURL
+  reportPdf: async (id, isPublic = false) => {
+    const path = isPublic ? `/public/artifacts/${id}/pdf` : `/reports/${id}/pdf?tenant_id=${TENANT}`
+    const r = await fetch(`${BASE}${path}`, { headers: { 'x-demo-token': gateToken() } })
+    if (!r.ok) throw new Error(`pdf → ${r.status}`)
+    const fname = (r.headers.get('content-disposition') || '').match(/filename="?([^";]+)/)?.[1] || `report-${id}.pdf`
+    return { blob: await r.blob(), filename: fname }
+  },
 }

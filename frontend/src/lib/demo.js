@@ -119,6 +119,46 @@ export const demo = {
     file_id: uid(), filename, collection: 'invoices', imported: 34, skipped: 2,
     sample: [{ invoice_no: 'INV-0101', buyer: 'Kapil Auto', amount: 12400, due_date: '2026-10-02' }],
   }),
+  // offline fallback — same REPORT_TYPES metadata + a canned business_report artifact
+  reports: {
+    types: () => [
+      { id: 'business_overview', name: 'Business overview', desc: 'The whole shop on one page.', sections: ['KPIs', 'Invoice status', 'Top debtors'] },
+      { id: 'receivables_aging', name: 'Receivables aging', desc: 'Who owes what and how late.', sections: ['Aging buckets', 'Open invoices'] },
+      { id: 'cashflow_forecast', name: 'Cash flow forecast', desc: 'Money-in vs money-out, next 90 days.', sections: ['Cash events', 'Verdict'] },
+      { id: 'gst_summary', name: 'GST summary', desc: 'Output tax by month + filing docs.', sections: ['Monthly billed + GST'] },
+      { id: 'ops_digest', name: 'Operations digest', desc: 'What the AI team did.', sections: ['Active agents', 'Activity'] },
+    ],
+    generate: (reportType, title) => {
+      const row = {
+        id: uid(), title: title || 'Business overview', template: 'business_report',
+        created_by: 'reports-page', visibility: 'private',
+        created_at: new Date().toISOString(), share_path: '',
+        data: {
+          business: 'Ramesh Auto Components', period: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+          subtitle: 'Owner digest — receivables, payables and what needs a decision',
+          kpis: [
+            { label: 'Outstanding', value: '₹4.9L', sub: '11 unpaid invoices' },
+            { label: 'Overdue', value: '₹1.8L', sub: '4 invoices' },
+            { label: 'Collected', value: '₹6.2L', sub: 'paid invoices' },
+            { label: 'Payables', value: '₹1.2L', sub: '3 vendor dues' },
+          ],
+          sections: [
+            { heading: 'Invoices by status', kind: 'table', columns: ['Status', 'Invoices', 'Amount'],
+              rows: [['paid', '5', '₹6,20,000'], ['due soon', '7', '₹3,10,000'], ['overdue', '4', '₹1,80,000']] },
+            { heading: 'Largest outstanding — by buyer', kind: 'bars',
+              items: [
+                { label: 'Sharma Constructions', value: 124500, display: '₹1,24,500' },
+                { label: 'Om Sai Electric Works', value: 56000, display: '₹56,000' },
+                { label: 'Kapil Auto', value: 34800, display: '₹34,800' },
+              ] },
+            { heading: 'Read', kind: 'text',
+              text: 'Offline preview — connect the backend for live figures pulled from your ledgers.' },
+          ],
+        },
+      }
+      DEMO.artifacts.push(row); return row
+    },
+  },
 }
 
 // Real substring search over LIVE endpoints where they exist + demo extras —

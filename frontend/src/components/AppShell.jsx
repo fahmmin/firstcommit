@@ -5,7 +5,7 @@ import { session } from '../lib/auth.js'
 import { groupAgents } from '../lib/agentGroups.js'
 import {
   PlugZap, LayoutTemplate, RotateCcw, Activity, Settings2, FileText, LogOut,
-  Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search,
+  Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search, FileBarChart,
 } from 'lucide-react'
 import { SpinPlus } from './anim/index.jsx'
 import { Blobs } from './Logo.jsx'
@@ -17,6 +17,7 @@ const NAV = [
   ['#/notifications', 'Notifications', Activity],
   ['#/people', 'People', Users],
   ['#/analytics', 'Analytics', Activity],
+  ['#/reports', 'Reports', FileBarChart],
   ['#/logs', 'Logs', ScrollText],
   ['#/context', 'Business context', Brain],
   ['#/artifacts', 'Artifacts', FileText],

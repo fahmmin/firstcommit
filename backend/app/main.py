@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 
@@ -30,6 +30,7 @@ from .notifier import get_notifier
 from .scheduler import run_once as scheduler_run_once, start as scheduler_start
 from .store import DATA_DIR, get_store
 from .tools.artifacts import TEMPLATES, create_artifact_impl
+from .reports import REPORT_TYPES, build_report
 from .tools.comms import send_alert_impl
 from .tools.documents import cosine, embed_text, ingest_document_impl
 from .tools.importer import import_excel_impl
@@ -786,6 +787,60 @@ def get_public_artifact(artifact_id: str):
     if not row or row.get("visibility", "public") != "public":
         raise HTTPException(404, "not found")
     return row
+
+
+# ================= reports — real-data documents + PDF export =================
+
+class ReportReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    report_type: str
+    title: str = ""
+    visibility: str = "private"
+
+
+@app.get("/reports/types")
+def report_types():
+    return REPORT_TYPES
+
+
+@app.post("/reports/generate")
+def generate_report(req: ReportReq):
+    """Aggregate real tenant data → persist as a business_report artifact."""
+    try:
+        built = build_report(req.tenant_id, req.report_type, req.title)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    row = create_artifact_impl(req.tenant_id, built["title"], "business_report",
+                               built["data"], created_by="reports-page",
+                               visibility=req.visibility)
+    return row
+
+
+def _report_pdf_response(row: dict):
+    from .pdf_report import render_report_pdf
+    pdf = render_report_pdf(row.get("title", "Report"), row.get("data") or {},
+                            business=(row.get("data") or {}).get("business", ""))
+    fname = f"{(row.get('title') or 'report').lower().replace(' ', '-')}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+@app.get("/reports/{artifact_id}/pdf")
+def report_pdf(artifact_id: str, tenant_id: str = "ramesh_auto"):
+    row = deps.store.get_artifact(tenant_id, artifact_id)
+    if not row or row.get("template") != "business_report":
+        raise HTTPException(404, "no such report")
+    return _report_pdf_response(row)
+
+
+@app.get("/public/artifacts/{artifact_id}/pdf")
+def public_report_pdf(artifact_id: str):
+    """PDF download on the share link — same visibility gate as the page itself."""
+    row = deps.store.get_artifact("ramesh_auto", artifact_id)
+    if not row or row.get("visibility", "public") != "public" \
+            or row.get("template") != "business_report":
+        raise HTTPException(404, "not found")
+    return _report_pdf_response(row)
 
 
 @app.patch("/artifacts/{artifact_id}")

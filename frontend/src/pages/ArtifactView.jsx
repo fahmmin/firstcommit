@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { Blobs } from '../components/Logo.jsx'
 import { ARTIFACT_TEMPLATES } from '../components/artifacts/index.jsx'
-import { Share2, Check, Sparkles, Globe, Lock } from 'lucide-react'
+import { Share2, Check, Sparkles, Globe, Lock, Download } from 'lucide-react'
 
 // Shareable artifact page — #/a/:id. Public: no auth required.
 export default function ArtifactView({ param }) {
@@ -31,15 +31,29 @@ export default function ArtifactView({ param }) {
           <span className="font-semibold text-[14px] tracking-tight text-ink">Sahayak</span>
         </a>
         {art && (
-          <button onClick={copy}
-            className="flex items-center gap-1.5 text-[11px] font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:border-ink hover:text-ink transition">
-            {copied ? <><Check size={11} className="text-emerald-500" /> Copied</> : <><Share2 size={11} /> Share link</>}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {art.template === 'business_report' && art.visibility === 'public' && (
+              <button onClick={async () => {
+                  const { blob, filename } = await api.reportPdf(art.id, true).catch(() => ({}))
+                  if (!blob) return
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+                  setTimeout(() => URL.revokeObjectURL(url), 4000)
+                }}
+                className="flex items-center gap-1.5 text-[11px] font-medium rounded-lg bg-ink text-white px-3 py-1.5 hover:bg-ink/85 transition">
+                <Download size={11} /> PDF
+              </button>
+            )}
+            <button onClick={copy}
+              className="flex items-center gap-1.5 text-[11px] font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:border-ink hover:text-ink transition">
+              {copied ? <><Check size={11} className="text-emerald-500" /> Copied</> : <><Share2 size={11} /> Share link</>}
+            </button>
+          </div>
         )}
       </header>
 
       <main className="flex-1 grid place-items-center px-6 py-10">
-        <div className="w-full max-w-[440px]">
+        <div className={`w-full ${art?.template === 'business_report' ? 'max-w-3xl' : 'max-w-[440px]'}`}>
           {err && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-[13px] text-slate-500">{err}</div>}
           {!art && !err && <div className="text-center text-[12px] text-slate-400 animate-pulse">Loading artifact…</div>}
           {art && (

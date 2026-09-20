@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 from strands import tool
 
 from .. import deps
+from ..reports import BusinessReport
 
 
 class TrackingPage(BaseModel):
@@ -94,6 +95,7 @@ TEMPLATES: dict[str, type[BaseModel]] = {
     "payment_card": PaymentCard,
     "financial_report": FinancialReport,
     "storefront": Storefront,
+    "business_report": BusinessReport,
 }
 
 
