@@ -45,3 +45,6 @@ simulation/fixtures/
 # deploy packaging (simulation/deploy_aws.py)
 build/
 uvicorn.log
+
+# vite temp
+vite.config.js.timestamp-*.mjs
