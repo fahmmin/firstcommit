@@ -115,6 +115,42 @@ def main() -> int:
         check("calendar unified", "3 kinds", str(sorted(kinds)),
               {"invoice_due", "alert", "task"} <= kinds)
 
+        # 13. Round 2 — Excel import → real ledger rows
+        import io
+        from openpyxl import Workbook
+        wb = Workbook(); ws = wb.active
+        ws.append(["Invoice No", "Buyer", "Amount", "Due Date"])
+        ws.append(["INV-8001", "Ludhiana Motors", 15600, "2026-10-15"])
+        ws.append(["INV-8002", "Amritsar Spares", 9200, "2026-08-20"])
+        buf = io.BytesIO(); wb.save(buf)
+        before = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        imp = c.post("/import/excel",
+                     files={"file": ("ledger.xlsx", buf.getvalue(),
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+                     data={"tenant_id": TENANT}).json()
+        after = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        check("excel import", "2 imported → ledger grows", f"{imp['imported']}/{after - before}",
+              imp["imported"] == 2 and after - before == 2)
+
+        # 14. Round 2 — memory taught, then referenced by the agent (real memory)
+        c.post("/memories", json={"tenant_id": TENANT,
+               "text": "Falcon Traders is a cash-only buyer — never offer credit"})
+        rm = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                    "text": "what do you remember about Falcon?"}).json()
+        check("memory referenced in reply", "mentions Falcon", rm["reply"][:80],
+              "falcon" in rm["reply"].lower())
+
+        # 15. Round 2 — agent builds an artifact, fetchable via share link
+        art = c.post("/artifacts", json={"tenant_id": TENANT, "title": "Tracking — ORD-9",
+                     "template": "tracking_page",
+                     "data": {"order_id": "ORD-9", "carrier": "SafeRoad Carriers",
+                              "from": "Ludhiana", "to": "Faridabad", "status": "in_transit",
+                              "progress_pct": 55}}).json()
+        fetched = c.get(f"/artifacts/{art['id']}", params={"tenant_id": TENANT}).json()
+        check("artifact created + fetchable", "same order_id via /a/ link",
+              f"{art['share_path']}", fetched.get("data", {}).get("order_id") == "ORD-9"
+              and art["share_path"] == f"/a/{art['id']}")
+
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{'='*60}\n{passed}/{len(results)} checks passed")
     return 0 if passed == len(results) else 1

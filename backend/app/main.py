@@ -19,7 +19,9 @@ from .agents.specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec
 from .notifier import get_notifier
 from .scheduler import run_once as scheduler_run_once, start as scheduler_start
 from .store import DATA_DIR, get_store
+from .tools.artifacts import TEMPLATES, create_artifact_impl
 from .tools.comms import send_alert_impl
+from .tools.importer import import_excel_impl
 from .tools.invoices import create_invoice_impl, draft_reminder_impl, parse_invoice_file
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
@@ -532,6 +534,141 @@ def patch_settings(req: SettingsPatch):
             nxt[k] = cur[k]
     deps.store.put_settings(req.tenant_id, nxt)
     return {"status": "saved"}
+
+
+# ================= Round 2 — import / memories / artifacts / search =================
+
+
+@app.post("/import/excel")
+async def import_excel(file: UploadFile = File(...), tenant_id: str = Form("ramesh_auto")):
+    """Owner drops an .xlsx/Tally ledger export → rows become invoice entries."""
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    file_id = f"f-imp-{uuid.uuid4().hex[:6]}"
+    dest = UPLOAD_DIR / f"{file_id}_{file.filename}"
+    with dest.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    try:
+        result = import_excel_impl(tenant_id, str(dest), filename=file.filename or "ledger.xlsx")
+    except Exception as e:  # a bad file must never 500 — report a clean skip
+        raise HTTPException(400, f"could not read spreadsheet: {type(e).__name__}: {e}")
+    return result
+
+
+class MemoryReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    text: str
+    source: str = "owner"
+
+
+@app.get("/memories")
+def memories(tenant_id: str = "ramesh_auto"):
+    rows = deps.store.list_memories(tenant_id)
+    rows.sort(key=lambda m: m.get("created_at", ""), reverse=True)
+    return rows
+
+
+@app.post("/memories")
+def add_memory(req: MemoryReq):
+    mem = deps.store.put_memory(req.tenant_id, {
+        "id": f"mem-{uuid.uuid4().hex[:6]}", "text": req.text, "source": req.source,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    deps.record_action("memory_added", {"id": mem["id"], "text": mem["text"]})
+    # new memory should reach live agents — rebuild them with the fresh context
+    reg.get_registry(req.tenant_id).reset_agents()
+    return {"id": mem["id"], "status": "saved"}
+
+
+@app.delete("/memories/{memory_id}")
+def delete_memory(memory_id: str, tenant_id: str = "ramesh_auto"):
+    if not deps.store.delete_memory(tenant_id, memory_id):
+        raise HTTPException(404, "no such memory")
+    reg.get_registry(tenant_id).reset_agents()
+    return {"status": "deleted"}
+
+
+@app.get("/artifacts")
+def artifacts(tenant_id: str = "ramesh_auto"):
+    rows = deps.store.list_artifacts(tenant_id)
+    rows.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+    return [{"id": a["id"], "title": a["title"], "template": a["template"],
+             "created_by": a.get("created_by", ""), "created_at": a.get("created_at", ""),
+             "share_path": a.get("share_path", f"/a/{a['id']}")} for a in rows]
+
+
+@app.get("/artifacts/{artifact_id}")
+def artifact_detail(artifact_id: str, tenant_id: str = "ramesh_auto"):
+    a = deps.store.get_artifact(tenant_id, artifact_id)
+    if not a:
+        raise HTTPException(404, "no such artifact")
+    return a
+
+
+class ArtifactReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    title: str
+    template: str
+    data: dict = {}
+    created_by: str = "owner"
+
+
+@app.post("/artifacts")
+def create_artifact(req: ArtifactReq):
+    """Direct artifact creation (agents use the create_artifact TOOL; this is for UI/tests)."""
+    if req.template not in TEMPLATES:
+        raise HTTPException(400, f"unknown template — allowed: {sorted(TEMPLATES)}")
+    try:
+        return create_artifact_impl(req.tenant_id, req.title, req.template, req.data,
+                                    created_by=req.created_by)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.get("/search")
+def search(q: str = "", tenant_id: str = "ramesh_auto"):
+    """Enterprise search — case-insensitive substring over title/desc/meta fields."""
+    ql = q.strip().lower()
+    results: dict[str, list] = {"invoices": [], "suppliers": [], "carriers": [],
+                                "agents": [], "tasks": [], "memories": [], "documents": []}
+    if not ql:
+        return {"q": q, "results": results}
+
+    def hit(*parts) -> bool:
+        return any(ql in str(p).lower() for p in parts if p)
+
+    for i in deps.store.list_invoices(tenant_id):
+        if hit(i.get("buyer"), i.get("invoice_no"), i.get("items")):
+            meta = f"₹{i.get('amount', 0):,} · {i.get('status', '')}"
+            if i.get("days_overdue"):
+                meta += f" {i['days_overdue']}d"
+            results["invoices"].append({"id": i["id"],
+                "title": f"{i.get('invoice_no', '')} — {i.get('buyer', '')}", "meta": meta, "ref": "#/app"})
+    for s in deps.store.list_suppliers(tenant_id):
+        if hit(s.get("name"), s.get("category")):
+            results["suppliers"].append({"id": s["id"], "title": s.get("name", ""),
+                "meta": f"{s.get('category', '')} · trust {s.get('trust_score', '')}", "ref": "#/app"})
+    for c in deps.store.list_carriers(tenant_id):
+        if hit(c.get("name"), c.get("route")):
+            results["carriers"].append({"id": c["id"], "title": c.get("name", ""),
+                "meta": f"{c.get('route', '')} · ₹{c.get('rate_per_kg', '')}/kg", "ref": "#/app"})
+    for a in reg.get_registry(tenant_id).specs():
+        if hit(a.get("name"), a.get("goal"), a.get("description")):
+            results["agents"].append({"id": a["id"], "title": a.get("name", ""),
+                "meta": a.get("description") or a.get("goal", ""), "ref": f"#/agents/{a['id']}"})
+    for t in deps.store.list_tasks(tenant_id):
+        if hit(t.get("title"), t.get("details")):
+            results["tasks"].append({"id": t["id"], "title": t.get("title", ""),
+                "meta": t.get("status", ""), "ref": "#/tasks"})
+    for m in deps.store.list_memories(tenant_id):
+        if hit(m.get("text")):
+            results["memories"].append({"id": m["id"], "title": m.get("text", ""),
+                "meta": m.get("source", "owner"), "ref": "#/settings"})
+    if UPLOAD_DIR.exists():
+        for p in UPLOAD_DIR.iterdir():
+            if p.is_file() and ql in p.name.lower():
+                results["documents"].append({"id": p.stem, "title": p.name,
+                    "meta": "uploaded document", "ref": "#/app"})
+    return {"q": q, "results": results}
 
 
 handler = None

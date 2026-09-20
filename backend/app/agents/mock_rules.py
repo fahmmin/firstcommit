@@ -64,6 +64,30 @@ TOOL_BEHAVIORS: dict[str, dict] = {
 }
 
 
+# Memory recall + artifact building — every agent gets these tools, so their
+# mock behaviors live here (outside TOOL_REGISTRY, which is factory-facing).
+EXTRA_RULES: list[MockRule] = [
+    MockRule(
+        keywords=["remember", "memory", "recall", "know about", "told you",
+                  "context", "note about", "what do you know", "taught you"],
+        tool="recall_context",
+        args=lambda t: {"query": t},
+    ),
+    MockRule(
+        keywords=["tracking page", "tracking link", "build a tracker", "share a page",
+                  "make a page", "artifact", "mini app", "shareable"],
+        tool="create_artifact",
+        args=lambda t: {
+            "title": "Tracking — latest order",
+            "template": "tracking_page",
+            "data": {"order_id": "ORD-1042", "carrier": "SafeRoad Carriers",
+                     "from": "Ludhiana", "to": "Faridabad", "eta": "tomorrow 11am",
+                     "status": "in_transit", "progress_pct": 62},
+        },
+    ),
+]
+
+
 def rules_for_tools(tool_names: list[str]) -> list[MockRule]:
     """Build MockRules for any subset of registry tools (works for factory agents too)."""
     rules = []
@@ -71,7 +95,7 @@ def rules_for_tools(tool_names: list[str]) -> list[MockRule]:
         b = TOOL_BEHAVIORS.get(name)
         if b:
             rules.append(MockRule(keywords=b["keywords"], tool=name, args=b["args"]))
-    return rules
+    return rules + EXTRA_RULES
 
 
 # ---- orchestrator routing (tools = sub-agents) ----
