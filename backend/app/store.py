@@ -95,6 +95,32 @@ class Store(ABC):
     @abstractmethod
     def put_activity(self, tenant_id: str, event: dict) -> dict: ...
 
+    # memories (business context — injected into every agent's system prompt)
+    @abstractmethod
+    def list_memories(self, tenant_id: str) -> list[dict]: ...
+    @abstractmethod
+    def put_memory(self, tenant_id: str, memory: dict) -> dict: ...
+    @abstractmethod
+    def delete_memory(self, tenant_id: str, memory_id: str) -> bool: ...
+
+    # artifacts (template-bound mini-apps agents build via the create_artifact tool)
+    @abstractmethod
+    def list_artifacts(self, tenant_id: str) -> list[dict]: ...
+    @abstractmethod
+    def get_artifact(self, tenant_id: str, artifact_id: str) -> dict | None: ...
+    @abstractmethod
+    def put_artifact(self, tenant_id: str, artifact: dict) -> dict: ...
+
+    # documents (business-context brain: any file/note, auto-tagged + searchable)
+    @abstractmethod
+    def list_documents(self, tenant_id: str) -> list[dict]: ...
+    @abstractmethod
+    def get_document(self, tenant_id: str, doc_id: str) -> dict | None: ...
+    @abstractmethod
+    def put_document(self, tenant_id: str, doc: dict) -> dict: ...
+    @abstractmethod
+    def delete_document(self, tenant_id: str, doc_id: str) -> bool: ...
+
     # seed/reset
     @abstractmethod
     def reset(self, tenant_id: str, seed: dict) -> None: ...
@@ -104,7 +130,8 @@ class LocalStore(Store):
     """One JSON file per collection under backend/data/, shaped {tenant_id: [rows]}."""
 
     _COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
-                    "tasks", "notifications", "connectors", "settings", "activity")
+                    "tasks", "notifications", "connectors", "settings", "activity",
+                    "memories", "artifacts", "documents")
 
     def __init__(self, data_dir: Path | None = None):
         self.dir = data_dir or DATA_DIR
@@ -151,6 +178,16 @@ class LocalStore(Store):
                 self._write(coll, data)
                 return copy.deepcopy(r)
         return None
+
+    def _delete(self, coll: str, tenant_id: str, row_id: str) -> bool:
+        data = self._read(coll)
+        rows = data.setdefault(tenant_id, [])
+        kept = [r for r in rows if r.get("id") != row_id]
+        if len(kept) == len(rows):
+            return False
+        data[tenant_id] = kept
+        self._write(coll, data)
+        return True
 
     # specs
     def list_specs(self, tenant_id):
@@ -256,6 +293,39 @@ class LocalStore(Store):
     def put_activity(self, tenant_id, event):
         return self._put("activity", tenant_id, event)
 
+    # memories
+    def list_memories(self, tenant_id):
+        return self._rows("memories", tenant_id)
+
+    def put_memory(self, tenant_id, memory):
+        return self._put("memories", tenant_id, memory)
+
+    def delete_memory(self, tenant_id, memory_id):
+        return self._delete("memories", tenant_id, memory_id)
+
+    # artifacts
+    def list_artifacts(self, tenant_id):
+        return self._rows("artifacts", tenant_id)
+
+    def get_artifact(self, tenant_id, artifact_id):
+        return next((a for a in self.list_artifacts(tenant_id) if a["id"] == artifact_id), None)
+
+    def put_artifact(self, tenant_id, artifact):
+        return self._put("artifacts", tenant_id, artifact)
+
+    # documents
+    def list_documents(self, tenant_id):
+        return self._rows("documents", tenant_id)
+
+    def get_document(self, tenant_id, doc_id):
+        return next((d for d in self.list_documents(tenant_id) if d["id"] == doc_id), None)
+
+    def put_document(self, tenant_id, doc):
+        return self._put("documents", tenant_id, doc)
+
+    def delete_document(self, tenant_id, doc_id):
+        return self._delete("documents", tenant_id, doc_id)
+
     def reset(self, tenant_id, seed):
         for coll in self._COLLECTIONS:
             if coll in seed:
@@ -303,6 +373,9 @@ class DynamoStore(Store):
         "connectors": "DDB_TABLE_CONNECTORS",
         "settings": "DDB_TABLE_SETTINGS",
         "activity": "DDB_TABLE_ACTIVITY",
+        "memories": "DDB_TABLE_MEMORIES",
+        "artifacts": "DDB_TABLE_ARTIFACTS",
+        "documents": "DDB_TABLE_DOCUMENTS",
     }
 
     def __init__(self, region: str | None = None):
@@ -440,6 +513,45 @@ class DynamoStore(Store):
 
     def put_activity(self, tenant_id, event):
         return self._put("activity", tenant_id, event)
+
+    # memories
+    def list_memories(self, tenant_id):
+        return self._all("memories", tenant_id)
+
+    def put_memory(self, tenant_id, memory):
+        return self._put("memories", tenant_id, memory)
+
+    def delete_memory(self, tenant_id, memory_id):
+        if not self._put_get("memories", tenant_id, memory_id):
+            return False
+        self.tables["memories"].delete_item(Key={"tenant_id": tenant_id, "id": memory_id})
+        return True
+
+    # artifacts
+    def list_artifacts(self, tenant_id):
+        return self._all("artifacts", tenant_id)
+
+    def get_artifact(self, tenant_id, artifact_id):
+        return self._put_get("artifacts", tenant_id, artifact_id)
+
+    def put_artifact(self, tenant_id, artifact):
+        return self._put("artifacts", tenant_id, artifact)
+
+    # documents
+    def list_documents(self, tenant_id):
+        return self._all("documents", tenant_id)
+
+    def get_document(self, tenant_id, doc_id):
+        return self._put_get("documents", tenant_id, doc_id)
+
+    def put_document(self, tenant_id, doc):
+        return self._put("documents", tenant_id, doc)
+
+    def delete_document(self, tenant_id, doc_id):
+        if not self._put_get("documents", tenant_id, doc_id):
+            return False
+        self.tables["documents"].delete_item(Key={"tenant_id": tenant_id, "id": doc_id})
+        return True
 
     def reset(self, tenant_id, seed):
         # clear every existing row for the tenant first — a spec-free seed

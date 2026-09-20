@@ -76,8 +76,16 @@
     { "id": "airtable", "name": "Airtable", "icon": "table", "status": "connected", "connected_at": "2026-09-18T10:00:00Z", "last_sync": "2026-09-19T01:00:00Z", "items_synced": 32, "description": "Sync ledger + suppliers to your base" },
     { "id": "whatsapp", "name": "WhatsApp", "icon": "message", "status": "available", "description": "Send payment reminders via wa.me deep links", "items_synced": 0 },
     { "id": "tally", "name": "Tally", "icon": "ledger", "status": "available", "description": "Import existing invoices", "items_synced": 0 },
-    { "id": "razorpay", "name": "Razorpay", "icon": "rupee", "status": "available", "description": "Payment links in reminders", "items_synced": 0 }
+    { "id": "razorpay", "name": "Razorpay", "icon": "rupee", "status": "available", "description": "Payment links in reminders", "items_synced": 0 },
+    { "id": "gmail", "name": "Gmail", "icon": "mail", "status": "available", "description": "Read payment confirmations + send reminders from your inbox", "items_synced": 0 },
+    { "id": "google_drive", "name": "Google Drive", "icon": "folder", "status": "available", "description": "Pull invoice PDFs + ledgers straight from Drive", "items_synced": 0 }
   ],
+  "memories": [
+    { "id": "mem-1", "text": "Sharma Motors always pays around 45 days — don't push too hard, they're a long-term buyer", "source": "owner", "created_at": "2026-09-19T03:00:00Z" },
+    { "id": "mem-2", "text": "Big orders (over ₹50,000) must go through a GST invoice only", "source": "owner", "created_at": "2026-09-19T03:05:00Z" },
+    { "id": "mem-3", "text": "Never source raw steel from Apex Alloys — quality issues last monsoon", "source": "owner", "created_at": "2026-09-19T03:10:00Z" }
+  ],
+  "artifacts": [],
   "settings": [
     { "id": "settings",
       "business": { "name": "Ramesh Auto Components", "owner": "Ramesh Gupta", "city": "Faridabad", "line": "auto components" },

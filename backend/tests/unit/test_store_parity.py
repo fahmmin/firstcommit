@@ -19,7 +19,8 @@ class TestStoreParity:
     T = "t1"
 
     _ALL_COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
-                        "tasks", "notifications", "connectors", "settings", "activity")
+                        "tasks", "notifications", "connectors", "settings", "activity",
+                        "memories", "artifacts", "documents")
 
     def _store(self, impl, tmp_path):
         if impl == "local":
@@ -111,3 +112,30 @@ class TestStoreParity:
         s.put_connector(self.T, {"id": "airtable", "status": "available"})
         s.update_connector(self.T, "airtable", status="connected", items_synced=32)
         assert s.list_connectors(self.T)[0]["items_synced"] == 32
+
+    def test_memory_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_memory(self.T, {"id": "m1", "text": "Sharma pays in 45d", "source": "owner"})
+        s.put_memory(self.T, {"id": "m2", "text": "GST invoice for big orders", "source": "owner"})
+        assert len(s.list_memories(self.T)) == 2
+        assert s.delete_memory(self.T, "m1") is True
+        assert s.delete_memory(self.T, "m1") is False  # already gone
+        assert [m["id"] for m in s.list_memories(self.T)] == ["m2"]
+
+    def test_artifact_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_artifact(self.T, {"id": "art-1", "title": "Tracking", "template": "tracking_page",
+                                "data": {"progress_pct": 62}})
+        got = s.get_artifact(self.T, "art-1")
+        assert got["template"] == "tracking_page" and got["data"]["progress_pct"] == 62
+        assert len(s.list_artifacts(self.T)) == 1
+
+    def test_document_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_document(self.T, {"id": "doc-1", "filename": "gstr.xlsx", "kind": "spreadsheet",
+                                "tags": ["tax", "finance"], "summary": "GST data"})
+        assert s.get_document(self.T, "doc-1")["tags"] == ["tax", "finance"]
+        assert len(s.list_documents(self.T)) == 1
+        assert s.delete_document(self.T, "doc-1") is True
+        assert s.delete_document(self.T, "doc-1") is False
+        assert s.list_documents(self.T) == []

@@ -4,6 +4,8 @@ uvicorn[standard]
 boto3
 pydantic
 python-multipart
+openpyxl
+cedarpy
 mangum
 pytest
 pytest-asyncio

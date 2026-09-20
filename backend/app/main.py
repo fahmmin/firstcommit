@@ -19,7 +19,10 @@ from .agents.specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec
 from .notifier import get_notifier
 from .scheduler import run_once as scheduler_run_once, start as scheduler_start
 from .store import DATA_DIR, get_store
+from .tools.artifacts import TEMPLATES, create_artifact_impl
 from .tools.comms import send_alert_impl
+from .tools.documents import cosine, embed_text, ingest_document_impl
+from .tools.importer import import_excel_impl
 from .tools.invoices import create_invoice_impl, draft_reminder_impl, parse_invoice_file
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
@@ -285,6 +288,25 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
     horizon = (date.today() + timedelta(days=30)).isoformat()
     payables = deps.store.list_payables(tenant_id)
     specs = reg.get_registry(tenant_id).specs()
+    pending = deps.store.list_alerts(tenant_id, status="pending_approval")
+    bookings = [a for a in pending if a.get("kind") == "booking"]
+
+    # "N things need you" — the morning-brief card
+    brief: list[dict] = []
+    if overdue:
+        brief.append({"icon": "receipt", "kind": "overdue",
+                      "title": f"{len(overdue)} invoices overdue",
+                      "detail": f"₹{sum(i['amount'] for i in overdue):,} locked", "ref": "#/app"})
+    if pending:
+        brief.append({"icon": "bell", "kind": "approval",
+                      "title": f"{len(pending)} action{'s' if len(pending) != 1 else ''} waiting for your approval",
+                      "detail": "drafted overnight — nothing sent yet", "ref": "#/notifications"})
+    if bookings:
+        brief.append({"icon": "truck", "kind": "shipment",
+                      "title": "Shipments on the move",
+                      "detail": f"{len(bookings)} pickup{'s' if len(bookings) != 1 else ''} awaiting confirmation",
+                      "ref": "#/calendar"})
+
     return {
         "receivables": {
             "total": sum(i["amount"] for i in open_inv),
@@ -294,11 +316,12 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
         },
         "capital_locked_long_terms": sum(i["amount"] for i in open_inv if i.get("terms_days", 30) >= 60),
         "payables_due_30d": sum(p["amount"] for p in payables if p.get("due", "9999") <= horizon),
-        "pending_approvals": len(deps.store.list_alerts(tenant_id, status="pending_approval")),
+        "pending_approvals": len(pending),
         "agents": {"total": len(specs),
                    "ai_hired": sum(1 for s in specs if s.get("created_by") == "factory")},
         "alerts_unread": sum(1 for n in deps.store.list_notifications(tenant_id)
                              if n.get("status") == "unread"),
+        "brief": brief,
         "recent_activity": deps.store.list_activity(tenant_id, limit=10),
     }
 
@@ -532,6 +555,344 @@ def patch_settings(req: SettingsPatch):
             nxt[k] = cur[k]
     deps.store.put_settings(req.tenant_id, nxt)
     return {"status": "saved"}
+
+
+# ================= Round 2 — import / memories / artifacts / search =================
+
+
+@app.post("/import/excel")
+async def import_excel(file: UploadFile = File(...), tenant_id: str = Form("ramesh_auto")):
+    """Owner drops an .xlsx/Tally ledger export → rows become invoice entries."""
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    file_id = f"f-imp-{uuid.uuid4().hex[:6]}"
+    dest = UPLOAD_DIR / f"{file_id}_{file.filename}"
+    with dest.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    try:
+        result = import_excel_impl(tenant_id, str(dest), filename=file.filename or "ledger.xlsx")
+    except Exception as e:  # a bad file must never 500 — report a clean skip
+        raise HTTPException(400, f"could not read spreadsheet: {type(e).__name__}: {e}")
+    return result
+
+
+class MemoryReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    text: str
+    source: str = "owner"
+
+
+@app.get("/memories")
+def memories(tenant_id: str = "ramesh_auto"):
+    rows = deps.store.list_memories(tenant_id)
+    rows.sort(key=lambda m: m.get("created_at", ""), reverse=True)
+    return rows
+
+
+@app.post("/memories")
+def add_memory(req: MemoryReq):
+    mem = deps.store.put_memory(req.tenant_id, {
+        "id": f"mem-{uuid.uuid4().hex[:6]}", "text": req.text, "source": req.source,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    deps.record_action("memory_added", {"id": mem["id"], "text": mem["text"]})
+    # new memory should reach live agents — rebuild them with the fresh context
+    reg.get_registry(req.tenant_id).reset_agents()
+    return {"id": mem["id"], "status": "saved"}
+
+
+@app.delete("/memories/{memory_id}")
+def delete_memory(memory_id: str, tenant_id: str = "ramesh_auto"):
+    if not deps.store.delete_memory(tenant_id, memory_id):
+        raise HTTPException(404, "no such memory")
+    reg.get_registry(tenant_id).reset_agents()
+    return {"status": "deleted"}
+
+
+@app.get("/artifacts")
+def artifacts(tenant_id: str = "ramesh_auto"):
+    rows = deps.store.list_artifacts(tenant_id)
+    rows.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+    return [{"id": a["id"], "title": a["title"], "template": a["template"],
+             "created_by": a.get("created_by", ""), "created_at": a.get("created_at", ""),
+             "share_path": a.get("share_path", f"/a/{a['id']}")} for a in rows]
+
+
+@app.get("/artifacts/{artifact_id}")
+def artifact_detail(artifact_id: str, tenant_id: str = "ramesh_auto"):
+    a = deps.store.get_artifact(tenant_id, artifact_id)
+    if not a:
+        raise HTTPException(404, "no such artifact")
+    return a
+
+
+class ArtifactReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    title: str
+    template: str
+    data: dict = {}
+    created_by: str = "owner"
+
+
+@app.post("/artifacts")
+def create_artifact(req: ArtifactReq):
+    """Direct artifact creation (agents use the create_artifact TOOL; this is for UI/tests)."""
+    if req.template not in TEMPLATES:
+        raise HTTPException(400, f"unknown template — allowed: {sorted(TEMPLATES)}")
+    try:
+        return create_artifact_impl(req.tenant_id, req.title, req.template, req.data,
+                                    created_by=req.created_by)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.post("/context/upload")
+async def context_upload(file: UploadFile | None = File(None),
+                        text: str | None = Form(None),
+                        tenant_id: str = Form("ramesh_auto")):
+    """Business context — drop any file OR a note; auto-tagged + fed to agents."""
+    if file is None and not (text and text.strip()):
+        raise HTTPException(400, "provide a file or a text note")
+    if file is not None:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        fid = f"f-{uuid.uuid4().hex[:6]}"
+        dest = UPLOAD_DIR / f"{fid}_{file.filename}"
+        with dest.open("wb") as f:
+            shutil.copyfileobj(file.file, f)
+        return ingest_document_impl(tenant_id, file_path=str(dest), filename=file.filename)
+    return ingest_document_impl(tenant_id, note=text.strip(), filename="note.txt")
+
+
+@app.get("/context")
+def context(tenant_id: str = "ramesh_auto"):
+    rows = deps.store.list_documents(tenant_id)
+    rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
+    return [{k: v for k, v in d.items() if k not in ("embedding", "text_excerpt")} for d in rows]
+
+
+@app.delete("/context/{doc_id}")
+def delete_context(doc_id: str, tenant_id: str = "ramesh_auto"):
+    if not deps.store.delete_document(tenant_id, doc_id):
+        raise HTTPException(404, "no such document")
+    reg.get_registry(tenant_id).reset_agents()
+    return {"status": "deleted"}
+
+
+@app.get("/templates")
+def templates(tenant_id: str = "ramesh_auto"):
+    from .templates_catalog import TEMPLATES
+    return TEMPLATES
+
+
+# pain-chip → template id + human reason (drives onboarding agent setup)
+_PAIN_MAP = {
+    "late_payments": ("collections-agent", "chasing late payments"),
+    "gst": ("compliance-agent", "GST / compliance deadlines"),
+    "compliance": ("compliance-agent", "GST / compliance deadlines"),
+    "untracked_deliveries": ("hire-logistics", "untracked deliveries"),
+    "no_online_presence": ("digital-presence", "no online presence"),
+    "stock_outs": ("compare-suppliers", "stock-outs / sourcing"),
+    "cash_flow": ("cashflow-check", "cash-flow surprises"),
+    "chasing_suppliers": ("compare-suppliers", "chasing suppliers"),
+    "pricing": ("should-i-take-90d", "pricing decisions"),
+}
+
+
+class OnboardingReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    business: dict = {}
+    prefs: dict = {}
+    pains: list[str] = []
+    slow_payers: list[str] = []
+    key_buyers: list[str] = []
+    key_suppliers: list[str] = []
+    rules: list[str] = []
+    tools_today: list[str] = []
+    auto_hire: bool = False
+
+
+@app.post("/onboarding")
+def onboarding(req: OnboardingReq):
+    """Rich first-run wizard — one call: profile + prefs + memories + agent setup."""
+    from .agents.specs import ALL_TOOL_NAMES
+    from .templates_catalog import get_template
+    tid = req.tenant_id
+
+    # 1. business profile + prefs
+    cur = deps.store.get_settings(tid) or {}
+    deps.store.put_settings(tid, {
+        "business": {**cur.get("business", {}), **req.business},
+        "prefs": {**cur.get("prefs", {}), **req.prefs},
+        "onboarded": True,
+        "mcp_servers": cur.get("mcp_servers", []),
+    })
+
+    # 2. free-text answers → real agent memories
+    def _mem(text: str, source: str = "onboarding"):
+        deps.store.put_memory(tid, {"id": f"mem-{uuid.uuid4().hex[:6]}", "text": text,
+                                    "source": source,
+                                    "created_at": datetime.now(timezone.utc).isoformat()})
+    memories = 0
+    for name in req.slow_payers:
+        _mem(f"{name} is a slow payer — follow up carefully, don't push too hard"); memories += 1
+    for name in req.key_buyers:
+        _mem(f"{name} is a key buyer — prioritize their orders"); memories += 1
+    for name in req.key_suppliers:
+        _mem(f"{name} is a trusted key supplier"); memories += 1
+    for rule in req.rules:
+        _mem(rule); memories += 1
+
+    # 3. pains → agents (auto-hire the magic, or suggest)
+    registry = reg.get_registry(tid)
+    existing_names = {s.get("name", "").lower() for s in registry.specs()}
+    agents_installed, suggested, seen = [], [], set()
+    for pain in req.pains:
+        entry = _PAIN_MAP.get(pain)
+        if not entry or entry[0] in seen:
+            continue
+        tmpl_id, reason = entry
+        seen.add(tmpl_id)
+        t = get_template(tmpl_id) or {}
+        spec_def = t.get("agent_spec")
+        valid = [x for x in (spec_def or {}).get("tools", []) if x in ALL_TOOL_NAMES]
+        if req.auto_hire and spec_def and valid and spec_def["name"].lower() not in existing_names:
+            spec = registry.create_spec(name=spec_def["name"], goal=spec_def["goal"],
+                                        tools=valid, hindi_tagline=spec_def.get("hindi_tagline", ""))
+            agents_installed.append({"id": spec["id"], "name": spec["name"]})
+        else:
+            suggested.append({"template_id": tmpl_id, "title": t.get("title", tmpl_id),
+                              "reason": reason})
+
+    next_steps = []
+    if "excel" in req.tools_today or "tally" in req.tools_today:
+        next_steps.append("Import your existing ledger from Excel")
+    deps.record_action("onboarding_completed",
+                       {"memories": memories, "agents": len(agents_installed)})
+    deps.log_activity(tid, "onboarding_completed",
+                      f"Onboarding done — {memories} context notes, {len(agents_installed)} agents hired")
+    registry.reset_agents()  # so new memories/agents take effect
+    return {"tenant_id": tid, "onboarded": True, "memories_created": memories,
+            "agents_installed": agents_installed, "suggested_agents": suggested,
+            "next_steps": next_steps}
+
+
+class TemplateInstallReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+
+
+@app.post("/templates/{template_id}/install")
+def install_template(template_id: str, req: TemplateInstallReq):
+    """Install a template. Agent templates with valid tools → created via the factory;
+    factory/prompt templates → return the prompt to run through Nirmata live."""
+    from .agents.specs import ALL_TOOL_NAMES
+    from .templates_catalog import get_template
+    t = get_template(template_id)
+    if not t:
+        raise HTTPException(404, "unknown template")
+    spec_def = t.get("agent_spec")
+    valid_tools = [x for x in (spec_def or {}).get("tools", []) if x in ALL_TOOL_NAMES]
+    if spec_def and valid_tools:
+        spec = reg.get_registry(req.tenant_id).create_spec(
+            name=spec_def["name"], goal=spec_def["goal"], tools=valid_tools,
+            hindi_tagline=spec_def.get("hindi_tagline", ""))
+        deps.record_action("template_installed", {"template": template_id, "agent_id": spec["id"]})
+        return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"]}
+    # no ready toolset (e.g. digital presence) → the owner runs it and Nirmata hires live
+    return {"status": "needs_factory", "runs_on": t.get("runs_on", "nirmata"),
+            "prompt": t.get("prompt", "")}
+
+
+@app.get("/people")
+def people(tenant_id: str = "ramesh_auto"):
+    """Everyone the business touches — customers (from invoices), suppliers, carriers."""
+    invoices = deps.store.list_invoices(tenant_id)
+    by_buyer: dict[str, dict] = {}
+    for i in invoices:
+        buyer = i.get("buyer", "").strip()
+        if not buyer:
+            continue
+        c = by_buyer.setdefault(buyer, {
+            "id": "cust-" + re.sub(r"[^a-z0-9]+", "-", buyer.lower()).strip("-"),
+            "name": buyer, "invoices": 0, "billed": 0, "outstanding": 0, "worst_overdue_days": 0,
+        })
+        c["invoices"] += 1
+        c["billed"] += i.get("amount", 0)
+        if i.get("status") in ("sent", "due_soon", "overdue"):
+            c["outstanding"] += i.get("amount", 0)
+        c["worst_overdue_days"] = max(c["worst_overdue_days"], i.get("days_overdue", 0))
+    customers = sorted(by_buyer.values(), key=lambda c: c["outstanding"], reverse=True)
+    for c in customers:
+        c["defaulter"] = c["worst_overdue_days"] > 30
+    suppliers = deps.store.list_suppliers(tenant_id)
+    carriers = deps.store.list_carriers(tenant_id)
+    return {
+        "summary": {"customers": len(customers), "suppliers": len(suppliers),
+                    "carriers": len(carriers),
+                    "outstanding": sum(c["outstanding"] for c in customers)},
+        "customers": customers, "suppliers": suppliers, "carriers": carriers,
+    }
+
+
+@app.get("/logs")
+def logs(tenant_id: str = "ramesh_auto", limit: int = 50):
+    """Unified activity/audit log (dashboard feed + agent actions)."""
+    return deps.store.list_activity(tenant_id, limit=limit)
+
+
+@app.get("/search")
+def search(q: str = "", tenant_id: str = "ramesh_auto"):
+    """Enterprise search — case-insensitive substring over title/desc/meta fields."""
+    ql = q.strip().lower()
+    results: dict[str, list] = {"invoices": [], "suppliers": [], "carriers": [],
+                                "agents": [], "tasks": [], "memories": [], "documents": []}
+    if not ql:
+        return {"q": q, "results": results}
+
+    def hit(*parts) -> bool:
+        return any(ql in str(p).lower() for p in parts if p)
+
+    for i in deps.store.list_invoices(tenant_id):
+        if hit(i.get("buyer"), i.get("invoice_no"), i.get("items")):
+            meta = f"₹{i.get('amount', 0):,} · {i.get('status', '')}"
+            if i.get("days_overdue"):
+                meta += f" {i['days_overdue']}d"
+            results["invoices"].append({"id": i["id"],
+                "title": f"{i.get('invoice_no', '')} — {i.get('buyer', '')}", "meta": meta, "ref": "#/app"})
+    for s in deps.store.list_suppliers(tenant_id):
+        if hit(s.get("name"), s.get("category")):
+            results["suppliers"].append({"id": s["id"], "title": s.get("name", ""),
+                "meta": f"{s.get('category', '')} · trust {s.get('trust_score', '')}", "ref": "#/app"})
+    for c in deps.store.list_carriers(tenant_id):
+        if hit(c.get("name"), c.get("route")):
+            results["carriers"].append({"id": c["id"], "title": c.get("name", ""),
+                "meta": f"{c.get('route', '')} · ₹{c.get('rate_per_kg', '')}/kg", "ref": "#/app"})
+    for a in reg.get_registry(tenant_id).specs():
+        if hit(a.get("name"), a.get("goal"), a.get("description")):
+            results["agents"].append({"id": a["id"], "title": a.get("name", ""),
+                "meta": a.get("description") or a.get("goal", ""), "ref": f"#/agents/{a['id']}"})
+    for t in deps.store.list_tasks(tenant_id):
+        if hit(t.get("title"), t.get("details")):
+            results["tasks"].append({"id": t["id"], "title": t.get("title", ""),
+                "meta": t.get("status", ""), "ref": "#/tasks"})
+    for m in deps.store.list_memories(tenant_id):
+        if hit(m.get("text")):
+            results["memories"].append({"id": m["id"], "title": m.get("text", ""),
+                "meta": m.get("source", "owner"), "ref": "#/settings"})
+    # documents — content search over the business-context brain (tags/summary/excerpt),
+    # ranked by Titan-embedding cosine similarity when embeddings are present.
+    docs = deps.store.list_documents(tenant_id)
+    qvec = embed_text(q) if any(d.get("embedding") for d in docs) else None
+    doc_hits = []
+    for d in docs:
+        substr = hit(d.get("filename"), d.get("summary"), d.get("text_excerpt"),
+                     " ".join(d.get("tags", [])))
+        score = cosine(qvec, d["embedding"]) if qvec and d.get("embedding") else 0.0
+        if substr or score >= 0.35:
+            doc_hits.append((score, {"id": d["id"], "title": d.get("filename", ""),
+                "meta": f"{', '.join(d.get('tags', []))} · {d.get('summary', '')}"[:80],
+                "ref": "#/context"}))
+    doc_hits.sort(key=lambda x: x[0], reverse=True)
+    results["documents"] = [h for _, h in doc_hits]
+    return {"q": q, "results": results}
 
 
 handler = None

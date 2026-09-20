@@ -115,6 +115,85 @@ def main() -> int:
         check("calendar unified", "3 kinds", str(sorted(kinds)),
               {"invoice_due", "alert", "task"} <= kinds)
 
+        # 13. Round 2 — Excel import → real ledger rows
+        import io
+        from openpyxl import Workbook
+        wb = Workbook(); ws = wb.active
+        ws.append(["Invoice No", "Buyer", "Amount", "Due Date"])
+        ws.append(["INV-8001", "Ludhiana Motors", 15600, "2026-10-15"])
+        ws.append(["INV-8002", "Amritsar Spares", 9200, "2026-08-20"])
+        buf = io.BytesIO(); wb.save(buf)
+        before = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        imp = c.post("/import/excel",
+                     files={"file": ("ledger.xlsx", buf.getvalue(),
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+                     data={"tenant_id": TENANT}).json()
+        after = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        check("excel import", "2 imported → ledger grows", f"{imp['imported']}/{after - before}",
+              imp["imported"] == 2 and after - before == 2)
+
+        # 14. Round 2 — memory taught, then referenced by the agent (real memory)
+        c.post("/memories", json={"tenant_id": TENANT,
+               "text": "Falcon Traders is a cash-only buyer — never offer credit"})
+        rm = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                    "text": "what do you remember about Falcon?"}).json()
+        check("memory referenced in reply", "mentions Falcon", rm["reply"][:80],
+              "falcon" in rm["reply"].lower())
+
+        # 15. Round 2 — agent builds an artifact, fetchable via share link
+        art = c.post("/artifacts", json={"tenant_id": TENANT, "title": "Tracking — ORD-9",
+                     "template": "tracking_page",
+                     "data": {"order_id": "ORD-9", "carrier": "SafeRoad Carriers",
+                              "from": "Ludhiana", "to": "Faridabad", "status": "in_transit",
+                              "progress_pct": 55}}).json()
+        fetched = c.get(f"/artifacts/{art['id']}", params={"tenant_id": TENANT}).json()
+        check("artifact created + fetchable", "same order_id via /a/ link",
+              f"{art['share_path']}", fetched.get("data", {}).get("order_id") == "ORD-9"
+              and art["share_path"] == f"/a/{art['id']}")
+
+        # 16. Phase A — People aggregation + defaulter flag
+        ppl = c.get("/people", params={"tenant_id": TENANT}).json()
+        defaulters = [x for x in ppl["customers"] if x.get("defaulter")]
+        check("people aggregated + defaulter flagged",
+              "customers>0 + >=1 defaulter", f"{ppl['summary']['customers']}/{len(defaulters)}",
+              ppl["summary"]["customers"] > 0 and len(defaulters) >= 1)
+
+        # 17. Phase B — business context: drop a note → auto-tagged → searchable → fed to agents
+        doc = c.post("/context/upload", data={"tenant_id": TENANT,
+              "text": "Falcon Exports demands GST invoice with HSN codes on every order"}).json()
+        found = c.get("/search", params={"q": "falcon", "tenant_id": TENANT}).json()
+        in_search = any(d["id"] == doc["id"] for d in found["results"]["documents"])
+        rc = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                    "text": "what do you know about Falcon Exports?"}).json()
+        check("business context tagged + searchable + fed",
+              "tags + in-search + agent cites it",
+              f"{doc.get('tags')}/{in_search}/{'falcon' in rc['reply'].lower()}",
+              bool(doc.get("tags")) and in_search and "falcon" in rc["reply"].lower())
+
+        # 18. Phase C — template catalog + install-as-agent via the factory
+        tmpls = c.get("/templates", params={"tenant_id": TENANT}).json()
+        cats = {t["category"] for t in tmpls}
+        before_agents = {a["id"] for a in c.get("/agents", params={"tenant_id": TENANT}).json()}
+        inst = c.post("/templates/collections-agent/install", json={"tenant_id": TENANT}).json()
+        after_agents = {a["id"] for a in c.get("/agents", params={"tenant_id": TENANT}).json()}
+        check("templates catalog + install→agent",
+              ">=5 categories + new agent", f"{len(cats)}/{inst.get('created_by')}",
+              len(cats) >= 5 and inst.get("created_by") == "factory"
+              and inst["id"] in after_agents and inst["id"] not in before_agents)
+
+        # 19. Round 4 — onboarding: rich answers → memory + auto-hire → agent cites it
+        onb = c.post("/onboarding", json={"tenant_id": TENANT,
+              "business": {"city": "Faridabad"}, "prefs": {"credit_terms_days": 60},
+              "pains": ["gst", "no_online_presence"],
+              "slow_payers": ["Verma Traders"], "auto_hire": True}).json()
+        rv = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                    "text": "what do you remember about Verma Traders?"}).json()
+        check("onboarding → memory + auto-hire + fed",
+              "mem>0 + agent installed + cited",
+              f"{onb['memories_created']}/{len(onb['agents_installed'])}/{'verma' in rv['reply'].lower()}",
+              onb["memories_created"] >= 1 and len(onb["agents_installed"]) >= 1
+              and "verma" in rv["reply"].lower())
+
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{'='*60}\n{passed}/{len(results)} checks passed")
     return 0 if passed == len(results) else 1

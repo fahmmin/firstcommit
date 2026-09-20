@@ -58,9 +58,10 @@ class AgentSpec(BaseModel):
         return v
 
     def resolved_tools(self, tenant_id: str) -> list:
+        """Tools this agent may use — authorized by Cedar policy (default-deny)."""
+        from .policy import tool_allowed
         tool_map = build_tool_map(tenant_id)
-        allowed = self.guardrails.get("allowed_tools") or self.tools
-        return [tool_map[t] for t in self.tools if t in allowed and t in tool_map]
+        return [tool_map[t] for t in self.tools if t in tool_map and tool_allowed(self, t)]
 
 
 BUILTIN_SPECS: list[dict] = [

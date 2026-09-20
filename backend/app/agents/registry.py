@@ -16,6 +16,8 @@ from strands.session.file_session_manager import FileSessionManager
 from .. import deps
 from ..models import MockModel, make_model
 from ..store import DATA_DIR
+from ..tools.artifacts import artifact_tools
+from ..tools.context import build_memory_suffix, memory_tools
 from . import mock_rules
 from .specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec, BUILTIN_SPECS, build_tool_map
 
@@ -70,6 +72,11 @@ class AgentRegistry:
     def get_spec(self, spec_id: str) -> dict | None:
         return next((s for s in self.specs() if s["id"] == spec_id), None)
 
+    def reset_agents(self) -> None:
+        """Drop cached agents so they re-instantiate with fresh memory/context."""
+        self._agents.clear()
+        self._orchestrator = None
+
     def create_spec(self, name: str, goal: str, tools: list[str],
                     hindi_tagline: str = "", persona_prompt: str = "") -> dict:
         """Validate → persist → warm the agent. This IS the Factory's output artifact."""
@@ -106,11 +113,13 @@ class AgentRegistry:
         if not raw:
             return None
         spec = AgentSpec(**raw)
+        extra = artifact_tools(self.tenant_id, created_by=spec.id) + memory_tools(self.tenant_id)
         agent = Agent(
             name=spec.name,
             model=make_model(rules=mock_rules.rules_for_tools(spec.tools), role="worker"),
-            system_prompt=f"{spec.persona_prompt}\nYour goal: {spec.goal}",
-            tools=spec.resolved_tools(self.tenant_id),
+            system_prompt=f"{spec.persona_prompt}\nYour goal: {spec.goal}"
+                          + build_memory_suffix(self.tenant_id),
+            tools=spec.resolved_tools(self.tenant_id) + extra,
             session_manager=_session_manager(f"{self.tenant_id}-{spec_id}"),
             callback_handler=None,
         )
@@ -184,6 +193,7 @@ class AgentRegistry:
                 "Never create before showing a preview. Never claim an agent is live unless "
                 "create_agent succeeded. Only tools from list_available_tools. Draft-only "
                 "guardrails always apply."
+                + build_memory_suffix(self.tenant_id)
             ),
             tools=[list_available_tools, preview_spec, create_agent],
             session_manager=_session_manager(f"{self.tenant_id}-nirmata"),
@@ -219,6 +229,7 @@ class AgentRegistry:
                 "Always call a specialist tool for any business-data question — never answer "
                 "from memory. If unsure, ask one short clarifying question. Reply in the "
                 "owner's language (English/Hinglish), short and concrete."
+                + build_memory_suffix(self.tenant_id)
             ),
             tools=subs,
             session_manager=_session_manager(f"{self.tenant_id}-orchestrator"),

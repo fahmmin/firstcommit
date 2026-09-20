@@ -6,8 +6,34 @@ ready. **Fahmin owns the entire frontend.** The seam between you is
 you implement until responses match it. Both of you work on `USE_AWS=1` once your
 `.env` exists.
 
-The app already runs end-to-end locally (`USE_AWS=0`). 39 tests + 14/14
-`simulate_demo.py` checks are green — **keep them green and grow them.**
+The app already runs end-to-end locally (`USE_AWS=0`). **75 tests + 25/25
+`simulate_demo.py` checks are green** — and green on live AWS too — **keep them green and grow them.**
+
+---
+
+## STATUS (updated 2026-09-20) — done ✅ / open ⬜
+
+**Live AWS is wired** (profile `sahayak`, region `ap-south-1`, account `055533307288`):
+Strands + Bedrock Nova (Lite+Pro) + Titan embeddings + Textract + DynamoDB (14 tables) + S3 + SES + Cedar. `USE_AWS=1` verified: `check_aws.py` 5/5, parity+policy 32/32, sim 25/25.
+
+Done ✅
+- ✅ AWS console + `.env` (§2) — account, IAM `sahayak`, Bedrock Nova access, 14 DynamoDB tables, S3 bucket, SES sender verified
+- ✅ DynamoStore parity green on AWS (§3)
+- ✅ SESNotifier (sender verified; sandbox recipient still needs verifying for real delivery)
+- ✅ All Round-1 `[TODO]` endpoints (§4): dashboard/summary, notifications, tasks, agents/context, calendar, connectors, settings, login
+- ✅ Round-2 (§5): `/import/excel` (openpyxl), memories + prompt injection + `recall_context`, artifacts + `create_artifact` (4 templates), `/search`
+- ✅ Round-3: `GET /people` (defaulter agg), `GET /logs`, dashboard `brief[]`, orchestrator+nirmata memory injection
+- ✅ Round-3: **Cedar** tool-authorization (`app/agents/policy.py`) — per-agent allowlist is now a real default-deny policy
+- ✅ Round-3: **business-context brain** — `documents` collection + `/context/*`, Textract→vision→heuristic extract, Nova auto-tag, Titan-embedding semantic search
+- ✅ Round-3: **templates catalog** (`app/templates_catalog.py`) + `/templates` + `/templates/{id}/install`
+- ✅ Round-4: **`POST /onboarding`** — rich 7-step wizard backend (profile+prefs+memories+pain→agent auto-hire/suggest)
+- ✅ `simulation/setup_aws.py` provisioner + `check_aws.py` (all 14 tables)
+
+Open ⬜ (not done yet)
+- ⬜ **Real Google Drive / Google Calendar OAuth connectors** (currently simulated — connect flips status, sync counts local rows only). Gmail/Drive/WhatsApp/Tally/Razorpay are stubs. ← revisit for genuine external integration
+- ⬜ **Deploy** (§6): Amplify (frontend) + Lambda URL (`Mangum` ready) + EventBridge rule → `scheduler.run_once`
+- ⬜ **Web search / Deep research** agent tool (needs a `TAVILY_API_KEY`)
+- ⬜ Frontend wiring of already-built backends (artifacts UI, business-context page, people, templates gallery, onboarding wizard, excel import) — Fahmin's side
 
 ---
 
@@ -37,16 +63,17 @@ Add seed rows in `seed.json` for tasks/notifications/connectors/activity.
 
 ## 2. AWS console (~60–90 min) — needs nothing from Fahmin
 
-- [ ] AWS account → `us-east-1` → billing alert $5
-- [ ] Bedrock → Model access → **Nova Lite + Nova Pro** (auto-approve; skip Anthropic)
-- [ ] IAM user `hackathon` + AdministratorAccess + key → `aws configure --profile hackathon`
-- [ ] DynamoDB `PAY_PER_REQUEST`, PK `tenant_id` + SK `id` — one table per
-      `Store._COLLECTIONS` (existing 6 + any you add: `tasks`, `notifications`,
-      `connectors`, `settings`, `activity`)
-- [ ] SES: verify sender **and the demo recipient** (sandbox only sends to verified)
-- [ ] S3 `sahayak-uploads` + CORS `["*"]` PUT/GET
-- [ ] Smoke: `sts get-caller-identity`, `dynamodb list-tables`, one
-      `bedrock-runtime converse` on `us.amazon.nova-lite-v1:0`
+> NOTE: actuals differ from the original draft below — region `ap-south-1`, profile `sahayak`,
+> bucket `sahayak-sessions-055533307288`, models `apac.amazon.nova-*`. All provisioning is
+> automated in `simulation/setup_aws.py`.
+- [x] AWS account (`055533307288`) → `ap-south-1`  ⬜ billing alert (set one if not already)
+- [x] Bedrock → Model access → **Nova Lite + Nova Pro** (verified reachable)
+- [x] IAM user `sahayak` + key → `aws configure --profile sahayak`
+- [x] DynamoDB `PAY_PER_REQUEST`, PK `tenant_id` + SK `id` — **14 tables** (all of `Store._COLLECTIONS`
+      incl. `tasks notifications connectors settings activity memories artifacts documents`)
+- [x] SES: sender `kkfahmin@gmail.com` verified  ⬜ verify a demo recipient for real delivery (sandbox)
+- [x] S3 bucket `sahayak-sessions-055533307288`
+- [x] Smoke: `check_aws.py` 5/5 (`sts`, `dynamodb`, `s3`, `ses`, `bedrock converse`)
 
 Then fill `.env` (copy `.env.example`), hand it to Fahmin: "set `USE_AWS=1` +
 `AWS_PROFILE=hackathon`, restart backend." **He's waiting on exactly this to
