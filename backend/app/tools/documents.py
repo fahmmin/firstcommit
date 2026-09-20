@@ -165,13 +165,34 @@ def cosine(a: list[float], b: list[float]) -> float:
 
 # ---------- ingest ----------
 
+def _upload_to_s3(tenant_id: str, doc_id: str, file_path: str, filename: str) -> str | None:
+    """Persist the raw file so it can be rendered/previewed later.
+    Returns the s3 key, or None when AWS is off."""
+    if not _use_aws() or not file_path:
+        return None
+    try:
+        import boto3
+        session = boto3.Session(profile_name=os.getenv("AWS_PROFILE") or None,
+                                region_name=os.getenv("AWS_REGION", "us-east-1"))
+        s3 = session.client("s3")
+        bucket = os.getenv("S3_BUCKET", "sahayak-sessions")
+        key = f"context/{tenant_id}/docs/{doc_id}-{filename}"
+        s3.upload_file(file_path, bucket, key)
+        return key
+    except Exception as e:
+        print(f"[documents] s3 upload failed ({type(e).__name__}): {e} — metadata only")
+        return None
+
+
 def ingest_document_impl(tenant_id: str, file_path: str | None = None,
                          filename: str | None = None, note: str | None = None) -> dict:
     filename = filename or ("note.txt" if note else "document")
     text = extract_text(file_path, filename, note=note)
     tags, summary = _auto_tag(text, filename)
+    doc_id = f"doc-{uuid.uuid4().hex[:6]}"
+    s3_key = _upload_to_s3(tenant_id, doc_id, file_path, filename)
     doc = {
-        "id": f"doc-{uuid.uuid4().hex[:6]}",
+        "id": doc_id,
         "filename": filename,
         "kind": "note" if note else _kind(filename),
         "tags": tags,
@@ -181,6 +202,10 @@ def ingest_document_impl(tenant_id: str, file_path: str | None = None,
         "status": "fed_to_agents",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if s3_key:
+        doc["s3_key"] = s3_key
+    elif file_path:
+        doc["file_path"] = file_path  # local mode — bytes stay on disk
     deps.store.put_document(tenant_id, doc)
     deps.record_action("context_added", {"id": doc["id"], "filename": filename, "tags": tags})
     deps.log_activity(tenant_id, "context_added",

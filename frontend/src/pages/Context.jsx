@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { contextStore } from '../lib/context.js'
 import { AppShell } from '../components/AppShell.jsx'
+import { ThinkingOrb } from 'thinking-orbs'
 import {
-  Brain, Plus, Trash2, Sparkles, CheckCircle2, UploadCloud,
+  Brain, Plus, Trash2, Sparkles, CheckCircle2, UploadCloud, X,
   FileText, FileSpreadsheet, Image as ImageIcon, File as FileIcon, StickyNote, Tag,
+  ExternalLink, Download, Eye,
 } from 'lucide-react'
 
 const KIND_ICON = { PDF: FileText, Spreadsheet: FileSpreadsheet, Image: ImageIcon, Video: FileIcon, Note: StickyNote, Doc: FileText, File: FileIcon }
@@ -12,6 +14,7 @@ const KIND_ICON = { PDF: FileText, Spreadsheet: FileSpreadsheet, Image: ImageIco
 const KIND_LABEL = { pdf: 'PDF', spreadsheet: 'Spreadsheet', image: 'Image', note: 'Note', document: 'Doc' }
 const docToItem = (d) => ({
   id: d.id, name: d.filename || d.name, kind: KIND_LABEL[d.kind] || d.kind || 'File',
+  kindRaw: d.kind, hasFile: !!d.has_file,
   tags: d.tags?.length ? d.tags : ['general'], meta: d.summary || d.meta || '',
   created_at: d.created_at, remote: true,
 })
@@ -30,12 +33,132 @@ const SUGGESTED = [
   'Diwali season: stock fasteners + brake pads 3 weeks early',
 ]
 
+/* ── in-app document preview ──────────────────────────────────
+   pdf/image → iframe/img straight at /context/{id}/file (gate via ?gate=).
+   spreadsheet → /preview JSON → rendered table. note/doc → text excerpt. */
+function DocPreview({ item, onClose }) {
+  const [pv, setPv] = useState(null)
+  const [err, setErr] = useState(null)
+  const [sheet, setSheet] = useState(0)
+  const fileUrl = item.remote ? api.contextFileUrl(item.id) : null
+
+  useEffect(() => {
+    if (!item.remote) return
+    api.contextPreview(item.id).then(setPv).catch(e => setErr(e.message))
+  }, [item.id, item.remote])
+
+  const isMedia = ['pdf', 'image'].includes(pv?.kind) || ['PDF', 'Image'].includes(item.kind)
+  const isText = ['note', 'document'].includes(pv?.kind)
+  const sheets = pv?.sheets || []
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm grid place-items-center p-4 animate-fadein"
+      onClick={onClose}>
+      <div className="w-full max-w-3xl max-h-[86vh] rounded-2xl border border-slate-200 bg-white shadow-float-lg flex flex-col overflow-hidden animate-popIn"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 shrink-0">
+          <span className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 grid place-items-center shrink-0">
+            {(() => { const I = KIND_ICON[item.kind] || FileIcon; return <I size={13} className="text-slate-500" /> })()}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-semibold text-ink truncate">{item.name}</div>
+            <div className="text-[9px] text-slate-400 flex items-center gap-1.5">
+              {item.kind} · {(pv?.tags || item.tags).join(', ')}
+              {pv?.summary && <span className="truncate">· {pv.summary}</span>}
+            </div>
+          </div>
+          {item.remote && pv?.has_file && (
+            <>
+              <a href={fileUrl} target="_blank" rel="noreferrer" title="Open in new tab"
+                className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+                <ExternalLink size={12} />
+              </a>
+              <a href={fileUrl} download={item.name} title="Download"
+                className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+                <Download size={12} />
+              </a>
+            </>
+          )}
+          <button onClick={onClose}
+            className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+            <X size={13} />
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-50/50">
+          {!item.remote && (
+            <div className="p-6 text-[12px] text-slate-500">
+              <p className="whitespace-pre-wrap leading-relaxed">{item.meta || 'Stored locally in this browser — no file bytes to render.'}</p>
+            </div>
+          )}
+          {item.remote && !pv && !err && (
+            <div className="h-40 grid place-items-center">
+              <ThinkingOrb size={36} state="shaping" aria-label="Loading preview" />
+            </div>
+          )}
+          {err && <div className="p-6 text-[12px] text-rose-500">Preview unavailable — {err}</div>}
+
+          {pv && isMedia && pv.has_file && (
+            pv.kind === 'image'
+              ? <img src={fileUrl} alt={item.name} className="max-w-full mx-auto p-4" />
+              : <iframe src={fileUrl} title={item.name} className="w-full h-[70vh] bg-white" />
+          )}
+
+          {pv && pv.kind === 'spreadsheet' && sheets.length > 0 && (
+            <div className="p-4">
+              {sheets.length > 1 && (
+                <div className="flex gap-1 mb-2">
+                  {sheets.map((s, i) => (
+                    <button key={i} onClick={() => setSheet(i)}
+                      className={`text-[10px] font-medium rounded-lg px-2.5 py-1 transition
+                        ${sheet === i ? 'bg-ink text-white' : 'bg-white border border-slate-200 text-slate-500'}`}>
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="rounded-xl border border-slate-200 bg-white overflow-auto max-h-[62vh]">
+                <table className="text-[11px] border-collapse">
+                  <tbody>
+                    {(sheets[sheet]?.rows || []).map((r, i) => (
+                      <tr key={i} className={i === 0 ? 'bg-slate-50 font-semibold text-ink sticky top-0' : i % 2 ? 'bg-slate-50/50' : ''}>
+                        {r.map((c, j) => (
+                          <td key={j} className="px-3 py-1.5 border-b border-r border-slate-100 whitespace-nowrap text-slate-600 max-w-[220px] truncate">{c}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-[9px] text-slate-400 mt-1.5">First 40 rows × 12 cols — download the file for the full sheet</div>
+            </div>
+          )}
+
+          {pv && !isMedia && pv.kind !== 'spreadsheet' && (
+            <div className="p-6">
+              <pre className="whitespace-pre-wrap text-[12px] leading-relaxed text-slate-600 font-sans">{pv.text || item.meta || 'No text extracted.'}</pre>
+            </div>
+          )}
+
+          {pv && pv.kind === 'spreadsheet' && !sheets.length && (
+            <div className="p-6 text-[12px] text-slate-400">Couldn't parse this spreadsheet — download it instead.</div>
+          )}
+          {pv && isMedia && !pv.has_file && (
+            <div className="p-6 text-[12px] text-slate-400">File bytes weren't stored for this document — only the extracted text is kept.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Context() {
   const [items, setItems] = useState([])
   const [memories, setMemories] = useState([])
   const [text, setText] = useState('')
   const [added, setAdded] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [preview, setPreview] = useState(null)
   const fileRef = useRef(null)
 
   const load = () => {
@@ -116,7 +239,8 @@ export default function Context() {
           {items.map(it => {
             const I = KIND_ICON[it.kind] || FileIcon
             return (
-              <div key={it.id} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:shadow-float transition">
+              <div key={it.id} onClick={() => setPreview(it)}
+                className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:shadow-float hover:border-slate-300 transition cursor-pointer group">
                 <span className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 grid place-items-center shrink-0">
                   <I size={13} className="text-slate-500" />
                 </span>
@@ -130,7 +254,8 @@ export default function Context() {
                     <span className="text-[9px] text-emerald-600 font-medium ml-auto flex items-center gap-0.5"><CheckCircle2 size={8} /> fed to agents</span>
                   </div>
                 </div>
-                <button onClick={() => remove(it)}
+                <Eye size={13} className="text-slate-300 group-hover:text-accent transition shrink-0 mt-1.5" />
+                <button onClick={(e) => { e.stopPropagation(); remove(it) }}
                   className="text-slate-300 hover:text-rose-500 transition shrink-0 mt-1"><Trash2 size={13} /></button>
               </div>
             )
@@ -177,6 +302,7 @@ export default function Context() {
         </div>
         </div>
       </main>
+      {preview && <DocPreview item={preview} onClose={() => setPreview(null)} />}
     </AppShell>
   )
 }

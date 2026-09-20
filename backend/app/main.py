@@ -1,6 +1,7 @@
 """FastAPI surface — shapes enforced by tests/contract against mocks/contract.json."""
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -881,15 +882,129 @@ async def context_upload(file: UploadFile | None = File(None),
 def context(tenant_id: str = "ramesh_auto"):
     rows = deps.store.list_documents(tenant_id)
     rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
-    return [{k: v for k, v in d.items() if k not in ("embedding", "text_excerpt")} for d in rows]
+    out = []
+    for d in rows:
+        row = {k: v for k, v in d.items() if k not in ("embedding", "text_excerpt")}
+        # bytes are fetchable if stored under a key/path — or via the legacy
+        # context/{tenant}/{filename} seed layout when running on AWS
+        row["has_file"] = bool(d.get("s3_key") or d.get("file_path")) or \
+            (_use_aws() and d.get("kind") != "note")
+        out.append(row)
+    return out
 
 
 @app.delete("/context/{doc_id}")
 def delete_context(doc_id: str, tenant_id: str = "ramesh_auto"):
+    doc = deps.store.get_document(tenant_id, doc_id)
+    if doc and doc.get("s3_key") and _use_aws():
+        try:
+            _s3().delete_object(Bucket=_s3_bucket(), Key=doc["s3_key"])
+        except Exception:
+            pass
     if not deps.store.delete_document(tenant_id, doc_id):
         raise HTTPException(404, "no such document")
     reg.get_registry(tenant_id).reset_agents()
     return {"status": "deleted"}
+
+
+# ---------- document file serving + preview ----------
+
+def _use_aws() -> bool:
+    return os.getenv("USE_AWS", "0") == "1"
+
+
+def _s3_bucket() -> str:
+    return os.getenv("S3_BUCKET", "sahayak-sessions")
+
+
+def _s3():
+    import boto3
+    return boto3.Session(profile_name=os.getenv("AWS_PROFILE") or None,
+                         region_name=os.getenv("AWS_REGION", "us-east-1")).client("s3")
+
+
+_MIME_BY_EXT = {
+    ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif",
+    ".txt": "text/plain; charset=utf-8", ".md": "text/plain; charset=utf-8",
+    ".csv": "text/csv; charset=utf-8",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+}
+
+
+def _doc_bytes(tenant_id: str, doc: dict) -> bytes | None:
+    """Resolve raw bytes: doc's own s3_key → legacy seed key → local file_path."""
+    filename = doc.get("filename", "")
+    if _use_aws():
+        for key in filter(None, [doc.get("s3_key"), f"context/{tenant_id}/{filename}"]):
+            try:
+                return _s3().get_object(Bucket=_s3_bucket(), Key=key)["Body"].read()
+            except Exception:
+                continue
+    fp = doc.get("file_path")
+    if fp and os.path.exists(fp):
+        with open(fp, "rb") as f:
+            return f.read()
+    return None
+
+
+@app.get("/context/{doc_id}/file")
+def context_file(doc_id: str, tenant_id: str = "ramesh_auto"):
+    """Raw document bytes — rendered inline by the app (pdf/image/text in iframes)."""
+    doc = deps.store.get_document(tenant_id, doc_id)
+    if not doc:
+        raise HTTPException(404, "no such document")
+    data = _doc_bytes(tenant_id, doc)
+    if data is None:
+        raise HTTPException(404, "file bytes not stored for this document")
+    ext = os.path.splitext(doc.get("filename", ""))[1].lower()
+    mime = _MIME_BY_EXT.get(ext, "application/octet-stream")
+    return Response(content=data, media_type=mime,
+                    headers={"Content-Disposition": f'inline; filename="{doc.get("filename", "file")}"'})
+
+
+@app.get("/context/{doc_id}/preview")
+def context_preview(doc_id: str, tenant_id: str = "ramesh_auto"):
+    """JSON preview — spreadsheets come back as parsed sheets; everything else
+    reports its kind so the UI picks iframe (pdf/image/text) or excerpt."""
+    doc = deps.store.get_document(tenant_id, doc_id)
+    if not doc:
+        raise HTTPException(404, "no such document")
+    out = {"id": doc_id, "filename": doc.get("filename"), "kind": doc.get("kind"),
+           "summary": doc.get("summary"), "tags": doc.get("tags") or [],
+           "has_file": bool(doc.get("s3_key") or doc.get("file_path"))}
+    if _use_aws() and not out["has_file"]:
+        out["has_file"] = True  # legacy seed files resolve by filename fallback
+    if doc.get("kind") == "spreadsheet":
+        data = _doc_bytes(tenant_id, doc)
+        if data is not None:
+            out["sheets"] = _spreadsheet_preview(data, doc.get("filename", ""))
+            out["has_file"] = True
+    else:
+        out["text"] = (doc.get("text_excerpt") or doc.get("summary") or "")[:4000]
+    return out
+
+
+def _spreadsheet_preview(data: bytes, filename: str) -> list:
+    """First ~40 rows × 12 cols per sheet — enough for an in-app look."""
+    ext = os.path.splitext(filename or "")[1].lower()
+    sheets = []
+    try:
+        if ext == ".csv":
+            import csv as _csv, io as _io
+            rows = [r[:12] for r in list(_csv.reader(_io.StringIO(data.decode("utf-8", "replace"))))[:40]]
+            return [{"name": filename or "Sheet1", "rows": rows}]
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        for ws in wb.worksheets[:4]:
+            rows = [[("" if c is None else str(c)) for c in row][:12]
+                    for row in list(ws.iter_rows(values_only=True))[:40]]
+            sheets.append({"name": ws.title, "rows": rows})
+        wb.close()
+    except Exception as e:
+        print(f"[context] spreadsheet preview failed ({type(e).__name__}): {e}")
+    return sheets
 
 
 @app.get("/templates")

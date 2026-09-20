@@ -140,6 +140,10 @@ export const api = {
     return req('/context/upload', { method: 'POST', body: fd })
   },
   delContext: (id) => req(`/context/${id}?tenant_id=${TENANT}`, { method: 'DELETE' }),
+  contextPreview: (id) => req(`/context/${id}/preview?tenant_id=${TENANT}`),
+  // direct URL for iframe/img — the gate accepts ?gate= so media renders in-app
+  contextFileUrl: (id) =>
+    `${BASE}/context/${id}/file?tenant_id=${TENANT}${gateToken() ? `&gate=${encodeURIComponent(gateToken())}` : ''}`,
 
   // ── reports — real-data docs persisted as business_report artifacts ──
   reportTypes: () => req('/reports/types').catch(() => demo.reports.types()),
