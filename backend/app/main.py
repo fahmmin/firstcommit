@@ -259,7 +259,7 @@ def demo_reset(tenant_id: str = "ramesh_auto"):
 
 class LoginReq(BaseModel):
     name: str = "Ramesh Gupta"
-    business: str = "Ramesh Auto Components"
+    business: str = "Ramesh Hardware & Electricals"
     provider: str = "guest"
     provider_id: str | None = None
 
@@ -614,6 +614,7 @@ def artifacts(tenant_id: str = "ramesh_auto"):
     rows.sort(key=lambda a: a.get("created_at", ""), reverse=True)
     return [{"id": a["id"], "title": a["title"], "template": a["template"],
              "created_by": a.get("created_by", ""), "created_at": a.get("created_at", ""),
+             "visibility": a.get("visibility", "private"),
              "share_path": a.get("share_path", f"/a/{a['id']}")} for a in rows]
 
 
@@ -631,6 +632,13 @@ class ArtifactReq(BaseModel):
     template: str
     data: dict = {}
     created_by: str = "owner"
+    visibility: str = "private"          # private | public — share-link ACL label
+
+
+class ArtifactPatch(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    visibility: str | None = None
+    title: str | None = None
 
 
 @app.post("/artifacts")
@@ -640,9 +648,37 @@ def create_artifact(req: ArtifactReq):
         raise HTTPException(400, f"unknown template — allowed: {sorted(TEMPLATES)}")
     try:
         return create_artifact_impl(req.tenant_id, req.title, req.template, req.data,
-                                    created_by=req.created_by)
+                                    created_by=req.created_by, visibility=req.visibility)
     except ValueError as e:
         raise HTTPException(422, str(e))
+
+
+@app.get("/public/artifacts/{artifact_id}")
+def get_public_artifact(artifact_id: str):
+    """Share-link route — resolves only when visibility == 'public'.
+    Private artifacts 404 here so a leaked link leaks nothing. The owner-app
+    route (GET /artifacts/{id}?tenant_id=…) stays permissive until real auth lands."""
+    row = deps.store.get_artifact("ramesh_auto", artifact_id)
+    if not row or row.get("visibility", "public") != "public":
+        raise HTTPException(404, "not found")
+    return row
+
+
+@app.patch("/artifacts/{artifact_id}")
+def patch_artifact(artifact_id: str, req: ArtifactPatch):
+    """Toggle visibility (private ↔ public) — the 'share to investors' switch."""
+    updates = {k: v for k, v in req.model_dump(exclude={"tenant_id"}).items() if v is not None}
+    if "visibility" in updates and updates["visibility"] not in ("private", "public"):
+        raise HTTPException(422, "visibility must be private|public")
+    if not updates:
+        raise HTTPException(400, "nothing to update")
+    row = deps.store.update_artifact(req.tenant_id, artifact_id, **updates)
+    if not row:
+        raise HTTPException(404, "no such artifact")
+    if "visibility" in updates:
+        deps.log_activity(req.tenant_id, "artifact_shared",
+                          f"Artifact '{row['title']}' made {updates['visibility']}")
+    return row
 
 
 @app.post("/context/upload")

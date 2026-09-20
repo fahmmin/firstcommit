@@ -110,6 +110,8 @@ class Store(ABC):
     def get_artifact(self, tenant_id: str, artifact_id: str) -> dict | None: ...
     @abstractmethod
     def put_artifact(self, tenant_id: str, artifact: dict) -> dict: ...
+    @abstractmethod
+    def update_artifact(self, tenant_id: str, artifact_id: str, **fields) -> dict | None: ...
 
     # documents (business-context brain: any file/note, auto-tagged + searchable)
     @abstractmethod
@@ -312,6 +314,9 @@ class LocalStore(Store):
 
     def put_artifact(self, tenant_id, artifact):
         return self._put("artifacts", tenant_id, artifact)
+
+    def update_artifact(self, tenant_id, artifact_id, **fields):
+        return self._update("artifacts", tenant_id, artifact_id, **fields)
 
     # documents
     def list_documents(self, tenant_id):
@@ -536,6 +541,9 @@ class DynamoStore(Store):
 
     def put_artifact(self, tenant_id, artifact):
         return self._put("artifacts", tenant_id, artifact)
+
+    def update_artifact(self, tenant_id, artifact_id, **fields):
+        return self._update("artifacts", tenant_id, artifact_id, **fields)
 
     # documents
     def list_documents(self, tenant_id):

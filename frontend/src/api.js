@@ -68,6 +68,14 @@ export const api = {
   search: (q) => req(`/search?tenant_id=${TENANT}&q=${encodeURIComponent(q)}`).catch(() => demoSearch(q, api)),
   artifacts: () => req(`/artifacts?tenant_id=${TENANT}`).catch(() => demo.artifacts.list()),
   artifact: (id) => req(`/artifacts/${id}`).catch(() => demo.artifacts.get(id)),
+  updateArtifact: (id, patch) =>
+    req(`/artifacts/${id}?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
+  // share-link route — only resolves public artifacts (no tenant context needed)
+  publicArtifact: (id) => req(`/public/artifacts/${id}`).catch(() => {
+    const a = demo.artifacts.get(id)
+    if (a.visibility === 'private') throw new Error('private')
+    return a
+  }),
   importExcel: (file) => {
     const fd = new FormData()
     fd.append('file', file)

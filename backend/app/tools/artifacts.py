@@ -30,25 +30,51 @@ class TrackingPage(BaseModel):
 
 
 class InvoiceSummary(BaseModel):
-    buyer: str
-    total_outstanding: float
+    # buyer-statement fields (agent vocabulary)
+    buyer: str = ""
+    total_outstanding: float = 0
     invoices: list = []
     oldest_overdue_days: int = 0
     note: str = ""
+    # single-invoice card fields (frontend renderer vocabulary)
+    invoice_no: str = ""
+    amount: float = 0
+    gst: float | None = None
+    due_date: str = ""
+    status: str = ""
+    items: str = ""
 
 
 class SupplierCompare(BaseModel):
-    category: str
-    suppliers: list  # required — the whole point is a comparison
+    category: str = ""          # backend name for what's being compared
+    item: str = ""              # frontend renderer reads `item` — normalized below
+    suppliers: list = []        # backend name for the quote rows
+    quotes: list = []           # frontend renderer reads `quotes` — normalized below
     recommendation: str = ""
 
 
 class PaymentCard(BaseModel):
-    payer: str
+    payer: str = ""
+    business: str = ""          # frontend renderer reads `business` — normalized below
+    buyer: str = ""
     amount: float
     invoice_no: str = ""
     due_date: str = ""
     pay_link: str = ""
+    upi: str = ""               # frontend renderer reads `upi` — normalized below
+
+
+class FinancialReport(BaseModel):
+    """Shareable financial projection report — the 'send to investors/landlord' artifact."""
+    business: str = ""
+    period: str = ""                     # e.g. "FY2026-27 projection"
+    revenue: float = 0
+    expenses: float = 0
+    net_margin_pct: float = 0
+    cash_on_hand: float = 0
+    projections: list = []               # [{month, revenue, expenses}]
+    highlights: list = []                # ["Revenue up 18% QoQ", ...]
+    ask: str = ""                        # e.g. "Seeking ₹15L working-capital line"
 
 
 TEMPLATES: dict[str, type[BaseModel]] = {
@@ -56,11 +82,12 @@ TEMPLATES: dict[str, type[BaseModel]] = {
     "invoice_summary": InvoiceSummary,
     "supplier_compare": SupplierCompare,
     "payment_card": PaymentCard,
+    "financial_report": FinancialReport,
 }
 
 
 def create_artifact_impl(tenant_id: str, title: str, template: str, data: dict,
-                         created_by: str = "agent") -> dict:
+                         created_by: str = "agent", visibility: str = "private") -> dict:
     """Validate `data` against the template schema, persist, return the stored row.
 
     Raises ValueError on unknown template or schema-invalid data (caller turns
@@ -81,11 +108,29 @@ def create_artifact_impl(tenant_id: str, title: str, template: str, data: dict,
     clean = validated.model_dump()
     if template == "tracking_page":  # restore public `from` key
         clean["from"] = clean.pop("from_", "")
+    # dual-vocabulary normalization — the frontend renderer and the model's tool
+    # schema use different names for the same fields; fill both so either works
+    elif template == "supplier_compare":
+        clean["quotes"] = clean.get("quotes") or clean.get("suppliers") or []
+        clean["item"] = clean.get("item") or clean.get("category") or "Suppliers"
+        if not clean["quotes"]:
+            raise ValueError("template 'supplier_compare' needs: ['suppliers']")
+    elif template == "payment_card":
+        clean["upi"] = clean.get("upi") or clean.get("pay_link") or ""
+        clean["business"] = clean.get("business") or clean.get("buyer") or clean.get("payer") or ""
+    elif template == "invoice_summary":
+        if not clean.get("amount"):
+            clean["amount"] = clean.get("total_outstanding") or 0
+        if not clean.get("items") and clean.get("invoices"):
+            clean["items"] = ", ".join(
+                str(i.get("invoice_no", i)) if isinstance(i, dict) else str(i)
+                for i in clean["invoices"])
 
     art_id = f"art-{uuid.uuid4().hex[:6]}"
     row = {
         "id": art_id, "title": title, "template": template, "data": clean,
         "created_by": created_by,
+        "visibility": "public" if visibility == "public" else "private",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "share_path": f"/a/{art_id}",
     }
@@ -105,7 +150,9 @@ def artifact_tools(tenant_id: str, created_by: str = "agent") -> list:
         tracking_page (order_id, carrier, from, to, status, eta, progress_pct),
         invoice_summary (buyer, total_outstanding, invoices, oldest_overdue_days),
         supplier_compare (category, suppliers[], recommendation),
-        payment_card (payer, amount, invoice_no, due_date, pay_link).
+        payment_card (payer, amount, invoice_no, due_date, pay_link),
+        financial_report (business, period, revenue, expenses, net_margin_pct,
+        cash_on_hand, projections[{month,revenue,expenses}], highlights[], ask).
         Fill `data` for the chosen template; returns a share link."""
         try:
             row = create_artifact_impl(tenant_id, title, template, data, created_by=created_by)

@@ -100,13 +100,15 @@ def draft_reminder_impl(tenant_id: str, invoice_id: str = "", buyer: str = "") -
         inv = max(overdue, key=lambda r: r.get("days_overdue", 0), default=None)
     if not inv:
         return {"reply": "No overdue invoice found to remind about."}
+    business = (deps.store.get_settings(tenant_id) or {}).get("business", {}).get("name") \
+        or "Ramesh Hardware & Electricals"
     body = (
         f"Namaste {inv['buyer']} ji,\n\n"
         f"This is a gentle reminder that invoice {inv['invoice_no']} for "
         f"₹{inv['amount']:,} was due on {inv['due_date']} "
         f"({inv.get('days_overdue', 0)} days ago).\n\n"
         f"Kindly release the payment at your earliest convenience.\n"
-        f"— Ramesh Auto Components"
+        f"— {business}"
     )
     alert = deps.store.put_alert(tenant_id, {
         "id": f"alert-{uuid.uuid4().hex[:6]}", "kind": "reminder",

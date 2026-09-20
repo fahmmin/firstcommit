@@ -17,7 +17,7 @@
     "/connectors": { "desc": "Connect existing services — Google Calendar, Airtable, WhatsApp, Tally, Razorpay. connect → syncing → items_synced", "uses": ["GET /connectors", "POST /connectors/{id}/connect", "POST /connectors/{id}/disconnect", "GET /connectors/{id}/sync"] },
     "/settings": { "desc": "Business profile, prefs, business context (memories), skills toggles, MCP servers, connectors", "uses": ["GET /settings", "PATCH /settings", "GET /memories", "POST /memories", "DELETE /memories/{id}", "GET /connectors"] },
     "/search": { "desc": "Global search — topbar input → grouped results across invoices/suppliers/carriers/agents/tasks/memories/documents", "uses": ["GET /search"] },
-    "/a/:id": { "desc": "Shared artifact page — public-looking view of an agent-built mini-app (tracking page, invoice summary, supplier compare). 'Share link' copies the URL", "uses": ["GET /artifacts/{id}"] },
+    "/a/:id": { "desc": "Shared artifact page — public share link view of an agent-built mini-app (tracking page, invoice summary, supplier compare, payment card, financial report). Resolves only visibility=public artifacts; 'Share link' copies the URL", "uses": ["GET /public/artifacts/{id}"] },
     "/people": { "desc": "Everyone your business touches — Customers/Suppliers/Carriers tabs, outstanding totals, defaulter badges", "uses": ["GET /people"] },
     "/context": { "desc": "Business context — drop files/notes; auto-tagged 'organized library' fed to agents", "uses": ["POST /context/upload", "GET /context", "DELETE /context/{id}"] },
     "/templates": { "desc": "Template gallery — categorized prompt/agent templates; install runs on the factory", "uses": ["GET /templates", "POST /templates/{id}/install"] },
@@ -241,16 +241,32 @@
       }
     },
 
-    "GET /artifacts?tenant_id= [TODO]": {
-      "$comment": "Mini-apps agents build from chat via the create_artifact TOOL. TEMPLATE-BOUND, never raw HTML: template ∈ {tracking_page, invoice_summary, supplier_compare, payment_card}. Agent picks template + fills data; per-template pydantic schema validates.",
-      "response": [{ "id": "art-1", "title": "Tracking — ORD-1042", "template": "tracking_page", "created_by": "agent-l7x2", "created_at": "2026-09-19T03:00:00Z", "share_path": "/a/art-1" }]
+    "GET /artifacts?tenant_id= [DONE]": {
+      "$comment": "Mini-apps agents build from chat via the create_artifact TOOL. TEMPLATE-BOUND, never raw HTML: template ∈ {tracking_page, invoice_summary, supplier_compare, payment_card, financial_report}. Agent picks template + fills data; per-template pydantic schema validates (dual-vocabulary: supplier_compare accepts suppliers|quotes, payment_card payer|business, tracking_page from|from_ — normalized at create).",
+      "response": [{ "id": "art-1", "title": "Tracking — ORD-1042", "template": "tracking_page", "visibility": "public", "created_by": "agent-l7x2", "created_at": "2026-09-19T03:00:00Z", "share_path": "/a/art-1" }]
     },
-    "GET /artifacts/{id} [TODO]": {
+    "GET /artifacts/{id} [DONE]": {
+      "$comment": "Owner-app route (tenant-scoped). visibility=private artifacts still resolve here — ACL lives on the public route until real auth lands.",
       "response": {
-        "id": "art-1", "title": "Tracking — ORD-1042", "template": "tracking_page",
+        "id": "art-1", "title": "Tracking — ORD-1042", "template": "tracking_page", "visibility": "public",
         "data": { "order_id": "ORD-1042", "carrier": "SafeRoad Carriers", "from": "Ludhiana", "to": "Faridabad", "eta": "tomorrow 11am", "status": "in_transit", "progress_pct": 62 },
         "created_by": "agent-l7x2", "created_at": "2026-09-19T03:00:00Z", "share_path": "/a/art-1"
       }
+    },
+    "GET /public/artifacts/{id} [DONE]": {
+      "$comment": "Share-link route — what #/a/:id uses. Returns the artifact ONLY when visibility == 'public'; private artifacts 404. No tenant/auth — the id IS the capability token. NOTE: treats all artifacts as belonging to default tenant — multi-tenant share paths (/a/{tenant}/{id}) are a TODO.",
+      "response": "same as GET /artifacts/{id}",
+      "errors": { "404": "not found (unknown id OR private artifact)" }
+    },
+    "PATCH /artifacts/{id} [DONE]": {
+      "$comment": "Claude-artifacts style visibility toggle. Body {tenant_id, visibility: 'private'|'public', title?}. Logs artifact_shared activity.",
+      "request": { "tenant_id": "ramesh_auto", "visibility": "public" },
+      "response": "the updated artifact row",
+      "errors": { "400": "nothing to update", "404": "no such artifact", "422": "visibility must be private|public" }
+    },
+    "POST /artifacts [DONE]": {
+      "$comment": "Direct create (UI/tests). Body {tenant_id, title, template, data, created_by, visibility?='private'}.",
+      "errors": { "400": "unknown template", "422": "data failed template schema" }
     },
 
     "GET /people?tenant_id= [TODO]": {

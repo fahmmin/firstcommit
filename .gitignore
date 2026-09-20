@@ -37,3 +37,6 @@ Thumbs.db
 .hermes/
 skills-lock.json
 plan.md
+
+# generated demo fixtures — regenerate via simulation/seed_hardware.py
+simulation/fixtures/

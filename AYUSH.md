@@ -28,6 +28,9 @@ Done ✅
 - ✅ Round-3: **templates catalog** (`app/templates_catalog.py`) + `/templates` + `/templates/{id}/install`
 - ✅ Round-4: **`POST /onboarding`** — rich 7-step wizard backend (profile+prefs+memories+pain→agent auto-hire/suggest)
 - ✅ `simulation/setup_aws.py` provisioner + `check_aws.py` (all 14 tables)
+- ✅ **Artifact sharing (Claude-style)** — `visibility: private|public` on every artifact; `PATCH /artifacts/{id}` toggles it (logs `artifact_shared`); `GET /public/artifacts/{id}` is the share-link route (private → 404); 5th template `financial_report` (revenue/expenses/margin + monthly projections + highlights + ask) for investor/landlord sharing
+- ✅ **Hardware-business demo data** — seed.json rewritten (Ramesh Hardware & Electricals: 16 invoices, 20 suppliers, 6 carriers, 6 payables, 11 kanban tasks, 8 notifications, 12 connectors, 8 memories, 4 artifacts); `simulation/seed_hardware.py` generates **real .xlsx/.pdf files** (sales register, inventory, attendance, GSTR-3B, rate list, chalan log, rent agreement, GST cert, fire insurance, trade license) → ingests via `/context/upload` (extract→Bedrock tag→Titan embed) → uploads raw files to S3 `context/{tenant}/` → hires 3 factory agents. Verified USE_AWS=1.
+- ✅ Connector seeds: `facebook_marketplace` (connected) + `indiamart`, `shopify`, `instagram` (available) now in seed.json
 
 Open ⬜ (not done yet)
 
@@ -37,12 +40,13 @@ Open ⬜ (not done yet)
 - ⬜ **UTF-8 charset** on JSON responses — `₹` mojibakes to `â‚¹` on Windows/curl (Round-4 §3)
 - ⬜ `PATCH /settings` accept `role` — onboarding's role→RBAC pick should persist (Round-4 §5)
 - ⬜ `_PAIN_MAP` missing `too_many_excels` — frontend sends it from the wizard (Round-4 "already covered" note below)
-- ⬜ Connector seeds: `facebook_marketplace` (connected) + `indiamart`, `shopify`, `instagram` (available) — demo store covers today (Round-3 §4)
+- ⬜ **Textract IAM** — user `AWSHACKATHON` lacks `textract:DetectDocumentText`/`AnalyzeDocument`; PDF ingest falls back to filename-only. Attach the actions to the IAM policy (xlsx unaffected — openpyxl path works).
+- ⬜ **Real auth + OAuth connectors** — see §OAuth below (login is demo-only; connector connect/sync are stubs; artifact private ACL needs auth to be real)
 
 **Reconcile route names** — ✅ resolved: frontend adopted your routes. Context docs → `POST /context/upload` + `GET /context` + `DELETE /context/{id}` (spec's `/context/docs` dropped). Activity feed → `GET /logs` (spec's `/activity` dropped). contract.json + Round-3 §1 spec updated to match.
 
 **Stretch / open**
-- ⬜ **Real Google Drive / Google Calendar OAuth connectors** (currently simulated — connect flips status, sync counts local rows only). Gmail/Drive/WhatsApp/Tally/Razorpay are stubs. ← revisit for genuine external integration
+- ⬜ **Real Google Drive / Google Calendar OAuth connectors** — §OAuth below has the full setup list (env placeholders already in `.env.example`)
 - ⬜ **Deploy** (§6): Amplify (frontend) + Lambda URL (`Mangum` ready) + EventBridge rule → `scheduler.run_once`
 - ⬜ **Web search / Deep research** agent tool — `/chat` already receives `mode: "web"|"deep"` (ignored today); needs a `TAVILY_API_KEY`
 - ⬜ Digital-presence template's tools (`publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`) aren't in `TOOL_REGISTRY` — template ships `tools: []` so install converges via Nirmata prompt only
@@ -320,3 +324,60 @@ verify a top-level `role` or `prefs.role` survives a re-login.
   `alert→reminder` display kinds and filters by the viewed day.
 - Settings "Sync now" + post-connect auto-sync call `GET /connectors/{id}/sync` ✅.
 - Voice input, TTS, command palette, dark mode, kanban DnD — all client-side.
+
+---
+
+## §OAuth — real authentication + connector setup (NEW — 2026-09-20)
+
+**Today everything is demo auth.** `POST /auth/login` accepts any credentials,
+there is no session/token check on any route, and connector connect/sync are
+stubs (connect flips `status`, sync counts local rows). This section is what
+makes it real. All env placeholders are already in `.env.example` — ask Fahmin
+for the real `.env` values once provisioned.
+
+### A. App auth (do this FIRST — everything else hangs off it)
+1. `AUTH_JWT_SECRET` — issue a signed JWT (or opaque session id) at
+   `POST /auth/login`; verify it via a FastAPI dependency on every tenant route.
+2. Decide login mechanism: password+hash (argon2), or SES magic-link. Keep the
+   demo bypass behind `USE_AWS=0` or a `DEMO_LOGIN=1` flag so local dev stays
+   frictionless.
+3. Once auth exists, enforce on `GET /artifacts/{id}`: private artifacts must
+   require the owner's session. `/public/artifacts/{id}` already 404s private —
+   that's the share-link contract, keep it.
+4. `PUBLIC_API_URL` / `PUBLIC_APP_URL` — needed for OAuth redirect URIs and for
+   building absolute share links server-side.
+
+### B. Connector OAuth — what each needs
+| Connector | Provider console | Env vars | Redirect URI | Scopes |
+|---|---|---|---|---|
+| Gmail / Drive / Calendar (ONE client) | Google Cloud → OAuth consent + Web client | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `{PUBLIC_API_URL}/connectors/google/callback` | `gmail.readonly gmail.send drive.readonly calendar.events openid email` |
+| WhatsApp Business | Meta Dev app + WhatsApp product | `META_APP_ID`, `META_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` | meta callback + webhook URL for inbound | embedded signup or permanent token |
+| Facebook / Instagram | same Meta app | `META_*` above | meta callback | `pages_manage_posts`, `instagram_basic` (⚠ Marketplace has NO public listing API — keep that connector manual/simulated) |
+| Shopify | Partner dashboard → custom app | `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_SCOPES` | `/connectors/shopify/callback` | `read_products,write_products,read_orders` |
+| Razorpay | dashboard → API keys (not OAuth) | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | webhook URL | payment links + webhook verify |
+| IndiaMART | partner program | `INDIAMART_API_KEY` | — | lead/catalog APIs |
+| Airtable | airtable.com/create/oauth (or PAT) | `AIRTABLE_CLIENT_ID`, `AIRTABLE_CLIENT_SECRET` or `AIRTABLE_PAT` | `/connectors/airtable/callback` | `data.records.read` |
+| Slack | api.slack.com/apps | `SLACK_CLIENT_ID/SECRET`, `SLACK_SIGNING_SECRET` | `/connectors/slack/callback` | `chat:write`, `channels:read` |
+| Tally | no OAuth — TallyPrime HTTP on LAN | `TALLY_GATEWAY_URL` | — | XML over HTTP |
+
+### C. Backend work this implies (your build list)
+1. `GET /connectors/{id}/authorize` → redirect to provider consent (state=tenant+connector).
+2. `GET /connectors/{provider}/callback` → exchange code → store refresh token.
+3. **Token storage** — `TOKEN_STORE=secretsmanager` (AWS Secrets Manager) or an
+   encrypted `sahayak-tokens` table. NEVER plaintext tokens in DynamoDB.
+4. `GET /connectors/{id}/sync` — read real rows via the stored token instead of
+   counting local collections.
+5. Webhook receivers where the provider pushes (WhatsApp inbound, Razorpay
+   payment captured) — verify `WHATSAPP_VERIFY_TOKEN` / `RAZORPAY_WEBHOOK_SECRET`.
+6. Scheduler/EventBridge hookup so syncs run without a button press (already
+   planned in §6 deploy).
+7. Update `GET /auth/login` contract — return `{token, user}` not just a profile;
+   frontend stores the token and sends `Authorization: Bearer` on every call.
+
+### D. Frontend impact (Fahmin's side — FYI only)
+- api.js sends `Authorization` header once `AUTH_JWT_SECRET` flow exists.
+- ArtifactView already treats private as unresolvable on the public route —
+  after auth lands, private artifacts become owner-viewable in-app.
+- Connect buttons should open `window.location = /connectors/{id}/authorize`
+  instead of flipping state optimistically (keep the optimistic path as
+  offline fallback).

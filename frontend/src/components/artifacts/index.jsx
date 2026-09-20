@@ -1,7 +1,7 @@
 // Artifact templates — agent-built mini-apps rendered as shareable pages.
 // Template-bound (never raw HTML): the agent picks a template + fills data;
 // the registry renders it. Unknown/missing data degrades gracefully.
-import { Truck, PackageCheck, MapPin, Clock, Receipt, BadgeCheck, IndianRupee, Store, Star } from 'lucide-react'
+import { Truck, PackageCheck, MapPin, Clock, Receipt, BadgeCheck, IndianRupee, Store, Star, TrendingUp, CheckCircle2 } from 'lucide-react'
 
 const fmt = n => '₹' + Number(n || 0).toLocaleString('en-IN')
 
@@ -142,9 +142,86 @@ function PaymentCard({ data = {} }) {
   )
 }
 
+/* ── financial_report ──────────────────────────────────────── */
+// Interactive projection report — the "share to investors / landlord" artifact.
+function FinancialReport({ data = {} }) {
+  const proj = data.projections || []
+  const max = Math.max(1, ...proj.flatMap(p => [p.revenue || 0, p.expenses || 0]))
+  const stats = [
+    ['Revenue', data.revenue != null ? fmt(data.revenue) : '—'],
+    ['Expenses', data.expenses != null ? fmt(data.expenses) : '—'],
+    ['Net margin', data.net_margin_pct != null ? `${data.net_margin_pct}%` : '—'],
+    ['Cash on hand', data.cash_on_hand != null ? fmt(data.cash_on_hand) : '—'],
+  ]
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-[11px] text-slate-400 uppercase tracking-wide">Financial report</div>
+          <div className="text-[18px] font-semibold text-ink">{data.business || '—'}</div>
+          {data.period && <div className="text-[11px] text-slate-500 mt-0.5">{data.period}</div>}
+        </div>
+        <TrendingUp size={22} className="text-slate-300" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {stats.map(([l, v]) => (
+          <div key={l} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+            <div className="text-[10px] text-slate-400">{l}</div>
+            <div className="text-[15px] font-semibold text-ink mt-1">{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {proj.length > 0 && (
+        <div>
+          <div className="text-[11px] text-slate-400 mb-2 flex items-center justify-between">
+            <span>Monthly projection</span>
+            <span className="flex items-center gap-3">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-accent" /> Revenue</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-slate-300" /> Expenses</span>
+            </span>
+          </div>
+          <div className="flex items-end gap-2 h-28">
+            {proj.map((p, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full flex items-end justify-center gap-0.5 h-24">
+                  <div className="w-2.5 rounded-t bg-accent" title={`Revenue ${fmt(p.revenue)}`}
+                    style={{ height: `${Math.max(3, (p.revenue || 0) / max * 100)}%` }} />
+                  <div className="w-2.5 rounded-t bg-slate-300" title={`Expenses ${fmt(p.expenses)}`}
+                    style={{ height: `${Math.max(3, (p.expenses || 0) / max * 100)}%` }} />
+                </div>
+                <div className="text-[9px] text-slate-400">{p.month}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(data.highlights || []).length > 0 && (
+        <div className="space-y-1.5 border-t border-slate-100 pt-3">
+          {data.highlights.map((h, i) => (
+            <div key={i} className="flex items-start gap-2 text-[12px] text-slate-600">
+              <CheckCircle2 size={13} className="text-emerald-500 mt-0.5 shrink-0" /> {h}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data.ask && (
+        <div className="rounded-2xl bg-ink text-white p-4">
+          <div className="text-[10px] text-white/50 uppercase tracking-wide mb-1">The ask</div>
+          <div className="text-[13px] leading-relaxed">{data.ask}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export const ARTIFACT_TEMPLATES = {
   tracking_page: TrackingPage,
   invoice_summary: InvoiceSummary,
   supplier_compare: SupplierCompare,
   payment_card: PaymentCard,
+  financial_report: FinancialReport,
 }

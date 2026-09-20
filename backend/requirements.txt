@@ -10,3 +10,4 @@ mangum
 pytest
 pytest-asyncio
 httpx
+fpdf2

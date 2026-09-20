@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { Blobs } from '../components/Logo.jsx'
 import { ARTIFACT_TEMPLATES } from '../components/artifacts/index.jsx'
-import { Share2, Check, Sparkles } from 'lucide-react'
+import { Share2, Check, Sparkles, Globe, Lock } from 'lucide-react'
 
 // Shareable artifact page — #/a/:id. Public: no auth required.
 export default function ArtifactView({ param }) {
@@ -12,7 +12,8 @@ export default function ArtifactView({ param }) {
 
   useEffect(() => {
     if (!param) { setErr('No artifact id'); return }
-    api.artifact(param).then(setArt).catch(() => setErr('Artifact not found or backend offline'))
+    api.publicArtifact(param).then(setArt)
+      .catch(() => setErr('Artifact not found — it may be private, or the link is wrong.'))
   }, [param])
 
   const copy = () => {
@@ -45,7 +46,13 @@ export default function ArtifactView({ param }) {
             <div className="rounded-3xl border border-slate-200 bg-white shadow-float p-6">
               <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-100">
                 <div className="text-[15px] font-semibold text-ink">{art.title}</div>
-                <span className="text-[9px] font-bold text-accent bg-accent/10 rounded px-1.5 py-0.5 uppercase tracking-wide">Live</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[9px] font-bold rounded px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-1 ${
+                    art.visibility === 'public' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-500 bg-slate-100'}`}>
+                    {art.visibility === 'public' ? <><Globe size={9} /> Public</> : <><Lock size={9} /> Private</>}
+                  </span>
+                  <span className="text-[9px] font-bold text-accent bg-accent/10 rounded px-1.5 py-0.5 uppercase tracking-wide">Live</span>
+                </div>
               </div>
               {Template ? <Template data={art.data} /> : (
                 <pre className="text-[11px] text-slate-500 whitespace-pre-wrap">{JSON.stringify(art.data, null, 2)}</pre>

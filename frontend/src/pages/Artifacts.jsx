@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { api, TENANT } from '../api.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
-import { FileText, ExternalLink, Copy, MapPin, Receipt, Store, IndianRupee } from 'lucide-react'
+import { FileText, ExternalLink, Copy, MapPin, Receipt, Store, IndianRupee, LineChart, Globe, Lock } from 'lucide-react'
 import { AppShell } from '../components/AppShell.jsx'
 import { toast } from '../lib/toast.js'
 
@@ -11,6 +11,7 @@ const TEMPLATE_META = {
   invoice_summary: { label: 'Invoice summary', icon: Receipt, tint: 'text-accent bg-accent/10' },
   supplier_compare: { label: 'Supplier compare', icon: Store, tint: 'text-violet-600 bg-violet-50' },
   payment_card: { label: 'Payment request', icon: IndianRupee, tint: 'text-amber-600 bg-amber-50' },
+  financial_report: { label: 'Financial report', icon: LineChart, tint: 'text-magenta bg-magenta/10' },
 }
 
 export default function Artifacts() {
@@ -21,6 +22,16 @@ export default function Artifacts() {
     e.preventDefault()
     navigator.clipboard?.writeText(`${location.origin}${location.pathname}#${path}`).catch(() => {})
     toast.push('Share link copied')
+  }
+
+  // Claude-artifacts style: private = only you, public = anyone with the link
+  const toggleVis = async (e, a) => {
+    e.preventDefault()
+    const next = a.visibility === 'public' ? 'private' : 'public'
+    setItems(xs => xs.map(x => x.id === a.id ? { ...x, visibility: next } : x))
+    const r = await api.updateArtifact(a.id, { visibility: next }).catch(() => null)
+    if (r) toast.push(next === 'public' ? 'Public — anyone with the link can view' : 'Private — only you can view')
+    else setItems(xs => xs.map(x => x.id === a.id ? { ...x, visibility: a.visibility } : x))
   }
 
   return (
@@ -43,7 +54,15 @@ export default function Artifacts() {
                 className="rounded-2xl border border-slate-200 bg-white p-4 hover:border-ink/30 hover:shadow-float transition group">
                 <div className="flex items-start justify-between gap-2">
                   <span className={`w-9 h-9 rounded-xl grid place-items-center ${meta.tint}`}><meta.icon size={16} /></span>
-                  <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{meta.label}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={e => toggleVis(e, a)} title={a.visibility === 'public' ? 'Public link — click to make private' : 'Private — click to share publicly'}
+                      className={`text-[9px] font-medium rounded px-1.5 py-0.5 flex items-center gap-1 transition ${
+                        a.visibility === 'public' ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' : 'text-slate-400 bg-slate-100 hover:bg-slate-200'}`}>
+                      {a.visibility === 'public' ? <Globe size={9} /> : <Lock size={9} />}
+                      {a.visibility === 'public' ? 'Public' : 'Private'}
+                    </button>
+                    <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{meta.label}</span>
+                  </div>
                 </div>
                 <div className="text-[13px] font-semibold text-ink mt-2.5 group-hover:text-accent transition truncate">{a.title}</div>
                 <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
