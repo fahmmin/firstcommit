@@ -19,7 +19,7 @@ from app.store import DATA_DIR, LocalStore  # noqa: E402
 from app.agents import registry as reg    # noqa: E402
 
 import json
-SEED = json.loads((Path(__file__).resolve().parent.parent / "app" / "seed" / "seed.json").read_text())
+SEED = json.loads((Path(__file__).resolve().parent.parent / "app" / "seed" / "seed.json").read_text(encoding="utf-8"))
 TENANT = "ramesh_auto"
 
 

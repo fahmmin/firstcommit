@@ -38,9 +38,9 @@ class ConsoleNotifier(Notifier):
             "via": "console",
             "sent_at": datetime.now(timezone.utc).isoformat(),
         }
-        log = json.loads(self.log_file.read_text() or "[]")
+        log = json.loads(self.log_file.read_text(encoding="utf-8") or "[]")
         log.append(msg)
-        self.log_file.write_text(json.dumps(log, indent=2))
+        self.log_file.write_text(json.dumps(log, indent=2), encoding="utf-8")
         print(f"\n📧 [{channel.upper()}] To: {to}\nSubject: {subject}\n{body}\n")
         return msg
 

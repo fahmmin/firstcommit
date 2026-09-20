@@ -113,7 +113,7 @@ export function ApprovalBell({ alerts, onClick }) {
   const n = alerts.filter(a => a.status === 'pending_approval').length
   return (
     <button onClick={onClick} title="Pending approvals"
-      className="relative mt-1 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+      className="relative w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
       <RingBell ring={n > 0}><Bell size={13} /></RingBell>
       {n > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[8px] font-bold grid place-items-center animate-popIn">{n}</span>}
     </button>

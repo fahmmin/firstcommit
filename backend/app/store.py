@@ -158,13 +158,13 @@ class LocalStore(Store):
     def _read(self, coll: str) -> dict:
         f = self.dir / f"{coll}.json"
         with self._lock:
-            return json.loads(f.read_text() or "{}")
+            return json.loads(f.read_text(encoding="utf-8") or "{}")
 
     def _write(self, coll: str, data: dict) -> None:
         f = self.dir / f"{coll}.json"
         tmp = f.with_suffix(".tmp")
         with self._lock:
-            tmp.write_text(json.dumps(data, indent=2, default=str))
+            tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
             os.replace(tmp, f)
 
     def _rows(self, coll: str, tenant_id: str) -> list[dict]:

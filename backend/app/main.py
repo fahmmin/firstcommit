@@ -72,7 +72,7 @@ def _startup():
 
 
 def _load_seed(tenant_id: str):
-    seed = json.loads(SEED_PATH.read_text())
+    seed = json.loads(SEED_PATH.read_text(encoding="utf-8"))
     deps.store.reset(tenant_id, seed)
 
 
@@ -260,7 +260,7 @@ def run_scheduler(tenant_id: str = "ramesh_auto"):
 @app.get("/sent")
 def sent_messages():
     f = DATA_DIR / "sent_messages.json"
-    return json.loads(f.read_text()) if f.exists() else []
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else []
 
 
 @app.post("/demo/reset")

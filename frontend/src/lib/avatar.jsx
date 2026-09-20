@@ -13,8 +13,8 @@ export function agentColor(id) {
 export function AgentAvatar({ seed, size = 32, className = '' }) {
   return (
     <img src={avatarUrl(seed)} alt={seed}
-      width={size} height={size}
-      className={`rounded-xl bg-sky/30 shrink-0 ${className}`}
+      width={size} height={size} style={{ width: size, height: size }}
+      className={`rounded-xl bg-sky/30 shrink-0 self-start ${className}`}
       loading="lazy" />
   )
 }

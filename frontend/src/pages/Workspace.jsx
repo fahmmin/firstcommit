@@ -206,21 +206,26 @@ export default function Workspace() {
               {active?.stats?.runs != null ? `${active.stats.runs} tasks run` : 'Ramesh Auto Components · Faridabad'}
             </div>
           </div>
-          <form onSubmit={e => { e.preventDefault(); const q = e.target.q.value.trim(); if (q) location.hash = `#/search/${encodeURIComponent(q)}` }}
-            className="ml-auto mt-1 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 w-44 focus-within:border-ink transition">
-            <Search size={11} className="text-slate-400 shrink-0" />
-            <input name="q" placeholder="Search workspace…" className="w-full text-[11px] focus:outline-none bg-transparent" />
-          </form>
-          <ApprovalBell alerts={alerts} onClick={() => setApprovals(true)} />
-          <button onClick={() => setPalette(true)} title="Command palette (⌘K)"
-            className="mt-1 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
-            <Command size={13} />
-          </button>
-          <button onClick={() => setDark(a11y.toggleTheme() === 'dark')} title="Toggle dark mode"
-            className="mt-1 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
-            {dark ? <Sun size={13} /> : <Moon size={13} />}
-          </button>
-          <a href="#/docs" className="text-[11px] text-slate-400 hover:text-ink flex items-center gap-1 mt-1"><ExternalLink size={11} /> Docs</a>
+          <div className="ml-auto self-center flex items-center gap-1.5">
+            <form onSubmit={e => { e.preventDefault(); const q = e.target.q.value.trim(); if (q) location.hash = `#/search/${encodeURIComponent(q)}` }}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 w-44 focus-within:border-ink transition">
+              <Search size={11} className="text-slate-400 shrink-0" />
+              <input name="q" placeholder="Search workspace…" className="w-full text-[11px] focus:outline-none bg-transparent" />
+            </form>
+            <ApprovalBell alerts={alerts} onClick={() => setApprovals(true)} />
+            <button onClick={() => setPalette(true)} title="Command palette (⌘K)"
+              className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+              <Command size={13} />
+            </button>
+            <button onClick={() => setDark(a11y.toggleTheme() === 'dark')} title="Toggle dark mode"
+              className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+              {dark ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
+            <a href="#/docs" title="API docs"
+              className="h-7 rounded-lg grid place-items-center px-2 text-slate-400 hover:text-ink hover:bg-slate-100 transition">
+              <FileText size={13} />
+            </a>
+          </div>
         </div>
 
         {/* messages — nav indicator on the right edge jumps to any point */}
@@ -239,8 +244,8 @@ export default function Workspace() {
             <motion.div key={i} ref={el => msgRefs.current[i] = el}
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {isAgent && <AgentAvatar seed={m.agent} size={26} className="rounded-lg mt-1 mr-2.5 shadow-sm" />}
+              className={`flex items-start ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {isAgent && <AgentAvatar seed={m.agent} size={26} className="rounded-lg mt-1 mr-2.5 shadow-sm self-start" />}
               <div className={`max-w-[72%] text-[13px] leading-relaxed whitespace-pre-wrap
                 ${m.role === 'user'
                   ? 'bg-ink text-white rounded-2xl rounded-br-md px-4 py-2.5'
