@@ -304,3 +304,40 @@ def test_dashboard_brief(client):
     brief = r.json()["brief"]
     assert isinstance(brief, list) and len(brief) >= 1
     assert _keys(brief[0]) >= {"icon", "title", "detail", "ref"}
+
+
+# ---------- Phase B: business context / document brain ----------
+
+def test_context_note_lifecycle(client):
+    up = client.post("/context/upload", data={"tenant_id": "ramesh_auto",
+        "text": "Zenith Traders always disputes GST — attach HSN codes on every invoice"})
+    assert up.status_code == 200
+    body = up.json()
+    assert _keys(body) >= _keys(_ep("POST /context/upload")["response"])
+    assert body["status"] == "fed_to_agents" and "tax" in body["tags"]  # gst/hsn → tax
+    did = body["id"]
+    lst = client.get("/context", params={"tenant_id": "ramesh_auto"})
+    assert any(d["id"] == did for d in lst.json())
+    # content search finds it (substring path, offline-safe)
+    s = client.get("/search", params={"q": "zenith", "tenant_id": "ramesh_auto"})
+    assert any(d["id"] == did for d in s.json()["results"]["documents"])
+    d = client.delete(f"/context/{did}", params={"tenant_id": "ramesh_auto"})
+    assert d.status_code == 200 and d.json()["status"] == "deleted"
+
+
+def test_context_excel_upload(client):
+    up = client.post("/context/upload",
+        files={"file": ("suppliers.xlsx", _make_xlsx(),
+               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        data={"tenant_id": "ramesh_auto"})
+    assert up.status_code == 200
+    assert up.json()["kind"] == "spreadsheet"
+
+
+def test_context_fed_to_agent(client):
+    client.post("/context/upload", data={"tenant_id": "ramesh_auto",
+        "text": "Peacock Industries is our largest export buyer — handle with priority"})
+    r = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                   "text": "what do you know about Peacock?"})
+    assert r.status_code == 200
+    assert "peacock" in r.json()["reply"].lower()

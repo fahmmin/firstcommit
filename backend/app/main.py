@@ -21,6 +21,7 @@ from .scheduler import run_once as scheduler_run_once, start as scheduler_start
 from .store import DATA_DIR, get_store
 from .tools.artifacts import TEMPLATES, create_artifact_impl
 from .tools.comms import send_alert_impl
+from .tools.documents import cosine, embed_text, ingest_document_impl
 from .tools.importer import import_excel_impl
 from .tools.invoices import create_invoice_impl, draft_reminder_impl, parse_invoice_file
 
@@ -644,6 +645,38 @@ def create_artifact(req: ArtifactReq):
         raise HTTPException(422, str(e))
 
 
+@app.post("/context/upload")
+async def context_upload(file: UploadFile | None = File(None),
+                        text: str | None = Form(None),
+                        tenant_id: str = Form("ramesh_auto")):
+    """Business context — drop any file OR a note; auto-tagged + fed to agents."""
+    if file is None and not (text and text.strip()):
+        raise HTTPException(400, "provide a file or a text note")
+    if file is not None:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        fid = f"f-{uuid.uuid4().hex[:6]}"
+        dest = UPLOAD_DIR / f"{fid}_{file.filename}"
+        with dest.open("wb") as f:
+            shutil.copyfileobj(file.file, f)
+        return ingest_document_impl(tenant_id, file_path=str(dest), filename=file.filename)
+    return ingest_document_impl(tenant_id, note=text.strip(), filename="note.txt")
+
+
+@app.get("/context")
+def context(tenant_id: str = "ramesh_auto"):
+    rows = deps.store.list_documents(tenant_id)
+    rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
+    return [{k: v for k, v in d.items() if k not in ("embedding", "text_excerpt")} for d in rows]
+
+
+@app.delete("/context/{doc_id}")
+def delete_context(doc_id: str, tenant_id: str = "ramesh_auto"):
+    if not deps.store.delete_document(tenant_id, doc_id):
+        raise HTTPException(404, "no such document")
+    reg.get_registry(tenant_id).reset_agents()
+    return {"status": "deleted"}
+
+
 @app.get("/people")
 def people(tenant_id: str = "ramesh_auto"):
     """Everyone the business touches — customers (from invoices), suppliers, carriers."""
@@ -720,11 +753,21 @@ def search(q: str = "", tenant_id: str = "ramesh_auto"):
         if hit(m.get("text")):
             results["memories"].append({"id": m["id"], "title": m.get("text", ""),
                 "meta": m.get("source", "owner"), "ref": "#/settings"})
-    if UPLOAD_DIR.exists():
-        for p in UPLOAD_DIR.iterdir():
-            if p.is_file() and ql in p.name.lower():
-                results["documents"].append({"id": p.stem, "title": p.name,
-                    "meta": "uploaded document", "ref": "#/app"})
+    # documents — content search over the business-context brain (tags/summary/excerpt),
+    # ranked by Titan-embedding cosine similarity when embeddings are present.
+    docs = deps.store.list_documents(tenant_id)
+    qvec = embed_text(q) if any(d.get("embedding") for d in docs) else None
+    doc_hits = []
+    for d in docs:
+        substr = hit(d.get("filename"), d.get("summary"), d.get("text_excerpt"),
+                     " ".join(d.get("tags", [])))
+        score = cosine(qvec, d["embedding"]) if qvec and d.get("embedding") else 0.0
+        if substr or score >= 0.35:
+            doc_hits.append((score, {"id": d["id"], "title": d.get("filename", ""),
+                "meta": f"{', '.join(d.get('tags', []))} · {d.get('summary', '')}"[:80],
+                "ref": "#/context"}))
+    doc_hits.sort(key=lambda x: x[0], reverse=True)
+    results["documents"] = [h for _, h in doc_hits]
     return {"q": q, "results": results}
 
 

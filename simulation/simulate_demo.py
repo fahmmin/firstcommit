@@ -158,6 +158,18 @@ def main() -> int:
               "customers>0 + >=1 defaulter", f"{ppl['summary']['customers']}/{len(defaulters)}",
               ppl["summary"]["customers"] > 0 and len(defaulters) >= 1)
 
+        # 17. Phase B — business context: drop a note → auto-tagged → searchable → fed to agents
+        doc = c.post("/context/upload", data={"tenant_id": TENANT,
+              "text": "Falcon Exports demands GST invoice with HSN codes on every order"}).json()
+        found = c.get("/search", params={"q": "falcon", "tenant_id": TENANT}).json()
+        in_search = any(d["id"] == doc["id"] for d in found["results"]["documents"])
+        rc = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                    "text": "what do you know about Falcon Exports?"}).json()
+        check("business context tagged + searchable + fed",
+              "tags + in-search + agent cites it",
+              f"{doc.get('tags')}/{in_search}/{'falcon' in rc['reply'].lower()}",
+              bool(doc.get("tags")) and in_search and "falcon" in rc["reply"].lower())
+
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{'='*60}\n{passed}/{len(results)} checks passed")
     return 0 if passed == len(results) else 1

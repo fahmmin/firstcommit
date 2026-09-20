@@ -111,6 +111,16 @@ class Store(ABC):
     @abstractmethod
     def put_artifact(self, tenant_id: str, artifact: dict) -> dict: ...
 
+    # documents (business-context brain: any file/note, auto-tagged + searchable)
+    @abstractmethod
+    def list_documents(self, tenant_id: str) -> list[dict]: ...
+    @abstractmethod
+    def get_document(self, tenant_id: str, doc_id: str) -> dict | None: ...
+    @abstractmethod
+    def put_document(self, tenant_id: str, doc: dict) -> dict: ...
+    @abstractmethod
+    def delete_document(self, tenant_id: str, doc_id: str) -> bool: ...
+
     # seed/reset
     @abstractmethod
     def reset(self, tenant_id: str, seed: dict) -> None: ...
@@ -121,7 +131,7 @@ class LocalStore(Store):
 
     _COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
                     "tasks", "notifications", "connectors", "settings", "activity",
-                    "memories", "artifacts")
+                    "memories", "artifacts", "documents")
 
     def __init__(self, data_dir: Path | None = None):
         self.dir = data_dir or DATA_DIR
@@ -303,6 +313,19 @@ class LocalStore(Store):
     def put_artifact(self, tenant_id, artifact):
         return self._put("artifacts", tenant_id, artifact)
 
+    # documents
+    def list_documents(self, tenant_id):
+        return self._rows("documents", tenant_id)
+
+    def get_document(self, tenant_id, doc_id):
+        return next((d for d in self.list_documents(tenant_id) if d["id"] == doc_id), None)
+
+    def put_document(self, tenant_id, doc):
+        return self._put("documents", tenant_id, doc)
+
+    def delete_document(self, tenant_id, doc_id):
+        return self._delete("documents", tenant_id, doc_id)
+
     def reset(self, tenant_id, seed):
         for coll in self._COLLECTIONS:
             if coll in seed:
@@ -352,6 +375,7 @@ class DynamoStore(Store):
         "activity": "DDB_TABLE_ACTIVITY",
         "memories": "DDB_TABLE_MEMORIES",
         "artifacts": "DDB_TABLE_ARTIFACTS",
+        "documents": "DDB_TABLE_DOCUMENTS",
     }
 
     def __init__(self, region: str | None = None):
@@ -512,6 +536,22 @@ class DynamoStore(Store):
 
     def put_artifact(self, tenant_id, artifact):
         return self._put("artifacts", tenant_id, artifact)
+
+    # documents
+    def list_documents(self, tenant_id):
+        return self._all("documents", tenant_id)
+
+    def get_document(self, tenant_id, doc_id):
+        return self._put_get("documents", tenant_id, doc_id)
+
+    def put_document(self, tenant_id, doc):
+        return self._put("documents", tenant_id, doc)
+
+    def delete_document(self, tenant_id, doc_id):
+        if not self._put_get("documents", tenant_id, doc_id):
+            return False
+        self.tables["documents"].delete_item(Key={"tenant_id": tenant_id, "id": doc_id})
+        return True
 
     def reset(self, tenant_id, seed):
         # clear every existing row for the tenant first — a spec-free seed

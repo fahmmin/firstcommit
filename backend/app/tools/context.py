@@ -13,15 +13,18 @@ from .. import deps
 
 
 def build_memory_suffix(tenant_id: str) -> str:
-    """The '...what the owner told you...' block injected into system prompts."""
+    """Owner's typed memories + shared-document summaries, injected into prompts."""
     if deps.store is None:
         return ""
+    suffix = ""
     mems = deps.store.list_memories(tenant_id)
-    if not mems:
-        return ""
-    lines = "\n".join(f"- {m['text']}" for m in mems)
-    return ("\n\nWhat the owner told you about their business "
-            "(honor these in every answer):\n" + lines)
+    if mems:
+        lines = "\n".join(f"- {m['text']}" for m in mems)
+        suffix += ("\n\nWhat the owner told you about their business "
+                   "(honor these in every answer):\n" + lines)
+    from .documents import build_context_suffix
+    suffix += build_context_suffix(tenant_id)
+    return suffix
 
 
 def memory_tools(tenant_id: str) -> list:
@@ -32,15 +35,19 @@ def memory_tools(tenant_id: str) -> list:
         filter by a keyword (e.g. a buyer or supplier name)."""
         import re
         mems = deps.store.list_memories(tenant_id)
+        docs = deps.store.list_documents(tenant_id)
+        doc_items = [{"text": f"{d.get('filename','')}: {d.get('summary','')}"} for d in docs]
         stop = {"what", "does", "about", "remember", "recall", "know", "tell", "have",
                 "your", "the", "you", "told", "context", "note", "notes"}
         if query:
             words = [w for w in re.findall(r"[a-z0-9]+", query.lower())
                      if len(w) > 3 and w not in stop]
-            matched = [m for m in mems if any(w in m["text"].lower() for w in words)]
-            matched = matched or mems
+            def _match(items):
+                return [i for i in items if any(w in i["text"].lower() for w in words)]
+            mem_hits, doc_hits = _match(mems), _match(doc_items)
+            matched = mem_hits + doc_hits or mems
         else:
-            matched = mems
+            matched = mems + doc_items
         lines = [m["text"] for m in matched]
         return {
             "memories": lines,
