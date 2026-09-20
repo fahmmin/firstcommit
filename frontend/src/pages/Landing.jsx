@@ -1,4 +1,6 @@
 import { motion } from 'framer-motion'
+import { BorderBeam } from 'border-beam'
+import { MetalText } from 'metal-fx'
 import {
   Receipt, Package, Wallet, Factory, Bell, Camera, ShieldCheck,
   ArrowRight, Sparkles, CalendarClock, PlugZap, CheckCircle2, X,
@@ -148,7 +150,9 @@ export default function Landing() {
         </motion.h1>
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.16 }}
           className="mt-7 flex items-center gap-3">
-          <a href="#/app" className="bg-ink text-white rounded-xl px-6 py-3 lg:px-7 lg:py-3.5 text-sm lg:text-base font-medium hover:bg-ink/85 transition">Get Started</a>
+          <BorderBeam size="md" strength={0.7} colorVariant="colorful" className="rounded-xl">
+            <a href="#/app" className="block bg-ink text-white rounded-xl px-6 py-3 lg:px-7 lg:py-3.5 text-sm lg:text-base font-medium hover:bg-ink/85 transition">Get Started</a>
+          </BorderBeam>
           <a href="#demo" className="border border-slate-300 rounded-xl px-6 py-3 lg:px-7 lg:py-3.5 text-sm lg:text-base font-medium hover:bg-slate-50 transition">See it work</a>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 36 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.28 }}
@@ -403,7 +407,7 @@ export default function Landing() {
             <div>
               <a href="#/" className="flex items-center gap-2.5">
                 <Blobs />
-                <span className="font-semibold text-[15px] tracking-tight text-ink">Sahayak</span>
+                <MetalText font="600 15px/1.2 Inter, system-ui, sans-serif" color="#1a1a24" strength={0.9}>Sahayak</MetalText>
               </a>
               <p className="mt-3.5 text-[12.5px] lg:text-sm leading-relaxed text-slate-500 max-w-[270px] lg:max-w-[300px]">
                 AI operations team for Indian SMBs — receivables, procurement,

@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { api, TENANT } from '../api.js'
 import { session } from '../lib/auth.js'
 import { motion } from 'framer-motion'
+import { ThinkingOrb } from 'thinking-orbs'
+import { BorderBeam } from 'border-beam'
+import { Liquid } from 'liquid-gooey'
+import { MetalFx, MetalBadge } from 'metal-fx'
 import { AgentAvatar, agentColor } from '../lib/avatar.jsx'
 import { AgentCards } from '../components/cards/index.jsx'
 import { SourceChips } from '../components/ThinkingTrace.jsx'
 import { TimelineProgress } from '../components/rui/TimelineProgress.jsx'
 import { ExclusionTabs } from '../components/rui/ExclusionTabs.jsx'
-import { VoiceOverlay } from '../components/rui/CloudWave.jsx'
+const VoiceOverlay = lazy(() => import('../components/rui/CloudWave.jsx').then(m => ({ default: m.VoiceOverlay })))
 import { Can } from '../components/rui/Can.jsx'
 import { LinkifiedText, LinkPreviewCard, extractUrls } from '../components/rui/LinkPreview.jsx'
 import { NavIndicator } from '../components/rui/NavIndicator.jsx'
@@ -193,7 +197,7 @@ export default function Workspace() {
               <span className="font-semibold text-[15px] text-ink">{active?.name || 'Sahayak'}</span>
               {active?.hindi_tagline && <span className="text-[11px] text-accent">{active.hindi_tagline}</span>}
               {active?.created_by === 'factory' &&
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-magenta/10 text-magenta">HIRED BY AI</span>}
+                <MetalBadge strength={0.85} theme="light">HIRED BY AI</MetalBadge>}
             </div>
             <div className="text-[12px] text-slate-500 mt-0.5 truncate">
               {active ? (active.description || active.goal) : 'Orchestrator — routes your request to the right specialist, or hires a new one.'}
@@ -307,10 +311,13 @@ export default function Workspace() {
               className="flex items-start">
               <AgentAvatar seed={activeAgent || 'sahayak'} size={26} className="rounded-lg mt-1 mr-2.5 shadow-sm" />
               <div className="max-w-[72%]">
-                <div className="w-fit rounded-2xl rounded-tl-md border border-slate-100 bg-[#fbfbfd] px-4 py-2.5 shadow-sm flex items-center gap-1">
+                <div className="w-fit rounded-2xl rounded-tl-md border border-slate-100 bg-[#fbfbfd] px-4 py-2.5 shadow-sm flex items-center gap-2">
+                  <ThinkingOrb size={20}
+                    state={mode === 'deep' ? 'solving' : mode === 'web' ? 'searching' : 'working'}
+                    aria-label={`${active?.name || 'Sahayak'} is thinking`} />
                   <span className="text-[11.5px] font-bold tracking-tight"
                     style={{ color: agentColor(activeAgent || 'sahayak') }}>{active?.name || 'Sahayak'}</span>
-                  <TypingDots className="text-slate-400" />
+                  <span className="text-[10px] text-slate-400">is thinking</span>
                 </div>
                 <div className="mt-2"><TimelineProgress text={lastSent} scope={scope} mode={mode} /></div>
               </div>
@@ -322,19 +329,22 @@ export default function Workspace() {
 
         {/* templates gallery + scope tabs + suggestions + input */}
         <div className="px-6 pb-4">
-          {voice && <VoiceOverlay onClose={() => setVoice(false)}
-            onTranscript={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50) }} />}
+          {voice && <Suspense fallback={null}><VoiceOverlay onClose={() => setVoice(false)}
+            onTranscript={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50) }} /></Suspense>}
           {/* exclusion tabs — capability scope picker + response mode */}
           <div className="mb-2.5 flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5 shadow-float">
+            <Liquid blur={5} contrast={16} fill="#fff"
+              className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5 shadow-float w-fit">
               {[['chat', 'Chat', MessageSquare], ['web', 'Web search', Globe], ['deep', 'Deep research', Telescope]].map(([k, l, I]) => (
-                <button key={k} type="button" onClick={() => setMode(k)}
-                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium transition
-                    ${mode === k ? 'bg-ink text-white' : 'text-slate-500 hover:text-ink'}`}>
-                  <I size={10} /> {l}
-                </button>
+                <Liquid.Item key={k} transition="bouncy">
+                  <button type="button" onClick={() => setMode(k)}
+                    className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium transition
+                      ${mode === k ? 'bg-ink text-white' : 'text-slate-500 hover:text-ink'}`}>
+                    <I size={10} /> {l}
+                  </button>
+                </Liquid.Item>
               ))}
-            </div>
+            </Liquid>
             {mode !== 'chat' && (
               <span className="flex items-center gap-1 text-[9px] text-slate-400">
                 powered by <BrandIcon id="perplexity" size={10} /> Perplexity
@@ -424,27 +434,31 @@ export default function Workspace() {
               ))}
             </div>
           )}
-          <form onSubmit={e => { e.preventDefault(); send() }}
-            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white shadow-float px-4 py-1.5 focus-within:border-slate-400 transition">
-            <input ref={attachRef} type="file" multiple accept="image/*,video/*,.pdf,.xlsx,.csv,.docx" className="hidden"
-              onChange={e => { setFiles(fs => [...fs, ...Array.from(e.target.files)]); e.target.value = '' }} />
-            <button type="button" onClick={() => attachRef.current?.click()} title="Attach invoice photo, PDF, Excel…"
-              className="w-8 h-8 rounded-xl grid place-items-center transition shrink-0 text-slate-400 hover:text-ink hover:bg-slate-100">
-              <Paperclip size={14} />
-            </button>
-            {activeAgent && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ink text-white shrink-0">→ {active?.name || activeAgent}</span>}
-            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-              placeholder={activeAgent ? `Ask ${active?.name || activeAgent}…` : 'Pick a template or write your own prompt…'}
-              className="flex-1 py-2 text-[13px] focus:outline-none bg-transparent" />
-            <button type="button" onClick={() => setVoice(v => !v)} title="Voice mode"
-              className={`w-8 h-8 rounded-xl grid place-items-center transition shrink-0
-                ${voice ? 'bg-accent text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-100'}`}>
-              <Mic size={14} />
-            </button>
-            <button disabled={busy} className="group rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 active:scale-95 transition flex items-center gap-1.5">
-              Generate <Send size={10} className="send-fly" />
-            </button>
-          </form>
+          <BorderBeam size="line" strength={0.55} colorVariant="colorful" className="rounded-2xl">
+            <form onSubmit={e => { e.preventDefault(); send() }}
+              className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white shadow-float px-4 py-1.5 focus-within:border-slate-400 transition">
+              <input ref={attachRef} type="file" multiple accept="image/*,video/*,.pdf,.xlsx,.csv,.docx" className="hidden"
+                onChange={e => { setFiles(fs => [...fs, ...Array.from(e.target.files)]); e.target.value = '' }} />
+              <button type="button" onClick={() => attachRef.current?.click()} title="Attach invoice photo, PDF, Excel…"
+                className="w-8 h-8 rounded-xl grid place-items-center transition shrink-0 text-slate-400 hover:text-ink hover:bg-slate-100">
+                <Paperclip size={14} />
+              </button>
+              {activeAgent && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ink text-white shrink-0">→ {active?.name || activeAgent}</span>}
+              <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+                placeholder={activeAgent ? `Ask ${active?.name || activeAgent}…` : 'Pick a template or write your own prompt…'}
+                className="flex-1 py-2 text-[13px] focus:outline-none bg-transparent" />
+              <MetalFx variant="circle" preset="chromatic" strength={0.8} theme="light">
+                <button type="button" onClick={() => setVoice(v => !v)} title="Voice mode"
+                  className={`w-8 h-8 rounded-xl grid place-items-center transition shrink-0
+                    ${voice ? 'bg-accent text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-100'}`}>
+                  <Mic size={14} />
+                </button>
+              </MetalFx>
+              <button disabled={busy} className="group rounded-xl bg-ink text-white px-4 py-1.5 text-[12px] font-medium disabled:opacity-40 hover:bg-ink/85 active:scale-95 transition flex items-center gap-1.5">
+                Generate <Send size={10} className="send-fly" />
+              </button>
+            </form>
+          </BorderBeam>
         </div>
       </main>
 

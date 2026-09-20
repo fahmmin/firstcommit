@@ -3,6 +3,8 @@
 // `active` makes it breathe faster and pushes energy into the ripple rings.
 import { useEffect, useId, useRef, useState } from 'react'
 import { Mic, MicOff } from 'lucide-react'
+import { ThinkingOrb } from 'thinking-orbs'
+import { VoiceBeam, useMicrophone } from 'voice-glow'
 import { SpeedyCircles } from './Circles.jsx'
 
 export function CloudWaveOrb({ size = 132, active = false }) {
@@ -53,6 +55,9 @@ export function VoiceOverlay({ onClose, onTranscript }) {
   const [heard, setHeard] = useState('')
   const [supported] = useState(() => 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
   const recRef = useRef(null)
+  const mic = useMicrophone()  // voice-glow — drives the reactive beam
+
+  useEffect(() => { mic.start().catch(() => {}) ; return () => mic.stop() }, []) // best-effort — beam falls back to level
 
   useEffect(() => {
     if (!supported) return
@@ -75,10 +80,14 @@ export function VoiceOverlay({ onClose, onTranscript }) {
   const use = () => { if (heard.trim()) onTranscript(heard.trim()); onClose() }
 
   return (
-    <div className="mb-3 rounded-2xl border border-slate-200 bg-ink text-white shadow-float-lg px-5 py-5 flex items-center gap-5">
-      <SpeedyCircles size={120} active={listening}>
-        <CloudWaveOrb size={92} active={listening} />
-      </SpeedyCircles>
+    <VoiceBeam type="pill" theme="dark" colorVariant="ocean" strength={0.85}
+      stream={mic.stream} level={listening ? 0.45 : 0} processing={!listening && !!heard}
+      className="mb-3 rounded-2xl">
+      <div className="rounded-2xl border border-slate-200 bg-ink text-white shadow-float-lg px-5 py-5 flex items-center gap-5">
+        <div className="grid place-items-center" style={{ width: 120, height: 120 }}>
+          <ThinkingOrb state="listening" size={64} dark
+            aria-label={listening ? 'Listening' : 'Paused'} />
+        </div>
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-semibold flex items-center gap-2">
           {listening ? <Mic size={13} className="text-accent-2 animate-pulse" /> : <MicOff size={13} className="text-white/50" />}
@@ -102,6 +111,7 @@ export function VoiceOverlay({ onClose, onTranscript }) {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </VoiceBeam>
   )
 }
