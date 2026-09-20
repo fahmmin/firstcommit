@@ -118,7 +118,7 @@ export default function Reports() {
             </button>
             <button onClick={generate} disabled={busy}
               className="rounded-xl bg-ink text-white px-5 py-2 text-[12.5px] font-medium hover:bg-ink/85 active:scale-95 transition disabled:opacity-40 flex items-center gap-2">
-              {busy ? <><ThinkingOrb size={16} state="composing" /> Building…</> : <><Sparkles size={12} /> Generate report</>}
+              {busy ? <><ThinkingOrb size={20} state="composing" /> Building…</> : <><Sparkles size={12} /> Generate report</>}
             </button>
           </div>
 

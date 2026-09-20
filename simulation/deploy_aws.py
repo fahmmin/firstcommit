@@ -234,12 +234,13 @@ def deploy_lambda(role_arn: str, zip_path: Path) -> str | None:
 
 def function_url() -> str | None:
     lam = session.client("lambda")
-    cors = {"AllowOrigins": ["*"], "AllowMethods": ["*"], "AllowHeaders": ["*"],
-            "MaxAge": 86400}
+    # NO Cors here — FastAPI's CORSMiddleware owns it. Setting CORS on both
+    # layers emits duplicate Access-Control-Allow-Origin headers, which every
+    # browser rejects ("multiple values" → frontend reports backend down).
     try:
-        lam.create_function_url_config(FunctionName=FUNCTION_NAME, AuthType="NONE", Cors=cors)
+        lam.create_function_url_config(FunctionName=FUNCTION_NAME, AuthType="NONE")
     except lam.exceptions.ResourceConflictException:
-        lam.update_function_url_config(FunctionName=FUNCTION_NAME, AuthType="NONE", Cors=cors)
+        lam.update_function_url_config(FunctionName=FUNCTION_NAME, AuthType="NONE", Cors={})
     # public URL needs BOTH grants: URL access + actual invocation
     for sid, kw in [
         ("FunctionURLAllowPublicAccess", dict(Action="lambda:InvokeFunctionUrl",

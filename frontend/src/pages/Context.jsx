@@ -93,7 +93,7 @@ function DocPreview({ item, onClose }) {
           )}
           {item.remote && !pv && !err && (
             <div className="h-40 grid place-items-center">
-              <ThinkingOrb size={36} state="shaping" aria-label="Loading preview" />
+              <ThinkingOrb size={64} state="shaping" aria-label="Loading preview" />
             </div>
           )}
           {err && <div className="p-6 text-[12px] text-rose-500">Preview unavailable — {err}</div>}
