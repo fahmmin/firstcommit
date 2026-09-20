@@ -47,7 +47,7 @@ Open ⬜ (not done yet)
 
 **Stretch / open**
 - ⬜ **Real Google Drive / Google Calendar OAuth connectors** — §OAuth below has the full setup list (env placeholders already in `.env.example`)
-- ⬜ **Deploy** (§6): Amplify (frontend) + Lambda URL (`Mangum` ready) + EventBridge rule → `scheduler.run_once`
+- ✅ **Deploy** (§6): shipped — Amplify frontend live, Lambda + EventBridge deployed (`simulation/deploy_aws.py`); only `lambda:CreateFunctionUrlConfig` IAM grant pending for the permanent public URL
 - 🟡 **Web search / Deep research** agent tool — **plumbing DONE**: `/chat` now honors `mode: "web"|"deep"` (prepends a hint), `web_search` tool given to all agents + orchestrator (`tools/websearch.py`, Tavily via httpx), mock rule added. **Activate by setting `TAVILY_API_KEY`** — keyless it returns a graceful "not configured" reply.
 - ⬜ Digital-presence template's tools (`publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`) aren't in `TOOL_REGISTRY` — template ships `tools: []` so install converges via Nirmata prompt only
 - ✅ ~~Frontend wiring of already-built backends~~ — DONE (Fahmin, 2026-09-20): `/context/*` → Context page, `POST /onboarding` → wizard (chips→`pains`, auto-hire toast), `/people` → CRM tabs, `/logs` → LogsExplorer stream, `POST /notifications/{id}/read` → mark-read + mark-all, `GET /connectors/{id}/sync` → Settings "Sync now" + post-connect sync, `/templates` + `/templates/{id}/install` → gallery merged catalog + Install buttons (agent_spec → open_agent deep-link; `needs_factory` → prompt prefill). Every screen still falls back to the demo store offline.
@@ -161,7 +161,7 @@ python simulation/deploy_aws.py --api-url <url>    # frontend pointed at any bac
 ```
 
 **What's live**
-- Frontend: Amplify manual zip-deploy → `https://main.<appId>.amplifyapp.com`
+- Frontend: Amplify manual zip-deploy → `https://main.dym7go4p5hfno.amplifyapp.com`
   (S3 static-website fallback inside the script if Amplify fails)
 - Backend: Lambda `sahayak-api` (python3.11 zip, 41MB, handler `app.main.handler`)
   — verified via direct invoke: `/health` 200, gated routes 401→200 with token,

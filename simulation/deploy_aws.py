@@ -163,7 +163,8 @@ def deploy_lambda(role_arn: str, zip_path: Path) -> str | None:
         lam.get_function(FunctionName=FUNCTION_NAME)
         lam.update_function_code(FunctionName=FUNCTION_NAME, S3Bucket=bucket, S3Key=key)
         lam.get_waiter("function_updated_v2").wait(FunctionName=FUNCTION_NAME)
-        lam.update_function_configuration(FunctionName=FUNCTION_NAME, **{k: v for k, v in cfg.items() if k != "Runtime"})
+        lam.update_function_configuration(FunctionName=FUNCTION_NAME, **{
+            k: v for k, v in cfg.items() if k not in ("Runtime", "Architectures")})
         lam.get_waiter("function_updated_v2").wait(FunctionName=FUNCTION_NAME)
         print(f"[lambda] updated {FUNCTION_NAME}")
     except lam.exceptions.ResourceNotFoundException:
