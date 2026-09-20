@@ -170,6 +170,17 @@ def main() -> int:
               f"{doc.get('tags')}/{in_search}/{'falcon' in rc['reply'].lower()}",
               bool(doc.get("tags")) and in_search and "falcon" in rc["reply"].lower())
 
+        # 18. Phase C — template catalog + install-as-agent via the factory
+        tmpls = c.get("/templates", params={"tenant_id": TENANT}).json()
+        cats = {t["category"] for t in tmpls}
+        before_agents = {a["id"] for a in c.get("/agents", params={"tenant_id": TENANT}).json()}
+        inst = c.post("/templates/collections-agent/install", json={"tenant_id": TENANT}).json()
+        after_agents = {a["id"] for a in c.get("/agents", params={"tenant_id": TENANT}).json()}
+        check("templates catalog + install→agent",
+              ">=5 categories + new agent", f"{len(cats)}/{inst.get('created_by')}",
+              len(cats) >= 5 and inst.get("created_by") == "factory"
+              and inst["id"] in after_agents and inst["id"] not in before_agents)
+
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{'='*60}\n{passed}/{len(results)} checks passed")
     return 0 if passed == len(results) else 1

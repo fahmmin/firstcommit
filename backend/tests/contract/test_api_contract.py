@@ -341,3 +341,31 @@ def test_context_fed_to_agent(client):
                                    "text": "what do you know about Peacock?"})
     assert r.status_code == 200
     assert "peacock" in r.json()["reply"].lower()
+
+
+# ---------- Phase C: templates catalog + install ----------
+
+def test_templates_catalog(client):
+    r = client.get("/templates", params={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    rows = r.json()
+    assert isinstance(rows, list) and len(rows) >= 8
+    assert _keys(rows[0]) >= _keys(_ep("GET /templates?tenant_id=")["response"][0])
+    cats = {t["category"] for t in rows}
+    assert cats >= {"money", "procurement", "logistics", "new_agent", "presence"}
+    assert any(t["id"] == "digital-presence" and t["runs_on"] == "nirmata" for t in rows)
+
+
+def test_install_agent_template(client):
+    before = {a["id"] for a in client.get("/agents").json()}
+    r = client.post("/templates/collections-agent/install", json={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    assert r.json()["created_by"] == "factory"
+    after = {a["id"] for a in client.get("/agents").json()}
+    assert r.json()["id"] in after and len(after) > len(before)
+
+
+def test_install_factory_template_returns_prompt(client):
+    r = client.post("/templates/digital-presence/install", json={"tenant_id": "ramesh_auto"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "needs_factory" and r.json()["prompt"]

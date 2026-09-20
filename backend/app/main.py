@@ -677,6 +677,38 @@ def delete_context(doc_id: str, tenant_id: str = "ramesh_auto"):
     return {"status": "deleted"}
 
 
+@app.get("/templates")
+def templates(tenant_id: str = "ramesh_auto"):
+    from .templates_catalog import TEMPLATES
+    return TEMPLATES
+
+
+class TemplateInstallReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+
+
+@app.post("/templates/{template_id}/install")
+def install_template(template_id: str, req: TemplateInstallReq):
+    """Install a template. Agent templates with valid tools → created via the factory;
+    factory/prompt templates → return the prompt to run through Nirmata live."""
+    from .agents.specs import ALL_TOOL_NAMES
+    from .templates_catalog import get_template
+    t = get_template(template_id)
+    if not t:
+        raise HTTPException(404, "unknown template")
+    spec_def = t.get("agent_spec")
+    valid_tools = [x for x in (spec_def or {}).get("tools", []) if x in ALL_TOOL_NAMES]
+    if spec_def and valid_tools:
+        spec = reg.get_registry(req.tenant_id).create_spec(
+            name=spec_def["name"], goal=spec_def["goal"], tools=valid_tools,
+            hindi_tagline=spec_def.get("hindi_tagline", ""))
+        deps.record_action("template_installed", {"template": template_id, "agent_id": spec["id"]})
+        return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"]}
+    # no ready toolset (e.g. digital presence) → the owner runs it and Nirmata hires live
+    return {"status": "needs_factory", "runs_on": t.get("runs_on", "nirmata"),
+            "prompt": t.get("prompt", "")}
+
+
 @app.get("/people")
 def people(tenant_id: str = "ramesh_auto"):
     """Everyone the business touches — customers (from invoices), suppliers, carriers."""
