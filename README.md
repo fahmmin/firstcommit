@@ -1,11 +1,11 @@
-# Sahayak AI — an AI staff for the small businessman the internet left behind
+# Sahaayak AI — an AI staff for the small businessman the internet left behind
 
 > The online-shopping boom handed every big retailer a software army — logistics
 > engines, collection teams, analytics dashboards — while the man running a
 > components shop in Faridabad got a smartphone and a warning that his customers
 > are buying online now. **63 million small businesses** still run on paper
 > ledgers, WhatsApp threads and memory — not because they're behind, but because
-> every tool ever built for them assumes an IT department. Sahayak is our answer:
+> every tool ever built for them assumes an IT department. Sahaayak is our answer:
 > **an AI staff, not another dashboard.**
 
 [![Live demo](https://img.shields.io/badge/demo-sahaayak.space-3494f4)](https://www.sahaayak.space/?gate=WJecxdO_WdjZ#/app)
@@ -22,14 +22,14 @@
 <img width="1897" height="693" alt="image" src="https://github.com/user-attachments/assets/abf98127-4222-46b2-bd58-87facc88d916" />
 <img width="1513" height="903" alt="image" src="https://github.com/user-attachments/assets/99109b58-2efd-477a-9248-8cd4ecf6b6da" />
 
-## What does Sahayak do?
+## What does Sahaayak do?
 
 Ramesh owns an auto-components shop. His "system" is a notebook, a billing app,
-and his own memory of who owes him what. Sahayak gives him the thing only big
+and his own memory of who owes him what. Sahaayak gives him the thing only big
 companies have ever had: **a staff that works while he sleeps.**
 
 - **He talks, they work.** Plain words — Hinglish fine. An orchestrator
-  (**Sahayak**, Nova Pro) routes every request to a specialist: **Vasool** chases
+  (**Sahaayak**, Nova Pro) routes every request to a specialist: **Vasool** chases
   payments, **Khata** watches cash flow and 90-day terms, **Sourcer** knows
   suppliers and MOQs. Replies arrive in a group-chat thread that shows exactly
   *which* agent answered and how the request was routed.
@@ -70,7 +70,7 @@ the keys.
 
 ### Ship it — AWS services
 
-| Service | Role in Sahayak |
+| Service | Role in Sahaayak |
 |---|---|
 | **Amazon Bedrock** | Nova Pro (orchestrator, via `apac.amazon.nova-pro-v1:0` inference profile) routes requests; Nova Lite powers each specialist; **Titan Embed v2** drives semantic document search; Nova vision parses invoice photos |
 | **AWS Lambda + Function URL** | The whole FastAPI backend runs serverless via **Mangum** — zero idle cost, scales to zero between demo clicks |
@@ -80,7 +80,7 @@ the keys.
 | **Amazon SES** | Approved reminders/alerts go out as real email |
 | **Amazon EventBridge** | `rate(1 minute)` rule → the proactive loop that drafts overnight reminders |
 | **AWS Amplify** | Frontend hosting + the `sahaayak.space` custom domain |
-| **IAM** | Scoped execution role — Bedrock invoke, Textract, SES send, DDB/S3 on `sahayak-*` only |
+| **IAM** | Scoped execution role — Bedrock invoke, Textract, SES send, DDB/S3 on `Sahaayak-*` only |
 
 ---
 
@@ -95,7 +95,7 @@ the keys.
         ┌───────────────────────┼────────────────────────────┐
         ▼                       ▼                            ▼
   EventBridge (1/min)     Strands orchestrator          /context upload
-  scheduler → draft       Sahayak · Nova Pro            → S3 bytes
+  scheduler → draft       Sahaayak · Nova Pro            → S3 bytes
   overnight alerts              │                       → Textract OCR
         │         ┌─────────────┼─────────────┐         → Titan embed
         ▼         ▼             ▼             ▼              ▼
