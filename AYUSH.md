@@ -35,12 +35,12 @@ Done ✅
 Open ⬜ (not done yet)
 
 **Needed by the live frontend** (Fahmin's pages are shipped — these are the real gaps):
-- ⬜ `PATCH /tasks/{id}` — kanban drag-drop persistence; now in contract.json (Round-4 §1 below)
-- ⬜ `POST /tasks` field mapping — frontend now sends `col`+`status`+`agent`+`agent_id`; `agent_id` lands, `status`/`col` still dropped server-side (Round-4 §2)
-- ⬜ **UTF-8 charset** on JSON responses — `₹` mojibakes to `â‚¹` on Windows/curl (Round-4 §3)
-- ⬜ `PATCH /settings` accept `role` — onboarding's role→RBAC pick should persist (Round-4 §5)
-- ⬜ `_PAIN_MAP` missing `too_many_excels` — frontend sends it from the wizard (Round-4 "already covered" note below)
-- ⬜ **Textract IAM** — user `AWSHACKATHON` lacks `textract:DetectDocumentText`/`AnalyzeDocument`; PDF ingest falls back to filename-only. Attach the actions to the IAM policy (xlsx unaffected — openpyxl path works).
+- ✅ `PATCH /tasks/{id}` — kanban drag-drop persistence (col↔status alias); contract-tested + sim step
+- ✅ `POST /tasks` field mapping — accepts `col`+`status`+`agent`+`agent_id`, all persist
+- ✅ **UTF-8 charset** on JSON responses — `UTF8JSONResponse` (`ensure_ascii=False`, `charset=utf-8`); `₹` verified on the wire
+- ✅ `PATCH /settings` accept `role` — persists to `prefs.role`
+- ✅ `_PAIN_MAP` `too_many_excels` — handled as an "import your ledger" next-step (no specialist agent)
+- ⬜ **Textract IAM** — user `AWSHACKATHON` lacks `textract:DetectDocumentText`/`AnalyzeDocument`; PDF ingest falls back to filename-only. **Needs the IAM policy attached in the AWS console** (a security-settings change — do this yourself; xlsx unaffected — openpyxl path works).
 - ⬜ **Real auth + OAuth connectors** — see §OAuth below (login is demo-only; connector connect/sync are stubs; artifact private ACL needs auth to be real)
 
 **Reconcile route names** — ✅ resolved: frontend adopted your routes. Context docs → `POST /context/upload` + `GET /context` + `DELETE /context/{id}` (spec's `/context/docs` dropped). Activity feed → `GET /logs` (spec's `/activity` dropped). contract.json + Round-3 §1 spec updated to match.
@@ -48,7 +48,7 @@ Open ⬜ (not done yet)
 **Stretch / open**
 - ⬜ **Real Google Drive / Google Calendar OAuth connectors** — §OAuth below has the full setup list (env placeholders already in `.env.example`)
 - ⬜ **Deploy** (§6): Amplify (frontend) + Lambda URL (`Mangum` ready) + EventBridge rule → `scheduler.run_once`
-- ⬜ **Web search / Deep research** agent tool — `/chat` already receives `mode: "web"|"deep"` (ignored today); needs a `TAVILY_API_KEY`
+- 🟡 **Web search / Deep research** agent tool — **plumbing DONE**: `/chat` now honors `mode: "web"|"deep"` (prepends a hint), `web_search` tool given to all agents + orchestrator (`tools/websearch.py`, Tavily via httpx), mock rule added. **Activate by setting `TAVILY_API_KEY`** — keyless it returns a graceful "not configured" reply.
 - ⬜ Digital-presence template's tools (`publish_listing`, `sync_catalog`, `seo_audit`, `storefront_builder`) aren't in `TOOL_REGISTRY` — template ships `tools: []` so install converges via Nirmata prompt only
 - ✅ ~~Frontend wiring of already-built backends~~ — DONE (Fahmin, 2026-09-20): `/context/*` → Context page, `POST /onboarding` → wizard (chips→`pains`, auto-hire toast), `/people` → CRM tabs, `/logs` → LogsExplorer stream, `POST /notifications/{id}/read` → mark-read + mark-all, `GET /connectors/{id}/sync` → Settings "Sync now" + post-connect sync, `/templates` + `/templates/{id}/install` → gallery merged catalog + Install buttons (agent_spec → open_agent deep-link; `needs_factory` → prompt prefill). Every screen still falls back to the demo store offline.
 

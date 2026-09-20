@@ -74,6 +74,12 @@ EXTRA_RULES: list[MockRule] = [
         args=lambda t: {"query": t},
     ),
     MockRule(
+        keywords=["web search", "deep research", "search the web", "search online",
+                  "look up online", "latest price", "market price", "find online"],
+        tool="web_search",
+        args=lambda t: {"query": t, "deep": "deep research" in t or "deep=true" in t},
+    ),
+    MockRule(
         keywords=["tracking page", "tracking link", "build a tracker", "share a page",
                   "make a page", "artifact", "mini app", "shareable"],
         tool="create_artifact",

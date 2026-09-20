@@ -11,7 +11,17 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+
+class UTF8JSONResponse(JSONResponse):
+    """Emit UTF-8 (not \\uXXXX-escaped) so ₹ and Devanagari render everywhere."""
+    media_type = "application/json; charset=utf-8"
+
+    def render(self, content) -> bytes:
+        return json.dumps(content, ensure_ascii=False, allow_nan=False,
+                          separators=(",", ":"), default=str).encode("utf-8")
 
 from . import deps
 from .agents import registry as reg
@@ -28,7 +38,7 @@ from .tools.invoices import create_invoice_impl, draft_reminder_impl, parse_invo
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 SEED_PATH = Path(__file__).resolve().parent / "seed" / "seed.json"
 
-app = FastAPI(title="Sahayak AI")
+app = FastAPI(title="Sahayak AI", default_response_class=UTF8JSONResponse)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
@@ -52,6 +62,7 @@ class ChatReq(BaseModel):
     tenant_id: str = "ramesh_auto"
     text: str
     agent_id: str | None = None
+    mode: str = "chat"   # chat | web | deep — web/deep enable the web_search tool
 
 
 class SpecReq(BaseModel):
@@ -81,6 +92,10 @@ def _invoke(agent, text: str):
 @app.post("/chat")
 def chat(req: ChatReq):
     registry = reg.get_registry(req.tenant_id)
+    text = req.text
+    if req.mode in ("web", "deep"):
+        text = (f"[{'Deep research' if req.mode == 'deep' else 'Web search'} mode — use the "
+                f"web_search tool{' with deep=True' if req.mode == 'deep' else ''}] " + text)
     actions: list[dict] = []
     token = deps.current_actions.set(actions)
     try:
@@ -88,12 +103,12 @@ def chat(req: ChatReq):
             agent = registry.get_agent(req.agent_id)
             if not agent:
                 raise HTTPException(404, f"unknown agent {req.agent_id}")
-            result = _invoke(agent, req.text)
+            result = _invoke(agent, text)
             agent_name = req.agent_id
             registry.bump_stats(req.agent_id)
         else:
             agent = registry.orchestrator()
-            result = _invoke(agent, req.text)
+            result = _invoke(agent, text)
             tool_names = list(result.metrics.tool_metrics.keys()) if result.metrics else []
             agent_name = tool_names[-1] if tool_names else "sahayak"
     finally:
@@ -345,8 +360,22 @@ class TaskReq(BaseModel):
     tenant_id: str = "ramesh_auto"
     title: str
     agent_id: str = ""
+    agent: str = ""          # frontend alias for agent_id
     due: str = ""
     details: str = ""
+    status: str = "todo"     # todo | doing | done (kanban)
+    col: str = ""            # kanban column id (frontend)
+
+
+class TaskPatch(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    status: str | None = None
+    col: str | None = None
+    agent_id: str | None = None
+    title: str | None = None
+    due: str | None = None
+    details: str | None = None
+    result: str | None = None
 
 
 @app.get("/tasks")
@@ -356,13 +385,29 @@ def tasks(tenant_id: str = "ramesh_auto", status: str | None = None):
 
 @app.post("/tasks")
 def create_task(req: TaskReq):
+    status = req.status or "todo"
     t = deps.store.put_task(req.tenant_id, {
         "id": f"task-{uuid.uuid4().hex[:6]}", "title": req.title,
-        "agent_id": req.agent_id, "status": "todo", "due": req.due,
-        "details": req.details,
+        "agent_id": req.agent_id or req.agent, "status": status,
+        "col": req.col or status, "due": req.due, "details": req.details,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"id": t["id"], "status": t["status"]}
+    return {"id": t["id"], "status": t["status"], "col": t.get("col", "")}
+
+
+@app.patch("/tasks/{task_id}")
+def patch_task(task_id: str, req: TaskPatch):
+    """Persist kanban drag-drop (status/col) and any task edits. col ↔ status alias."""
+    fields = {k: v for k, v in req.model_dump().items()
+              if k != "tenant_id" and v is not None}
+    if "col" in fields and "status" not in fields:      # frontend sends col alone
+        fields["status"] = fields["col"]
+    elif "status" in fields:                              # keep col in sync
+        fields["col"] = fields["status"]
+    t = deps.store.update_task(req.tenant_id, task_id, **fields)
+    if not t:
+        raise HTTPException(404, "no such task")
+    return t
 
 
 @app.post("/tasks/{task_id}/run")
@@ -538,14 +583,18 @@ class SettingsPatch(BaseModel):
     prefs: dict | None = None
     onboarded: bool | None = None
     mcp_servers: list | None = None
+    role: str | None = None   # RBAC pick (owner|accountant|manager|worker) → prefs.role
 
 
 @app.patch("/settings")
 def patch_settings(req: SettingsPatch):
     cur = deps.store.get_settings(req.tenant_id) or {}
+    prefs = {**cur.get("prefs", {}), **(req.prefs or {})}
+    if req.role is not None:
+        prefs["role"] = req.role
     nxt = {
         "business": {**cur.get("business", {}), **(req.business or {})},
-        "prefs": {**cur.get("prefs", {}), **(req.prefs or {})},
+        "prefs": prefs,
     }
     for k in ("onboarded", "mcp_servers"):
         v = getattr(req, k)
@@ -799,7 +848,9 @@ def onboarding(req: OnboardingReq):
                               "reason": reason})
 
     next_steps = []
-    if "excel" in req.tools_today or "tally" in req.tools_today:
+    # too_many_excels is a pain with no specialist agent → it's a next-step (import ledger)
+    if ("too_many_excels" in req.pains or "excel" in req.tools_today
+            or "tally" in req.tools_today):
         next_steps.append("Import your existing ledger from Excel")
     deps.record_action("onboarding_completed",
                        {"memories": memories, "agents": len(agents_installed)})

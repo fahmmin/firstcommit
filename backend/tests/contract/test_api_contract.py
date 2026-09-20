@@ -401,3 +401,48 @@ def test_onboarding_suggest_only(client):
     assert r.status_code == 200
     assert r.json()["agents_installed"] == []
     assert len(r.json()["suggested_agents"]) >= 2
+
+
+def test_onboarding_too_many_excels_next_step(client):
+    r = client.post("/onboarding", json={"tenant_id": "ramesh_auto",
+        "pains": ["too_many_excels"], "auto_hire": True})
+    assert r.status_code == 200
+    assert any("ledger" in s.lower() or "excel" in s.lower() for s in r.json()["next_steps"])
+
+
+# ---------- Round 4 fixes: utf-8, kanban, role, web mode ----------
+
+def test_utf8_rupee_not_mojibaked(client):
+    # raw bytes must contain the real ₹ (U+20B9), not \u-escaped or mangled
+    r = client.get("/dashboard/summary", params={"tenant_id": "ramesh_auto"})
+    assert "charset=utf-8" in r.headers.get("content-type", "").lower()
+    r2 = client.post("/chat", json={"tenant_id": "ramesh_auto", "text": "show overdue invoices"})
+    assert "₹" in r2.content.decode("utf-8")  # ₹ survives as UTF-8
+
+
+def test_task_create_and_kanban_patch(client):
+    c = client.post("/tasks", json={"tenant_id": "ramesh_auto", "title": "Board card",
+                                    "agent": "vasool", "status": "todo", "col": "todo"})
+    assert c.status_code == 200
+    tid = c.json()["id"]
+    # drag to done via col alone → status follows
+    p = client.patch(f"/tasks/{tid}", json={"tenant_id": "ramesh_auto", "col": "done"})
+    assert p.status_code == 200
+    assert p.json()["status"] == "done" and p.json()["col"] == "done"
+    # agent alias landed
+    t = next(t for t in client.get("/tasks").json() if t["id"] == tid)
+    assert t["agent_id"] == "vasool"
+    assert client.patch("/tasks/nope", json={"tenant_id": "ramesh_auto", "col": "done"}).status_code == 404
+
+
+def test_settings_role_persists(client):
+    p = client.patch("/settings", json={"tenant_id": "ramesh_auto", "role": "accountant"})
+    assert p.status_code == 200
+    assert client.get("/settings").json()["prefs"]["role"] == "accountant"
+
+
+def test_chat_web_mode_ok(client):
+    # mode is accepted (no longer dropped); keyless → graceful, still 200
+    r = client.post("/chat", json={"tenant_id": "ramesh_auto",
+                                   "text": "latest steel price", "mode": "web"})
+    assert r.status_code == 200 and r.json()["reply"]
