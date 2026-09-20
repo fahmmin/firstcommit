@@ -1,4 +1,4 @@
-<img width="1897" height="693" alt="image" src="https://github.com/user-attachments/assets/36cea5cf-d30f-4dbc-a923-c59e8df365b5" /># Sahayak AI — an AI staff for the small businessman the internet left behind
+# Sahayak AI — an AI staff for the small businessman the internet left behind
 
 > The online-shopping boom handed every big retailer a software army — logistics
 > engines, collection teams, analytics dashboards — while the man running a
@@ -20,6 +20,7 @@
 <img width="1902" height="906" alt="image" src="https://github.com/user-attachments/assets/8ae3f30e-da00-4cd6-bb0a-09df0127cff2" />
 <img width="1906" height="822" alt="image" src="https://github.com/user-attachments/assets/10e108b6-5f8b-41d1-96e8-f4f2d27c67ce" />
 <img width="1897" height="693" alt="image" src="https://github.com/user-attachments/assets/abf98127-4222-46b2-bd58-87facc88d916" />
+<img width="1513" height="903" alt="image" src="https://github.com/user-attachments/assets/99109b58-2efd-477a-9248-8cd4ecf6b6da" />
 
 ## What does Sahayak do?
 
