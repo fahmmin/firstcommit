@@ -210,7 +210,8 @@ export default function Workspace() {
               {active ? (active.description || active.goal) : 'Orchestrator — routes your request to the right specialist, or hires a new one.'}
             </div>
             <div className="text-[10px] text-slate-400 mt-1">
-              {active?.stats?.runs != null ? `${active.stats.runs} tasks run` : 'Ramesh Auto Components · Faridabad'}
+              {active?.stats?.runs != null ? `${active.stats.runs} tasks run`
+                : [settings?.business?.name, settings?.business?.city].filter(Boolean).join(' · ') || 'Your business'}
             </div>
           </div>
           <div className="ml-auto self-center flex items-center gap-1.5">
@@ -416,7 +417,7 @@ export default function Workspace() {
           )}
           {messages.length === 1 && !busy && (
             <div className="mb-3">
-              <Digest onAction={(a) => a === 'approvals' ? setApprovals(true) : send(a)} />
+              <Digest owner={settings?.business?.owner} onAction={(a) => a === 'approvals' ? setApprovals(true) : send(a)} />
             </div>
           )}
           <div className="flex gap-2 flex-wrap mb-3 items-center">

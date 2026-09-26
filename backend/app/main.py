@@ -327,6 +327,13 @@ def _tenant_slug(req: "LoginReq") -> str:
     """Guests land on the seeded showcase; real logins get their own tenant."""
     if req.provider == "guest":
         return "ramesh_auto"
+    # an account whose email matches a workspace owner's email resolves to THAT
+    # workspace (the demo persona's Google login lands on the seeded showcase)
+    pid = (req.provider_id or "").strip().lower()
+    if pid:
+        owner = ((deps.store.get_settings("ramesh_auto") or {}).get("prefs") or {}).get("notify_email", "")
+        if pid == owner.strip().lower():
+            return "ramesh_auto"
     raw = req.provider_id or req.name or "user"
     slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")[:24] or "user"
     return "ramesh_auto" if slug in ("ramesh_auto", "ramesh") else slug

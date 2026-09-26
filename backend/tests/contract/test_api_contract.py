@@ -138,6 +138,18 @@ def test_login_multitenant_isolation(client):
     assert len(client.get("/invoices", params={"tenant_id": "ramesh_auto"}).json()) > 0
 
 
+def test_login_owner_email_resolves_to_its_workspace(client):
+    """The workspace owner's own Google account lands on their (seeded) workspace,
+    not a fresh empty tenant; a phone signup is a new tenant."""
+    owner = client.get("/settings", params={"tenant_id": "ramesh_auto"}).json()["prefs"]["notify_email"]
+    g = client.post("/auth/login", json={"provider": "google", "provider_id": owner.upper(),
+                                         "name": "Ramesh Gupta"}).json()
+    assert g["tenant_id"] == "ramesh_auto" and g["onboarded"] is True
+    p = client.post("/auth/login", json={"provider": "phone", "provider_id": "+919000011111",
+                                         "name": "", "business": ""}).json()
+    assert p["tenant_id"] not in ("ramesh_auto", "") and p["onboarded"] is False
+
+
 def test_dashboard_summary(client):
     r = client.get("/dashboard/summary", params={"tenant_id": "ramesh_auto"})
     assert r.status_code == 200

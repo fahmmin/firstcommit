@@ -1,59 +1,41 @@
 // Morning digest — "here's what needs you" card shown on a fresh chat.
-// Computed from live alerts + invoices + cashflow; each row is a one-tap CTA
-// that sends the matching prompt into the composer flow.
+// Source of truth = backend GET /dashboard/summary `brief[]` (tenant-scoped, only
+// emits an item when the data actually exists). Each row is a one-tap CTA.
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
-import { Sunrise, FileWarning, Landmark, Truck, ShieldCheck, ArrowRight } from 'lucide-react'
+import { Sunrise, FileWarning, Truck, ShieldCheck, ArrowRight, Bell } from 'lucide-react'
 
-export function Digest({ onAction }) {
+const KIND = {
+  overdue:  { icon: FileWarning, tint: 'text-rose-500 bg-rose-50',
+              prompt: 'Show my overdue invoices and draft a reminder for the oldest one.' },
+  approval: { icon: ShieldCheck, tint: 'text-amber-600 bg-amber-50', openApprovals: true },
+  shipment: { icon: Truck, tint: 'text-emerald-600 bg-emerald-50',
+              prompt: 'Which orders are in transit right now and when will they reach?' },
+}
+
+export function Digest({ onAction, owner }) {
   const [items, setItems] = useState(null)
 
   useEffect(() => {
-    Promise.all([
-      api.alerts().catch(() => []), api.invoices().catch(() => []), api.cashflow?.().catch(() => null) ?? Promise.resolve(null),
-    ]).then(([alerts, invoices]) => {
-      const pending = alerts.filter(a => a.status === 'pending_approval')
-      const overdue = invoices.filter(i => i.status === 'overdue' || (i.days_overdue || 0) > 0)
-      const dueSoon = invoices.filter(i => i.status === 'pending' || i.status === 'due')
-      const out = []
-      if (overdue.length) out.push({
-        icon: FileWarning, tint: 'text-rose-500 bg-rose-50',
-        title: `${overdue.length} invoice${overdue.length > 1 ? 's' : ''} overdue`,
-        sub: `₹${overdue.reduce((s, i) => s + Number(i.amount || 0), 0).toLocaleString('en-IN')} locked`,
-        prompt: 'Show my overdue invoices and draft a reminder for the oldest one.',
-      })
-      if (pending.length) out.push({
-        icon: ShieldCheck, tint: 'text-amber-600 bg-amber-50',
-        title: `${pending.length} action${pending.length > 1 ? 's' : ''} waiting for your approval`,
-        sub: 'drafted overnight — nothing sent yet',
-        prompt: null, openApprovals: true,
-      })
-      if (dueSoon.length) out.push({
-        icon: Landmark, tint: 'text-accent bg-accent/10',
-        title: `₹${dueSoon.reduce((s, i) => s + Number(i.amount || 0), 0).toLocaleString('en-IN')} coming due`,
-        sub: `${dueSoon.length} open invoice${dueSoon.length > 1 ? 's' : ''} in the next days`,
-        prompt: 'Show my cash flow for the next 30 days and warn me where money gets tight.',
-      })
-      out.push({
-        icon: Truck, tint: 'text-emerald-600 bg-emerald-50',
-        title: 'Shipments on the move',
-        sub: 'carriers + ETAs on one screen',
-        prompt: 'Which orders are in transit right now and when will they reach?',
-      })
-      setItems(out.slice(0, 3))
-    })
+    api.dashboard().then(d => {
+      setItems((d?.brief || []).slice(0, 3).map(b => ({
+        ...(KIND[b.kind] || { icon: Bell, tint: 'text-slate-500 bg-slate-50' }),
+        title: b.title, sub: b.detail,
+      })))
+    }).catch(() => setItems([]))  // no fabricated fallback — an empty day stays empty
   }, [])
 
   if (!items?.length) return null
   const hour = new Date().getHours()
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const who = (owner || '').trim().split(/\s+/)[0]
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-float">
       <div className="flex items-center gap-2 mb-3">
         <span className="w-7 h-7 rounded-lg bg-amber-50 text-amber-500 grid place-items-center"><Sunrise size={14} /></span>
         <div>
-          <div className="text-[13px] font-semibold text-ink">{greet}, Ramesh — {items.length} thing{items.length > 1 ? 's' : ''} need you</div>
+          <div className="text-[13px] font-semibold text-ink">{greet}{who ? `, ${who}` : ''} — {items.length} thing{items.length > 1 ? 's' : ''} need you</div>
           <div className="text-[10px] text-slate-400">overnight scan by your agents</div>
         </div>
       </div>

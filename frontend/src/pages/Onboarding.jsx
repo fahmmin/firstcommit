@@ -74,7 +74,7 @@ export default function Onboarding() {
   const steps = [
     { key: 'name', q: 'What should we call you?', ph: 'Ramesh Gupta', val: name, set: setName, ok: name.trim().length > 1 },
     { key: 'role' },   // role picker — rendered specially below
-    { key: 'biz', q: "What's your business called?", ph: 'Ramesh Auto Components', val: business, set: setBusiness, ok: business.trim().length > 1 },
+    { key: 'biz', q: "What's your business called?", ph: 'e.g. Sharma Textiles', val: business, set: setBusiness, ok: business.trim().length > 1 },
     { key: 'city', q: 'Which city do you operate from?', ph: 'Faridabad', val: city, set: setCity, ok: city.trim().length > 1 },
   ]
   const s = steps[step]
