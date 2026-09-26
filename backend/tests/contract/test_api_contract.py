@@ -188,6 +188,18 @@ def test_calendar_events(client):
     assert {e["kind"] for e in rows} >= {"invoice_due", "alert", "task"}
 
 
+def test_web_connector_flow(client):
+    """C1: keyless web connector — needs a URL, then connects with it (no OAuth)."""
+    nurl = client.post("/connectors/web/connect", params={"tenant_id": "ramesh_auto"})
+    assert nurl.status_code == 200 and nurl.json()["status"] == "needs_url"
+    ok = client.post("/connectors/web/connect",
+                     params={"tenant_id": "ramesh_auto", "url": "https://example.com/feed"})
+    assert ok.status_code == 200 and ok.json()["status"] == "connected"
+    assert ok.json()["url"] == "https://example.com/feed"
+    web = next(c for c in client.get("/connectors").json() if c["id"] == "web")
+    assert web["status"] == "connected" and web.get("url") == "https://example.com/feed"
+
+
 def test_connectors_flow(client, monkeypatch):
     r = client.get("/connectors", params={"tenant_id": "ramesh_auto"})
     assert r.status_code == 200

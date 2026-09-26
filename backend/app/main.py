@@ -582,6 +582,7 @@ _CONNECTOR_STUBS = {"whatsapp", "gmail", "airtable", "slack", "tally",
                     "indiamart", "shopify"}  # no real OAuth yet — coming soon
 _GOOGLE_CONNECTORS = {"google_drive", "google_sheets", "google_docs",
                       "google_calendar"}  # real via GCP service account (gcp.py)
+_INGEST_CONNECTORS = {"web"}  # keyless real ingest — owner gives a URL/feed (webingest.py)
 
 
 def _connector(tenant_id: str, conn_id: str) -> dict:
@@ -628,11 +629,21 @@ def connectors(tenant_id: str = "ramesh_auto"):
 
 
 @app.post("/connectors/{conn_id}/connect")
-def connect_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
+def connect_connector(conn_id: str, tenant_id: str = "ramesh_auto", url: str | None = None):
     c = _connector(tenant_id, conn_id)
     if conn_id in _CONNECTOR_STUBS:
         return {"id": conn_id, "status": "coming_soon",
                 "note": f"{c['name']} integration ships post-demo"}
+    if conn_id in _INGEST_CONNECTORS:  # keyless web/RSS — needs a URL to pull
+        if not url:
+            return {"id": conn_id, "status": "needs_url",
+                    "note": "Pass ?url= a public web page or RSS feed to connect."}
+        now = datetime.now(timezone.utc).isoformat()
+        deps.store.update_connector(tenant_id, conn_id, status="connected",
+                                    connected_at=now, last_sync=now, url=url)
+        deps.log_activity(tenant_id, "connector_synced", f"{c['name']} connected → {url}")
+        return {"id": conn_id, "status": "connected", "connected_at": now, "url": url,
+                "note": "Sync now pulls this URL into business context."}
     if conn_id in _GOOGLE_CONNECTORS:
         if not gcp.available():
             return {"id": conn_id, "status": "unconfigured",
@@ -673,6 +684,9 @@ def sync_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
         count = _sync_google_files(tenant_id, conn_id)
     elif conn_id == "google_calendar":
         count = len(calendar_events(tenant_id))
+    elif conn_id in _INGEST_CONNECTORS and c.get("url"):
+        from .tools.webingest import fetch_and_ingest
+        count = fetch_and_ingest(tenant_id, c["url"])
     else:
         count = c.get("items_synced", 0)
     now = datetime.now(timezone.utc).isoformat()

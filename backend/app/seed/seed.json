@@ -752,6 +752,14 @@
   ],
   "connectors": [
     {
+      "id": "web",
+      "name": "Web / RSS",
+      "icon": "globe",
+      "status": "available",
+      "description": "Pull a public web page or RSS feed into business context — no login needed",
+      "items_synced": 0
+    },
+    {
       "id": "google_calendar",
       "name": "Google Calendar",
       "icon": "calendar",
