@@ -232,10 +232,25 @@ class AgentRegistry:
                 description=s.get("description") or s.get("goal", ""),
                 preserve_context=True,
             ))
+        # live roster of the specialists actually in this router (drives routing)
+        roster = "\n".join(
+            f"- {s['id']} — {s.get('description') or s.get('goal', '')}"
+            for s in self.specs()
+            if (only is None or s["id"] in only) and self.get_agent(s["id"]))
+        has_logistics = any("list_carriers" in (s.get("tools") or []) for s in self.specs())
+        transport_example = ("- 'mera transporter nahi aaya, order stranded' → "
+                             + ("the logistics specialist above"
+                                if has_logistics else "nirmata (no logistics specialist exists yet — hire one)"))
         if only is None or "nirmata" in only:
             subs.append(self.nirmata().as_tool(
                 name="nirmata",
-                description="Hires new specialist agents when the owner describes a problem the team can't solve — new agent requests, logistics help, anything needing a specialist that doesn't exist yet.",
+                description=(
+                    "The HIRING agent (the factory). Call it whenever the owner describes a "
+                    "problem NONE of your current specialists cover — e.g. transport/logistics/"
+                    "delivery ('transporter nahi aaya', book a pickup), selling online / digital "
+                    "presence, GST/compliance filing, HR, or any new kind of request — and also "
+                    "when the owner confirms a hire ('haan'/'yes'/'create it'). Prefer nirmata "
+                    "over answering a problem yourself."),
                 preserve_context=True,
             ))
         if only is None or "web_search" in only:
@@ -245,15 +260,26 @@ class AgentRegistry:
             model=make_model(
                 rules=mock_rules.orchestrator_rules(self.specs()), role="orchestrator"),
             system_prompt=(
-                "You are Sahayak (सहायक), the front-desk AI for a small Indian manufacturer. "
-                "Route every request to the right specialist:\n"
-                "- Invoices, payments, reminders, 'paisa kab aayega' → vasool\n"
-                "- Suppliers, prices, stock, MOQ, buying → sourcer\n"
-                "- Cash flow, payment terms, 'should I take this order' → khata\n"
-                "- New agent requests, or a problem no specialist covers → nirmata\n"
-                "Always call a specialist tool for any business-data question — never answer "
-                "from memory. If unsure, ask one short clarifying question. Reply in the "
-                "owner's language (English/Hinglish), short and concrete."
+                "You are Sahayak (सहायक), the front-desk AI for a small Indian business. "
+                "Your ONLY job: route each request to the right specialist tool and relay its "
+                "answer. NEVER answer a business question from your own knowledge — always call "
+                "a tool.\n\n"
+                "Your specialists (call by tool name):\n" + roster + "\n"
+                "- nirmata — hires a NEW specialist for any problem the above don't cover.\n\n"
+                "Rules:\n"
+                "1. Match the request to ONE specialist above and call it.\n"
+                "2. If no specialist above fits (transport/logistics/delivery, selling online, "
+                "compliance, HR, anything new) → call nirmata. When torn between answering "
+                "yourself and nirmata, ALWAYS choose nirmata.\n"
+                "3. After a hiring preview, an affirmative ('haan'/'yes'/'ok'/'create it') → nirmata.\n\n"
+                "Routing examples:\n"
+                "- 'show my overdue invoices' / 'paisa kab aayega' → vasool\n"
+                "- 'cheapest steel supplier' / 'MOQ is too high' → sourcer\n"
+                "- 'should I take a 90-day-terms order?' / 'cash gap next week' → khata\n"
+                + transport_example + "\n"
+                "- 'I want to sell online on IndiaMART' → nirmata\n"
+                "- 'haan, create it' (confirming a hire) → nirmata\n\n"
+                "Reply in the owner's language (English/Hinglish), short and concrete."
                 + build_memory_suffix(self.tenant_id)
             ),
             tools=subs,
