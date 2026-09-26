@@ -191,6 +191,10 @@ def ingest_document_impl(tenant_id: str, file_path: str | None = None,
     tags, summary = _auto_tag(text, filename)
     doc_id = f"doc-{uuid.uuid4().hex[:6]}"
     s3_key = _upload_to_s3(tenant_id, doc_id, file_path, filename)
+    # B1: chunk + per-chunk embeddings (real hybrid retrieval). Embeddings are
+    # None offline, so retrieval degrades to keyword — never a no-op.
+    from .retrieval import build_chunks
+    chunks = build_chunks(text, embed=_use_aws())
     doc = {
         "id": doc_id,
         "filename": filename,
@@ -198,7 +202,8 @@ def ingest_document_impl(tenant_id: str, file_path: str | None = None,
         "tags": tags,
         "summary": summary,
         "text_excerpt": (text or "")[:2000],
-        "embedding": embed_text(text),
+        "chunks": chunks,
+        "embedding": chunks[0]["embedding"] if chunks else embed_text(text),
         "status": "fed_to_agents",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -213,7 +218,7 @@ def ingest_document_impl(tenant_id: str, file_path: str | None = None,
     # rebuild agents so the new context reaches their memory
     from ..agents import registry as reg
     reg.get_registry(tenant_id).reset_agents()
-    return {k: v for k, v in doc.items() if k not in ("embedding", "text_excerpt")}
+    return {k: v for k, v in doc.items() if k not in ("embedding", "text_excerpt", "chunks")}
 
 
 def build_context_suffix(tenant_id: str) -> str:

@@ -311,6 +311,26 @@ def test_search_grouped(client):
     assert client.get("/search", params={"q": ""}).json()["results"]["invoices"] == []
 
 
+def test_search_documents_hybrid_citations(client):
+    """B1: dropping a doc → hybrid /search returns it with a cited snippet + score."""
+    client.post("/context/upload", data={"tenant_id": "ramesh_auto",
+        "text": "Zephyr Exports requires an eway bill and HSN codes on every shipment invoice."})
+    body = client.get("/search", params={"q": "eway bill HSN for Zephyr", "tenant_id": "ramesh_auto"}).json()
+    assert body.get("retrieval") in ("hybrid", "keyword")  # honest mode flag
+    docs = body["results"]["documents"]
+    hit = next((d for d in docs if "zephyr" in (d.get("snippet", "") + d.get("title", "")).lower()), None)
+    assert hit, "uploaded doc should be retrieved"
+    assert hit["snippet"] and "score" in hit           # cited chunk + score
+
+
+def test_recall_context_cites_documents(client):
+    client.post("/context/upload", data={"tenant_id": "ramesh_auto",
+        "text": "Falcon Traders is cash-only — the credit limit is strictly zero."})
+    r = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                   "text": "what do you know about Falcon Traders?"})
+    assert r.status_code == 200 and "falcon" in r.json()["reply"].lower()
+
+
 # ---------- Phase A: people / logs / brief ----------
 
 def test_people_aggregation(client):

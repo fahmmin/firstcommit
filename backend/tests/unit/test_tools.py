@@ -60,7 +60,9 @@ def test_scheduler_promotes_due_alert(tenant):
     deps.store.put_alert(tenant, {
         "id": "a-later", "kind": "reminder", "title": "future",
         "status": "scheduled", "fires_at": "2999-01-01T00:00:00Z"})
-    assert run_once(tenant) == 1
+    # >=1 (not ==1): the seeded tenant may have other now-past scheduled alerts;
+    # what matters is our due one promotes and our future one does not.
+    assert run_once(tenant) >= 1
     statuses = {a["id"]: a["status"] for a in deps.store.list_alerts(tenant)}
     assert statuses["a-due"] == "pending_approval"
     assert statuses["a-later"] == "scheduled"

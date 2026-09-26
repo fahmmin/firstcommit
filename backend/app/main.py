@@ -900,7 +900,7 @@ def context(tenant_id: str = "ramesh_auto"):
     rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
     out = []
     for d in rows:
-        row = {k: v for k, v in d.items() if k not in ("embedding", "text_excerpt")}
+        row = {k: v for k, v in d.items() if k not in ("embedding", "text_excerpt", "chunks")}
         # bytes are fetchable if stored under a key/path — or via the legacy
         # context/{tenant}/{filename} seed layout when running on AWS
         row["has_file"] = bool(d.get("s3_key") or d.get("file_path")) or \
@@ -1227,22 +1227,16 @@ def search(q: str = "", tenant_id: str = "ramesh_auto"):
         if hit(m.get("text")):
             results["memories"].append({"id": m["id"], "title": m.get("text", ""),
                 "meta": m.get("source", "owner"), "ref": "#/settings"})
-    # documents — content search over the business-context brain (tags/summary/excerpt),
-    # ranked by Titan-embedding cosine similarity when embeddings are present.
-    docs = deps.store.list_documents(tenant_id)
-    qvec = embed_text(q) if any(d.get("embedding") for d in docs) else None
-    doc_hits = []
-    for d in docs:
-        substr = hit(d.get("filename"), d.get("summary"), d.get("text_excerpt"),
-                     " ".join(d.get("tags", [])))
-        score = cosine(qvec, d["embedding"]) if qvec and d.get("embedding") else 0.0
-        if substr or score >= 0.35:
-            doc_hits.append((score, {"id": d["id"], "title": d.get("filename", ""),
-                "meta": f"{', '.join(d.get('tags', []))} · {d.get('summary', '')}"[:80],
-                "ref": "#/context"}))
-    doc_hits.sort(key=lambda x: x[0], reverse=True)
-    results["documents"] = [h for _, h in doc_hits]
-    return {"q": q, "results": results}
+    # documents — B1 hybrid retrieval (keyword + vector) → rerank → cited chunks.
+    from .tools.retrieval import retrieval_mode, search_documents
+    for r in search_documents(tenant_id, q, k=8):
+        results["documents"].append({
+            "id": r["doc_id"], "title": r["filename"],
+            "meta": f"{', '.join(r.get('tags', []))} · {r.get('summary', '')}"[:80],
+            "snippet": r["snippet"], "score": r.get("rerank_score", r["score"]),
+            "ref": "#/context",
+        })
+    return {"q": q, "results": results, "retrieval": retrieval_mode(tenant_id)}
 
 
 handler = None
