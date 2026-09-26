@@ -98,6 +98,15 @@ export const api = {
   draftReminder: (invoiceId) => req(`/invoices/${invoiceId}/reminder?tenant_id=${TENANT}`, { method: 'POST' }),
   alerts: () => req(`/alerts?tenant_id=${TENANT}`),
   approveAlert: (id) => req(`/alerts/${id}/approve?tenant_id=${TENANT}`, { method: 'POST' }),
+  dismissAlert: (id) => req(`/alerts/${id}/dismiss?tenant_id=${TENANT}`, { method: 'POST' }),
+  // A1 approvals ledger — agent actions queued until the owner decides
+  approvals: (status = '') => req(`/approvals?tenant_id=${TENANT}${status ? `&status=${status}` : ''}`),
+  approveAction: (id) => req(`/approvals/${id}/approve?tenant_id=${TENANT}`, { method: 'POST' }),
+  denyAction: (id) => req(`/approvals/${id}/deny?tenant_id=${TENANT}`, { method: 'POST' }),
+  grantTool: (tool, on = true) =>
+    req('/approvals/grant', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ tenant_id: TENANT, tool, on }) }),
+  approvalGrants: () => req(`/approvals/grants?tenant_id=${TENANT}`),
   suppliers: (q) => req(`/suppliers?tenant_id=${TENANT}${q ? `&q=${q}` : ''}`),
   carriers: (to) => req(`/carriers?tenant_id=${TENANT}${to ? `&to=${to}` : ''}`),
   cashflow: () => req(`/cashflow?tenant_id=${TENANT}`),

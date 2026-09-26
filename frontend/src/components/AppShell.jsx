@@ -5,12 +5,13 @@ import { session } from '../lib/auth.js'
 import { groupAgents } from '../lib/agentGroups.js'
 import {
   PlugZap, LayoutTemplate, RotateCcw, Activity, Settings2, FileText, LogOut,
-  Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search, FileBarChart,
+  Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search, FileBarChart, ShieldCheck,
 } from 'lucide-react'
 import { SpinPlus } from './anim/index.jsx'
 import { Blobs } from './Logo.jsx'
 
 const NAV = [
+  ['#/approvals', 'Approvals', ShieldCheck],
   ['#/templates', 'Templates', LayoutTemplate],
   ['#/calendar', 'Calendar', CalendarDays],
   ['#/tasks', 'Tasks', ListTodo],
@@ -34,8 +35,9 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
   useEffect(() => { if (!agentsProp) api.agents().then(setAgents).catch(() => {}) }, [agentsProp])
   useEffect(() => { if (agentsProp) setAgents(agentsProp) }, [agentsProp])
 
-  const hash = location.hash
+  const hash = location.hash.split('?')[0]
   const isActive = (href) => hash === href || hash.startsWith(href + '/')
+  const pendingCount = usePendingCount()
 
   const clickAgent = (a) => {
     if (onAgentClick) return onAgentClick(a)
@@ -98,6 +100,8 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
                 className={`w-full text-[12.5px] rounded-lg px-2 py-[5px] transition flex items-center gap-2
                   ${isActive(href) ? 'bg-slate-900 text-white font-medium' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <I size={12} className="shrink-0" /> {label}
+                {href === '#/approvals' && pendingCount > 0 &&
+                  <span className="ml-auto text-[9px] font-bold rounded-full bg-amber-100 text-amber-700 px-1.5">{pendingCount}</span>}
               </a>
             ))}
           </div>
@@ -123,6 +127,19 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
       )}
     </div>
   )
+}
+
+// pending agent actions + drafts — the same numbers the Approvals page shows
+function usePendingCount() {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const load = () => api.dashboard().then(d => alive && setN(d?.pending_approvals || 0)).catch(() => {})
+    load()
+    const t = setInterval(() => { if (!document.hidden) load() }, 30000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
+  return n
 }
 
 // true while the last read fell back to sample data (see api.js withSample)

@@ -13,7 +13,8 @@ import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-DATA_DIR = (Path("/tmp/sahayak-data") if os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+DATA_DIR = (Path(os.environ["SAHAYAK_DATA_DIR"]) if os.environ.get("SAHAYAK_DATA_DIR")
+            else Path("/tmp/sahayak-data") if os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
             else Path(__file__).resolve().parent.parent / "data")
 
 
@@ -380,11 +381,17 @@ class LocalStore(Store):
         return self._update("approvals", tenant_id, approval_id, **fields)
 
     def reset(self, tenant_id, seed):
+        # every collection is reset for the tenant — ones absent from the seed
+        # (approvals, …) are cleared, matching DynamoStore.reset
         for coll in self._COLLECTIONS:
+            data = self._read(coll)
             if coll in seed:
-                data = self._read(coll)
                 data[tenant_id] = copy.deepcopy(seed[coll])
-                self._write(coll, data)
+            elif tenant_id in data:
+                del data[tenant_id]
+            else:
+                continue
+            self._write(coll, data)
 
 
 def _to_ddb(v):

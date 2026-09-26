@@ -157,3 +157,15 @@ class TestStoreParity:
         assert s.get_task(self.T, "ghost") is None
         assert s.update_approval(self.T, "ghost", status="denied") is None
         assert s.update_invoice(self.T, "ghost", status="paid") is None
+
+    def test_reset_clears_collections_absent_from_seed(self, impl, tmp_path):
+        # demo/reset must wipe the approvals ledger too (not just seeded colls)
+        s = self._store(impl, tmp_path)
+        s.put_approval(self.T, {"id": "apr-x", "tool": "create_invoice", "status": "pending"})
+        s.reset(self.T, {"invoices": []})
+        assert s.list_approvals(self.T) == []
+
+    def test_grants_persist_via_settings(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_settings(self.T, {"prefs": {"approval_grants": ["sync_catalog"]}})
+        assert s.get_settings(self.T)["prefs"]["approval_grants"] == ["sync_catalog"]

@@ -126,3 +126,48 @@ def test_web_search_unconfigured_records_honest_action(monkeypatch):
         deps.current_actions.reset(tok)
     ws = [a for a in acts if a["type"] == "web_searched"]
     assert ws and ws[0]["data"]["configured"] is False and ws[0]["data"]["n_results"] == 0
+
+
+# ---- Phase 2 — approvals ledger endpoints ----
+
+def _queue(tenant="ramesh_auto"):
+    from app.agents import approvals as appr
+    return appr.gate(tenant, "create_invoice",
+                     {"buyer": "Ledger Co", "amount": 1200, "due_date": "2026-12-01"}, "Add invoice for Ledger Co")
+
+
+def test_dashboard_counts_ledger_and_drafts(client):
+    client.post("/demo/reset", params={"tenant_id": T})
+    d0 = client.get("/dashboard/summary", params={"tenant_id": T}).json()
+    q = _queue()
+    d1 = client.get("/dashboard/summary", params={"tenant_id": T}).json()
+    assert d1["pending_approvals"] == d0["pending_approvals"] + 1
+    assert d1["pending_breakdown"]["agent_actions"] >= 1
+    assert any(b["kind"] == "agent_action" for b in d1["brief"])
+    client.post(f"/approvals/{q['approval_id']}/deny", params={"tenant_id": T})
+
+
+def test_deny_only_pending(client):
+    q = _queue()
+    ok = client.post(f"/approvals/{q['approval_id']}/approve", params={"tenant_id": T}).json()
+    assert ok["status"] == "executed" and ok["result_ref"]["kind"] == "invoice"
+    assert client.post(f"/approvals/{q['approval_id']}/deny", params={"tenant_id": T}).status_code == 409
+
+
+def test_dismiss_alert_persists(client):
+    client.post("/demo/reset", params={"tenant_id": T})
+    aid = next(a["id"] for a in client.get("/alerts", params={"tenant_id": T}).json()
+               if a["status"] == "pending_approval")
+    assert client.post(f"/alerts/{aid}/dismiss", params={"tenant_id": T}).json()["status"] == "dismissed"
+    st = next(a for a in client.get("/alerts", params={"tenant_id": T}).json() if a["id"] == aid)["status"]
+    assert st == "dismissed"
+    assert client.post("/alerts/BAD/dismiss", params={"tenant_id": T}).status_code == 404
+
+
+def test_grants_endpoint(client):
+    r = client.post("/approvals/grant", json={"tenant_id": T, "tool": "schedule_alert", "on": True}).json()
+    assert "schedule_alert" in r["grants"]
+    g = client.get("/approvals/grants", params={"tenant_id": T}).json()
+    assert "schedule_alert" in g["grants"] and "create_invoice" in g["gated_tools"]
+    client.post("/approvals/grant", json={"tenant_id": T, "tool": "schedule_alert", "on": False})
+    assert client.post("/approvals/grant", json={"tenant_id": T, "tool": "list_overdue"}).status_code == 400

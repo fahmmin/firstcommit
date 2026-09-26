@@ -75,7 +75,7 @@ export default function Notifications() {
                   </div>
                 </div>
                 {n.kind === 'action_required' && !read && (
-                  <a href="#/app" className="shrink-0 text-[10px] font-medium rounded-lg bg-ink text-white px-2.5 py-1.5 hover:bg-ink/85 transition">
+                  <a href={n.ref_id?.startsWith('apr-') ? `#/approvals?id=${n.ref_id}` : '#/approvals?tab=drafts'} className="shrink-0 text-[10px] font-medium rounded-lg bg-ink text-white px-2.5 py-1.5 hover:bg-ink/85 transition">
                     Review
                   </a>
                 )}

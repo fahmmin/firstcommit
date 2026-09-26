@@ -9,6 +9,7 @@ const KIND = {
   overdue:  { icon: FileWarning, tint: 'text-rose-500 bg-rose-50',
               prompt: 'Show my overdue invoices and draft a reminder for the oldest one.' },
   approval: { icon: ShieldCheck, tint: 'text-amber-600 bg-amber-50', openApprovals: true },
+  agent_action: { icon: ShieldCheck, tint: 'text-violet-600 bg-violet-50', href: '#/approvals' },
   shipment: { icon: Truck, tint: 'text-emerald-600 bg-emerald-50',
               prompt: 'Which orders are in transit right now and when will they reach?' },
 }
@@ -41,7 +42,7 @@ export function Digest({ onAction, owner }) {
       </div>
       <div className="space-y-1.5">
         {items.map((it, i) => (
-          <button key={i} onClick={() => it.openApprovals ? onAction?.('approvals') : onAction?.(it.prompt)}
+          <button key={i} onClick={() => it.href ? (location.hash = it.href) : it.openApprovals ? onAction?.('approvals') : onAction?.(it.prompt)}
             className="w-full flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-left hover:border-slate-300 hover:bg-white transition group">
             <span className={`w-6 h-6 rounded-lg grid place-items-center shrink-0 ${it.tint}`}><it.icon size={12} /></span>
             <span className="flex-1 min-w-0">

@@ -45,7 +45,10 @@ SEED_PATH = Path(__file__).resolve().parent / "seed" / "seed.json"
 
 @asynccontextmanager
 async def _lifespan(_app):
-    deps.init_deps(get_store(), get_notifier())
+    # idempotent: Mangum runs the lifespan on every Lambda invocation, and tests
+    # install their own isolated store first — never replace a live one
+    if deps.store is None:
+        deps.init_deps(get_store(), get_notifier())
     if not deps.store.list_invoices("ramesh_auto"):
         _load_seed("ramesh_auto")
     # local-only daemon — on Lambda, EventBridge invokes the handler directly;
@@ -261,6 +264,23 @@ def approve_alert(alert_id: str, tenant_id: str = "ramesh_auto"):
     return {"id": alert_id, "status": "sent", "via": result.get("message", {}).get("via", "console")}
 
 
+@app.post("/alerts/{alert_id}/dismiss")
+def dismiss_alert(alert_id: str, tenant_id: str = "ramesh_auto"):
+    """Owner rejects a drafted reminder/booking — persisted, never sent."""
+    a = next((x for x in deps.store.list_alerts(tenant_id) if x["id"] == alert_id), None)
+    if not a:
+        raise HTTPException(404, "no such alert")
+    if a.get("status") == "sent":
+        raise HTTPException(409, "already sent")
+    deps.store.update_alert(tenant_id, alert_id, status="dismissed",
+                            dismissed_at=datetime.now(timezone.utc).isoformat())
+    for n in deps.store.list_notifications(tenant_id):
+        if n.get("ref_id") == alert_id and n.get("status") == "unread":
+            deps.store.update_notification(tenant_id, n["id"], status="read")
+    deps.log_activity(tenant_id, "draft_dismissed", f"Dismissed: {a['title']}")
+    return {"id": alert_id, "status": "dismissed"}
+
+
 @app.get("/cashflow")
 def cashflow(tenant_id: str = "ramesh_auto"):
     receivables = [
@@ -430,6 +450,7 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
     specs = reg.get_registry(tenant_id).specs()
     pending = deps.store.list_alerts(tenant_id, status="pending_approval")
     bookings = [a for a in pending if a.get("kind") == "booking"]
+    ledger = [a for a in deps.store.list_approvals(tenant_id) if a.get("status") == "pending"]
 
     # "N things need you" — the morning-brief card
     brief: list[dict] = []
@@ -440,7 +461,12 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
     if pending:
         brief.append({"icon": "bell", "kind": "approval",
                       "title": f"{len(pending)} action{'s' if len(pending) != 1 else ''} waiting for your approval",
-                      "detail": "drafted overnight — nothing sent yet", "ref": "#/notifications"})
+                      "detail": "drafted overnight — nothing sent yet", "ref": "#/approvals?tab=drafts"})
+    if ledger:
+        brief.append({"icon": "shield", "kind": "agent_action",
+                      "title": f"{len(ledger)} agent action{'s' if len(ledger) != 1 else ''} awaiting approval",
+                      "detail": ledger[0].get("summary") or ledger[0].get("title", ""),
+                      "ref": "#/approvals"})
     if bookings:
         brief.append({"icon": "truck", "kind": "shipment",
                       "title": "Shipments on the move",
@@ -456,7 +482,8 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
         },
         "capital_locked_long_terms": sum(i["amount"] for i in open_inv if i.get("terms_days", 30) >= 60),
         "payables_due_30d": sum(p["amount"] for p in payables if p.get("due", "9999") <= horizon),
-        "pending_approvals": len(pending),
+        "pending_approvals": len(pending) + len(ledger),
+        "pending_breakdown": {"drafts": len(pending), "agent_actions": len(ledger)},
         "agents": {"total": len(specs),
                    "ai_hired": sum(1 for s in specs if s.get("created_by") == "factory")},
         "alerts_unread": sum(1 for n in deps.store.list_notifications(tenant_id)
@@ -1361,11 +1388,18 @@ def approvals_approve(approval_id: str, tenant_id: str = "ramesh_auto"):
 
 @app.post("/approvals/{approval_id}/deny")
 def approvals_deny(approval_id: str, tenant_id: str = "ramesh_auto"):
-    a = deps.store.update_approval(tenant_id, approval_id, status="denied",
-                                  decided_at=datetime.now(timezone.utc).isoformat(),
-                                  via="owner_denied")
-    if not a:
+    cur = deps.store.get_approval(tenant_id, approval_id)
+    if not cur:
         raise HTTPException(404, "no such approval")
+    if cur.get("status") != "pending":  # an executed action can't be retro-"denied"
+        raise HTTPException(409, f"already {cur.get('status')}")
+    deps.store.update_approval(tenant_id, approval_id, status="denied",
+                               decided_at=datetime.now(timezone.utc).isoformat(),
+                               via="owner_denied")
+    deps.log_activity(tenant_id, "action_denied", f"Denied: {cur.get('title', cur['tool'])}")
+    for n in deps.store.list_notifications(tenant_id):
+        if n.get("ref_id") == approval_id and n.get("status") == "unread":
+            deps.store.update_notification(tenant_id, n["id"], status="read")
     return {"id": approval_id, "status": "denied"}
 
 
@@ -1378,9 +1412,18 @@ class GrantReq(BaseModel):
 @app.post("/approvals/grant")
 def approvals_grant(req: GrantReq):
     """Session-grant: auto-approve this tool for the rest of the session (fights fatigue)."""
-    from .agents.approvals import grant_session, revoke_session
+    from .agents.approvals import TOOL_RISK, grant_session, list_grants, revoke_session
+    if req.tool not in TOOL_RISK and not req.tool.startswith("mcp:"):
+        raise HTTPException(400, f"{req.tool} doesn't need approval")
     (grant_session if req.on else revoke_session)(req.tenant_id, req.tool)
-    return {"tool": req.tool, "granted": req.on}
+    return {"tool": req.tool, "granted": req.on, "grants": list_grants(req.tenant_id)}
+
+
+@app.get("/approvals/grants")
+def approvals_grants(tenant_id: str = "ramesh_auto"):
+    """Tools currently auto-approved + every tool that asks (for the toggles)."""
+    from .agents.approvals import TOOL_RISK, list_grants
+    return {"grants": list_grants(tenant_id), "gated_tools": sorted(TOOL_RISK)}
 
 
 @app.get("/search")

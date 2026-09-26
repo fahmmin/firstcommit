@@ -43,7 +43,7 @@ export function CommandPalette({ open, onClose, onSelectAgent, onSend }) {
       ...TEMPLATES.filter(t => match(t.title, t.desc, t.prompt)).slice(0, 5)
         .map(t => ({ id: `t-${t.id}`, label: t.title, icon: t.icon, kind: 'template',
           hint: 'template prompt', run: () => onSend?.(t.prompt) })),
-      ...(match('pending approvals', 'approve') ? [{ id: 'x-approvals', label: 'Review pending approvals', icon: Bell, kind: 'action', hint: 'human-in-the-loop queue', run: () => location.hash = '#/app' }] : []),
+      ...(match('pending approvals', 'approve') ? [{ id: 'x-approvals', label: 'Review pending approvals', icon: Bell, kind: 'action', hint: 'human-in-the-loop queue', run: () => location.hash = '#/approvals' }] : []),
     ]
   }, [q, agents])
 

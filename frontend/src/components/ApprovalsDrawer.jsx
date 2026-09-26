@@ -1,7 +1,8 @@
-// Approvals drawer — the human-in-the-loop queue. Slide-over from the right,
-// each pending item shows a WhatsApp-style preview of exactly what the
-// customer would receive, then Approve / Dismiss.
+// Approvals drawer — the human-in-the-loop queue. Slide-over from the right:
+// queued agent actions (approvals ledger) + drafted messages with a preview of
+// exactly what the customer would receive. Full view lives at #/approvals.
 import { useState } from 'react'
+import { ApprovalCard } from './ApprovalCard.jsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import { api } from '../api.js'
 import { toast } from '../lib/toast.js'
@@ -10,18 +11,27 @@ import { BrandIcon } from './BrandIcon.jsx'
 import { DrawCheck, RingBell } from './anim/index.jsx'
 import { Bell, X, CheckCircle2, CheckCheck, Ban, ShieldCheck, Loader2 } from 'lucide-react'
 
-export function ApprovalsDrawer({ open, onClose, alerts, onChanged }) {
-  const [dismissed, setDismissed] = useState(new Set())
+export function ApprovalsDrawer({ open, onClose, alerts, actions = [], onChanged }) {
   const [approving, setApproving] = useState({})   // id -> 'busy' | 'done'
-  const pending = alerts.filter(a => a.status === 'pending_approval' && !dismissed.has(a.id))
+  const pending = alerts.filter(a => a.status === 'pending_approval')
   const done = alerts.filter(a => a.status === 'sent' || a.status === 'approved')
+  const total = pending.length + actions.length
 
   const approve = async (a) => {
     setApproving(s => ({ ...s, [a.id]: 'busy' }))
-    await api.approveAlert(a.id).catch(() => {})
-    setApproving(s => ({ ...s, [a.id]: 'done' }))
-    toast.push('Approved — sending to customer')
-    setTimeout(() => onChanged?.(), 600)
+    try {
+      const r = await api.approveAlert(a.id)
+      setApproving(s => ({ ...s, [a.id]: 'done' }))
+      toast.push(`Approved — sent via ${r.via}`)
+      setTimeout(() => onChanged?.(), 600)
+    } catch (e) {
+      setApproving(s => ({ ...s, [a.id]: undefined }))
+      if (e.status !== 403) toast.push(`Couldn't send — ${e.message}`, 'err')
+    }
+  }
+  const dismiss = async (a) => {
+    try { await api.dismissAlert(a.id); toast.push('Dismissed — it will not be sent'); onChanged?.() }
+    catch (e) { if (e.status !== 403) toast.push(`Couldn't dismiss — ${e.message}`, 'err') }
   }
 
   return (
@@ -36,16 +46,26 @@ export function ApprovalsDrawer({ open, onClose, alerts, onChanged }) {
             <div className="flex items-center justify-between px-4 h-[52px] border-b border-slate-100">
               <div className="flex items-center gap-2 text-[13px] font-semibold text-ink">
                 <ShieldCheck size={14} className="text-accent" /> Approvals
-                {pending.length > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">{pending.length} waiting</span>}
+                {total > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">{total} waiting</span>}
               </div>
               <button onClick={onClose} className="text-slate-400 hover:text-ink transition"><X size={15} /></button>
             </div>
 
             <div className="flex-1 overflow-y-auto scroll-thin p-4 space-y-3">
+              <a href="#/approvals" onClick={onClose} className="block text-right text-[10px] font-medium text-accent hover:text-ink">View all approvals →</a>
               <div className="text-[10px] text-slate-400 leading-snug rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
                 Agents draft — you approve. Nothing reaches a customer without your tap.
               </div>
-              {pending.length === 0 && (
+              {actions.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Agent actions</div>
+                  {actions.slice(0, 5).map(a => <ApprovalCard key={a.id} item={a} compact onChanged={onChanged} />)}
+                </div>
+              )}
+              {pending.length > 0 && actions.length > 0 && (
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 pt-1">Message drafts</div>
+              )}
+              {total === 0 && (
                 <div className="text-center py-10">
                   <CheckCheck size={20} className="mx-auto text-emerald-400 mb-2" />
                   <div className="text-[12px] font-medium text-ink">All clear</div>
@@ -82,10 +102,12 @@ export function ApprovalsDrawer({ open, onClose, alerts, onChanged }) {
                         {approving[a.id] === 'done' ? 'Sent!' : 'Approve & send'}
                       </button>
                     </Can>
-                    <button onClick={() => setDismissed(s => new Set(s).add(a.id))}
+                    <Can perm="approve">
+                    <button onClick={() => dismiss(a)}
                       className="rounded-lg border border-slate-200 text-slate-500 text-[11px] px-3 py-1.5 flex items-center gap-1 hover:text-ink hover:border-slate-300 transition">
                       <Ban size={10} /> Dismiss
                     </button>
+                    </Can>
                   </div>
                 </div>
               ))}
@@ -109,8 +131,8 @@ export function ApprovalsDrawer({ open, onClose, alerts, onChanged }) {
 }
 
 // Header bell — badge = pending count, swings once when a new one lands.
-export function ApprovalBell({ alerts, onClick }) {
-  const n = alerts.filter(a => a.status === 'pending_approval').length
+export function ApprovalBell({ alerts, actions = [], onClick }) {
+  const n = alerts.filter(a => a.status === 'pending_approval').length + actions.length
   return (
     <button onClick={onClick} title="Pending approvals"
       className="relative w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">

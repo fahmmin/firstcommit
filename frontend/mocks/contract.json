@@ -344,20 +344,22 @@
       }
     },
 
-    "GET /approvals?tenant_id=&status= [TODO]": {
-      "$comment": "A1 durable action-approval ledger. Side-effecting agent actions are queued here (status=pending) until the owner approves/denies. Reads auto-run and never appear.",
-      "response": [{ "id": "apr-1", "tool": "create_invoice", "title": "Add invoice for Kapil Auto (₹12,400)", "agent": "vasool", "risk": "ask", "status": "pending", "args": {}, "created_at": "2026-09-26T04:00:00Z" }]
+    "GET /approvals?tenant_id=&status= [EXISTS]": {
+      "$comment": "A1 durable action-approval ledger. Side-effecting agent tools (create_invoice, create_artifact, schedule_alert, publish_listing, sync_catalog, non-read-only MCP tools) queue here until the owner decides. Reads auto-run and never appear. Drafted reminders/bookings are approval-by-draft (alerts with status=pending_approval), not ledger rows. Decided rows add decided_at; executed rows add result_ref {kind,id,label,share_path?}; failed rows add error.",
+      "response": [{ "id": "apr-1", "tool": "create_invoice", "title": "Add invoice for Kapil Auto (₹12,400)", "summary": "Invoice ₹12,400 to Kapil Auto, due 2026-10-19", "agent": "vasool", "risk": "ask", "status": "pending|executed|denied|failed", "args": {}, "created_at": "2026-09-26T04:00:00Z" }]
     },
-    "POST /approvals/{id}/approve [TODO]": {
-      "$comment": "Owner approves → the queued action executes now.",
-      "response": { "id": "apr-1", "status": "executed", "result": {} }
+    "POST /approvals/{id}/approve [EXISTS]": {
+      "$comment": "Owner/manager approves → the queued action executes now. No registered executor → status=failed (never a fake 'executed').",
+      "response": { "id": "apr-1", "status": "executed", "result": {}, "result_ref": { "kind": "invoice", "id": "inv-x", "label": "INV-2302" } }
     },
-    "POST /approvals/{id}/deny [TODO]": { "response": { "id": "apr-1", "status": "denied" } },
-    "POST /approvals/grant [TODO]": {
-      "$comment": "Session-grant: auto-approve this tool for the rest of the session (approval-fatigue escape hatch).",
+    "POST /approvals/{id}/deny [EXISTS]": { "$comment": "only pending rows — 409 otherwise", "response": { "id": "apr-1", "status": "denied" } },
+    "POST /approvals/grant [EXISTS]": {
+      "$comment": "Auto-approve a gated tool (persisted in settings.prefs.approval_grants). 400 for tools that don't need approval.",
       "request": { "tenant_id": "ramesh_auto", "tool": "create_invoice", "on": true },
-      "response": { "tool": "create_invoice", "granted": true }
+      "response": { "tool": "create_invoice", "granted": true, "grants": ["create_invoice"] }
     },
+    "GET /approvals/grants [EXISTS]": { "response": { "grants": ["sync_catalog"], "gated_tools": ["create_artifact", "create_invoice", "publish_listing", "schedule_alert", "sync_catalog"] } },
+    "POST /alerts/{id}/dismiss [EXISTS]": { "$comment": "reject a drafted reminder/booking — persisted, never sent; 409 if already sent", "response": { "id": "alert-1", "status": "dismissed" } },
 
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },

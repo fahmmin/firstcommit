@@ -21,6 +21,7 @@ import { a11y } from '../lib/a11y.js'
 import { toast } from '../lib/toast.js'
 import { CommandPalette } from '../components/CommandPalette.jsx'
 import { ApprovalsDrawer, ApprovalBell } from '../components/ApprovalsDrawer.jsx'
+import { ApprovalCard } from '../components/ApprovalCard.jsx'
 import { Digest } from '../components/Digest.jsx'
 import { SetupChecklist } from '../components/SetupChecklist.jsx'
 import { SpinPlus, TypingDots } from '../components/anim/index.jsx'
@@ -44,6 +45,7 @@ export default function Workspace() {
   ])
   const [agents, setAgents] = useState([])
   const [alerts, setAlerts] = useState([])
+  const [pendingActions, setPendingActions] = useState([])   // approvals ledger, status=pending
   const [connectors, setConnectors] = useState([])
   const [settings, setSettings] = useState(null)
   const [context, setContext] = useState(null)
@@ -119,12 +121,21 @@ export default function Workspace() {
   const active = agents.find(a => a.id === activeAgent)
 
   const refresh = async () => {
-    const [ag, al, cn, st, mm] = await Promise.all([
+    const [ag, al, cn, st, mm, pa] = await Promise.all([
       api.agents(), api.alerts(), api.connectors().catch(() => []), api.settings().catch(() => null),
-      api.memories().catch(() => []),
+      api.memories().catch(() => []), api.approvals('pending').catch(() => []),
     ])
-    setAgents(ag); setAlerts(al); setConnectors(cn); setSettings(st); setMemList(mm)
+    setAgents(ag); setAlerts(al); setConnectors(cn); setSettings(st); setMemList(mm); setPendingActions(pa)
   }
+  // keep the bell honest — poll the queues while the tab is visible
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.hidden) return
+      api.alerts().then(setAlerts).catch(() => {})
+      api.approvals('pending').then(setPendingActions).catch(() => {})
+    }, 15000)
+    return () => clearInterval(t)
+  }, [])
   useEffect(() => {
     refresh().catch(console.error)
     const pre = localStorage.getItem('prefill_prompt')
@@ -220,7 +231,7 @@ export default function Workspace() {
               <Search size={11} className="text-slate-400 shrink-0" />
               <input name="q" placeholder="Search workspace…" className="w-full text-[11px] focus:outline-none bg-transparent" />
             </form>
-            <ApprovalBell alerts={alerts} onClick={() => setApprovals(true)} />
+            <ApprovalBell alerts={alerts} actions={pendingActions} onClick={() => setApprovals(true)} />
             <button onClick={() => setPalette(true)} title="Command palette (⌘K)"
               className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
               <Command size={13} />
@@ -301,6 +312,13 @@ export default function Workspace() {
                     ✨ New agent joined your team — check the sidebar
                   </div>
                 )}
+                {m.actions?.filter(a => a.type === 'action_queued').map(a => (
+                  <div key={a.data?.approval_id} className="mt-2 animate-popIn">
+                    <ApprovalCard compact onChanged={refresh}
+                      item={{ id: a.data?.approval_id, tool: a.data?.tool, title: a.data?.title,
+                              summary: a.data?.summary, status: 'pending', created_at: new Date().toISOString() }} />
+                  </div>
+                ))}
                 {m.actions?.filter(a => a.type === 'artifact_created').map((a, j) => (
                   <a key={j} href={`#${a.data?.share_path || '/app'}`}
                     className="mt-2 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-accent hover:shadow-float hover:-translate-y-0.5 transition animate-popIn">
@@ -555,7 +573,7 @@ export default function Workspace() {
       <CommandPalette open={palette} onClose={() => setPalette(false)}
         onSelectAgent={id => setActiveAgent(id)} onSend={t => send(t)} />
       <ApprovalsDrawer open={approvals} onClose={() => setApprovals(false)}
-        alerts={alerts} onChanged={refresh} />
+        alerts={alerts} actions={pendingActions} onChanged={refresh} />
     </AppShell>
   )
 }

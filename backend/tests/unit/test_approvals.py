@@ -44,3 +44,62 @@ def test_gate_auto_when_granted(tenant):
     q = appr.gate(tenant, "create_invoice", {"buyer": "X", "amount": 1}, "x")
     assert q is None   # auto-approved → proceed, no queue
     appr.revoke_session(tenant, "create_invoice")
+
+
+# ---- Round 5 / Phase 2 — every gated tool really executes on approve ----
+
+def _tool(tenant, factory, name):
+    return next(t for t in factory(tenant) if t.tool_name == name)
+
+
+def test_every_ask_tool_has_an_executor():
+    for tool in appr.TOOL_RISK:
+        assert appr._executor(tool) is not None, f"{tool} would be approved but never run"
+
+
+def test_no_executor_reports_failed_not_executed(tenant):
+    ap = deps.store.put_approval(tenant, {"id": "apr-ghost", "tool": "made_up_tool", "args": {},
+                                          "title": "ghost", "status": "pending"})
+    res = appr.execute_action(tenant, ap["id"])
+    assert res["status"] == "failed" and "no executor" in res["error"]
+    assert deps.store.get_approval(tenant, "apr-ghost")["status"] == "failed"
+
+
+def test_schedule_alert_queues_then_runs(tenant):
+    from app.tools.comms import comms_tools
+    before = len(deps.store.list_alerts(tenant))
+    q = _tool(tenant, comms_tools, "schedule_alert")(title="Chase Om Sai", fires_at="2026-12-01")
+    assert q["queued"] and len(deps.store.list_alerts(tenant)) == before
+    ap = deps.store.get_approval(tenant, q["approval_id"])
+    assert "Chase Om Sai" in ap["summary"]
+    res = appr.execute_action(tenant, q["approval_id"])
+    assert res["status"] == "executed" and res["result_ref"]["kind"] == "alert"
+    assert len(deps.store.list_alerts(tenant)) == before + 1
+
+
+def test_sync_catalog_and_publish_are_gated(tenant):
+    from app.tools.presence import presence_tools
+    before = len(deps.store.list_listings(tenant))
+    q = _tool(tenant, presence_tools, "sync_catalog")()
+    assert q["queued"] and len(deps.store.list_listings(tenant)) == before
+    assert appr.execute_action(tenant, q["approval_id"])["status"] == "executed"
+    assert len(deps.store.list_listings(tenant)) >= before
+    q2 = _tool(tenant, presence_tools, "publish_listing")(title="all")
+    assert q2["queued"]
+    res = appr.execute_action(tenant, q2["approval_id"])
+    # marketplaces are coming_soon → honest "blocked", nothing marked live
+    assert res["status"] == "executed" and res["result"]["published"] == 0
+
+
+def test_approval_by_draft_tools_are_not_double_gated(tenant):
+    # book_pickup/draft_reminder create a pending_approval draft — that IS the approval
+    for t in ("book_pickup", "draft_reminder", "send_reminder"):
+        assert appr.risk_for(t) == appr.AUTO
+
+
+def test_grants_persist_in_settings(tenant):
+    appr.grant_session(tenant, "sync_catalog")
+    assert "sync_catalog" in deps.store.get_settings(tenant)["prefs"]["approval_grants"]
+    assert appr.list_grants(tenant) == ["sync_catalog"]
+    appr.revoke_session(tenant, "sync_catalog")
+    assert appr.list_grants(tenant) == []
