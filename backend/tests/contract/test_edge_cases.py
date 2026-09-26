@@ -86,3 +86,43 @@ def test_private_artifact_gate(client):
     art = client.post("/artifacts", json={"tenant_id": T, "title": "Priv", "template": "payment_card",
                                           "data": {"payer": "X", "amount": 100}}).json()
     assert client.get(f"/public/artifacts/{art['id']}").status_code == 404  # private → not public
+
+
+# ---- Round 5 / Phase 0 — honesty: every UI number comes from the server ----
+
+def test_logs_since_returns_only_newer(client):
+    rows = client.get("/logs", params={"tenant_id": T, "limit": 200}).json()
+    assert rows, "seed has activity"
+    newest = rows[0]["ts"]
+    assert client.get("/logs", params={"tenant_id": T, "since": newest}).json() == []
+    older = rows[-1]["ts"]
+    newer = client.get("/logs", params={"tenant_id": T, "limit": 200, "since": older}).json()
+    assert all(r["ts"] > older for r in newer)
+
+
+def test_connectors_catalog_is_server_side_for_new_tenant(client):
+    # a brand-new tenant must see the real catalog (not client-side filler rows)
+    rows = client.get("/connectors", params={"tenant_id": "fresh_tenant_p0"}).json()
+    ids = {c["id"] for c in rows}
+    assert {"google_drive", "web", "whatsapp", "tally"} <= ids
+    by = {c["id"]: c for c in rows}
+    assert by["whatsapp"]["status"] == "coming_soon"
+    assert by["google_drive"]["status"] == "available"
+    assert all(c["items_synced"] == 0 for c in rows)
+    # idempotent — the backfill is persisted, not duplicated
+    again = client.get("/connectors", params={"tenant_id": "fresh_tenant_p0"}).json()
+    assert len(again) == len(rows)
+
+
+def test_web_search_unconfigured_records_honest_action(monkeypatch):
+    from app import deps
+    from app.tools.websearch import web_search_tools
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    tok = deps.current_actions.set([])
+    try:
+        web_search_tools(T)[0](query="steel price", deep=True)
+        acts = deps.current_actions.get()
+    finally:
+        deps.current_actions.reset(tok)
+    ws = [a for a in acts if a["type"] == "web_searched"]
+    assert ws and ws[0]["data"]["configured"] is False and ws[0]["data"]["n_results"] == 0

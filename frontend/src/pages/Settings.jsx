@@ -56,12 +56,14 @@ export default function Settings() {
 
   const toggleConnector = async (c) => {
     setSyncing(true)
-    if (c.status === 'connected') await api.disconnectConnector(c.id)
-    else {
-      const r = await api.connectConnector(c.id)
-      if (r?.note) setConnNote(r.note)          // e.g. "share files to <sa-email>"
-      if (r?.status === 'connected') await api.syncConnector?.(c.id).catch(() => {})
-    }
+    try {
+      if (c.status === 'connected') await api.disconnectConnector(c.id)
+      else {
+        const r = await api.connectConnector(c.id)
+        if (r?.note) setConnNote(r.note)          // e.g. "share files to <sa-email>"
+        if (r?.status === 'connected') await api.syncConnector?.(c.id).catch(() => {})
+      }
+    } catch (e) { setConnNote(`Couldn't reach the backend — ${e.message}`) }
     load(); setSyncing(false)
   }
 

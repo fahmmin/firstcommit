@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, TENANT } from '../api.js'
+import { api, TENANT, markOffline } from '../api.js'
+import { toast } from '../lib/toast.js'
 import { contextStore } from '../lib/context.js'
 import { AppShell } from '../components/AppShell.jsx'
 import { ThinkingOrb } from 'thinking-orbs'
@@ -164,7 +165,8 @@ export default function Context() {
   const load = () => {
     // real business-context brain first (auto-tag + embeddings + fed to agents);
     // localStorage store is the offline fallback
-    api.contextDocs().then(docs => setItems(docs.map(docToItem))).catch(() => setItems(contextStore.list()))
+    // offline → labelled sample library (api flips the offline flag → header pill)
+    api.contextDocs().then(docs => setItems(docs.map(docToItem))).catch(() => { markOffline(); setItems(contextStore.list()) })
     api.memories().then(setMemories).catch(() => setMemories([]))
   }
   useEffect(load, [])
@@ -174,18 +176,20 @@ export default function Context() {
     if (!v) return
     // note → real document (tagged, embedded, cited by agents); memory as fallback
     const ok = await api.uploadContext(v).then(() => true).catch(() => false)
-    if (!ok) { contextStore.addNote(v); await api.addMemory(v).catch(() => {}) }
+    if (!ok) { toast.push("Couldn't save — backend unreachable. Your note is still in the box.", 'err'); return }
     setText(''); load()
     setAdded(true); setTimeout(() => setAdded(false), 1400)
   }
 
   const drop = (files) => {
     Array.from(files || []).forEach(f =>
-      api.uploadContext(f).catch(() => contextStore.addFile(f)).finally(load))
+      api.uploadContext(f)
+        .catch(() => toast.push(`Couldn't upload ${f.name} — backend unreachable`, 'err'))
+        .finally(load))
   }
 
   const remove = async (it) => {
-    if (it.remote) await api.delContext(it.id).catch(() => {})
+    if (it.remote) await api.delContext(it.id).catch(() => toast.push("Couldn't delete — backend unreachable", 'err'))
     else contextStore.del(it.id)
     load()
   }

@@ -11,6 +11,18 @@ export const setTenant = (id) => { TENANT = id || 'ramesh_auto' }
 
 import { demo, demoSearch } from './lib/demo.js'
 
+// Offline flag — set whenever a read falls back to the sample store because the
+// backend was unreachable. The UI shows an "Offline — sample data" pill so sample
+// rows are never mistaken for the tenant's real data. A later success clears it.
+let _offline = false
+const _subs = new Set()
+const _setOffline = (v) => { if (v !== _offline) { _offline = v; _subs.forEach(f => f(v)) } }
+export const markOffline = () => _setOffline(true)
+export const offline = { get: () => _offline, subscribe: (f) => { _subs.add(f); return () => _subs.delete(f) } }
+// read with a labelled sample fallback (never used for writes — a failed write must fail)
+const withSample = (p, sample) => p.then(r => { _setOffline(false); return r })
+  .catch(() => { _setOffline(true); return typeof sample === 'function' ? sample() : sample })
+
 // demo gate — the deployed API sits behind DEMO_GATE_TOKEN (auth is demo-only
 // by project rule). Share the URL as .../?gate=PASSCODE#/app once and it sticks
 // in localStorage; public artifact links never need it.
@@ -72,12 +84,10 @@ export const api = {
   agentDetail: (id) => req(`/agents/${id}?tenant_id=${TENANT}`),
   agentContext: (id) => req(`/agents/${id}/context?tenant_id=${TENANT}`),
   notifications: () => req(`/notifications?tenant_id=${TENANT}`),
-  connectors: () =>
-    req(`/connectors?tenant_id=${TENANT}`).then(demo.connectors.merge).catch(() => demo.connectors.merge([])),
-  connectConnector: (id) =>
-    req(`/connectors/${id}/connect?tenant_id=${TENANT}`, { method: 'POST' }).catch(() => demo.connectors.toggle(id, true)),
-  disconnectConnector: (id) =>
-    req(`/connectors/${id}/disconnect?tenant_id=${TENANT}`, { method: 'POST' }).catch(() => demo.connectors.toggle(id, false)),
+  // server returns the full catalog with real statuses (coming_soon included)
+  connectors: () => withSample(req(`/connectors?tenant_id=${TENANT}`), () => demo.connectors.list()),
+  connectConnector: (id) => req(`/connectors/${id}/connect?tenant_id=${TENANT}`, { method: 'POST' }),
+  disconnectConnector: (id) => req(`/connectors/${id}/disconnect?tenant_id=${TENANT}`, { method: 'POST' }),
   settings: () => req(`/settings?tenant_id=${TENANT}`),
   updateSettings: (body) =>
     req(`/settings?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
@@ -85,18 +95,17 @@ export const api = {
   runScheduler: () => req(`/scheduler/run?tenant_id=${TENANT}`, { method: 'POST' }),
   resetDemo: () => req(`/demo/reset?tenant_id=${TENANT}`, { method: 'POST' }),
 
-  // ── round 2 — real endpoint first, demo store on failure ──
+  // ── round 2 — real endpoint first; reads fall back to labelled sample data ──
   login: (body) =>
     req('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-  memories: () => req(`/memories?tenant_id=${TENANT}`).catch(() => demo.memories.list()),
+  memories: () => withSample(req(`/memories?tenant_id=${TENANT}`), () => demo.memories.list()),
   addMemory: (text, source = 'owner') =>
     req('/memories', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                       body: JSON.stringify({ tenant_id: TENANT, text, source }) })
-      .catch(() => demo.memories.add(text, source)),
-  delMemory: (id) => req(`/memories/${id}`, { method: 'DELETE' }).catch(() => demo.memories.del(id)),
-  search: (q) => req(`/search?tenant_id=${TENANT}&q=${encodeURIComponent(q)}`).catch(() => demoSearch(q, api)),
-  artifacts: () => req(`/artifacts?tenant_id=${TENANT}`).catch(() => demo.artifacts.list()),
-  artifact: (id) => req(`/artifacts/${id}`).catch(() => demo.artifacts.get(id)),
+                       body: JSON.stringify({ tenant_id: TENANT, text, source }) }),
+  delMemory: (id) => req(`/memories/${id}?tenant_id=${TENANT}`, { method: 'DELETE' }),
+  search: (q) => withSample(req(`/search?tenant_id=${TENANT}&q=${encodeURIComponent(q)}`), () => demoSearch(q, api)),
+  artifacts: () => withSample(req(`/artifacts?tenant_id=${TENANT}`), () => demo.artifacts.list()),
+  artifact: (id) => withSample(req(`/artifacts/${id}?tenant_id=${TENANT}`), () => demo.artifacts.get(id)),
   updateArtifact: (id, patch) =>
     req(`/artifacts/${id}?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
   // share-link route — only resolves public artifacts (no tenant context needed)
@@ -109,26 +118,26 @@ export const api = {
     const fd = new FormData()
     fd.append('file', file)
     fd.append('tenant_id', TENANT)
-    return req('/import/excel', { method: 'POST', body: fd }).catch(() => demo.importExcel(file?.name))
+    return req('/import/excel', { method: 'POST', body: fd })
   },
   calendarEvents: () => req(`/calendar/events?tenant_id=${TENANT}`).catch(() => []),
-  tasks: () =>
-    req(`/tasks?tenant_id=${TENANT}`).then(demo.tasks.merge).catch(() => demo.tasks.list()),
+  tasks: () => withSample(req(`/tasks?tenant_id=${TENANT}`), () => demo.tasks.list()),
   // backend TaskReq uses agent_id/status — send both vocabularies so it works today
   // and keeps working when the backend adds status/col support
   addTask: (title, col = 'todo', agent = 'sahayak') =>
     req('/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tenant_id: TENANT, title, col, agent, status: col, agent_id: agent }) })
-      .catch(() => demo.tasks.add(title, col, agent)),
+                    body: JSON.stringify({ tenant_id: TENANT, title, col, agent, status: col, agent_id: agent }) }),
   updateTask: (id, patch) =>
-    req(`/tasks/${id}?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
-      .catch(() => demo.tasks.update(id, patch)),
+    req(`/tasks/${id}?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
 
   // ── rounds 3–4 backend — live endpoints wired to real UI ──
   people: () => req(`/people?tenant_id=${TENANT}`),
   markRead: (id) => req(`/notifications/${id}/read?tenant_id=${TENANT}`, { method: 'POST' }),
   syncConnector: (id) => req(`/connectors/${id}/sync?tenant_id=${TENANT}`),
-  logs: (limit = 80) => req(`/logs?tenant_id=${TENANT}&limit=${limit}`).catch(() => []),
+  // throws on failure so the Logs stream can show "paused" instead of pretending
+  logs: (limit = 80, since = '') =>
+    req(`/logs?tenant_id=${TENANT}&limit=${limit}${since ? `&since=${encodeURIComponent(since)}` : ''}`),
+  metrics: () => req(`/metrics?tenant_id=${TENANT}`),
   templates: () => req(`/templates?tenant_id=${TENANT}`).catch(() => []),
   installTemplate: (id) =>
     req(`/templates/${id}/install`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -151,11 +160,10 @@ export const api = {
     `${BASE}/context/${id}/file?tenant_id=${TENANT}${gateToken() ? `&gate=${encodeURIComponent(gateToken())}` : ''}`,
 
   // ── reports — real-data docs persisted as business_report artifacts ──
-  reportTypes: () => req('/reports/types').catch(() => demo.reports.types()),
+  reportTypes: () => withSample(req('/reports/types'), () => demo.reports.types()),
   generateReport: (reportType, title = '', visibility = 'private') =>
     req('/reports/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenant_id: TENANT, report_type: reportType, title, visibility }) })
-      .catch(() => demo.reports.generate(reportType, title)),
+      body: JSON.stringify({ tenant_id: TENANT, report_type: reportType, title, visibility }) }),
   // binary download — returns {blob, filename}; caller does URL.createObjectURL
   reportPdf: async (id, isPublic = false) => {
     const path = isPublic ? `/public/artifacts/${id}/pdf` : `/reports/${id}/pdf?tenant_id=${TENANT}`

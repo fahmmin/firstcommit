@@ -41,8 +41,13 @@ export default function Tasks() {
     const t = tasks.find(x => x.id === id)
     if (!t || t.col === col) return
     setTasks(ts => ts.map(x => x.id === id ? { ...x, col } : x))
-    api.updateTask(id, { col, status: col }).catch(() => {})
-    if (col === 'done') toast.push(`Done — ${t.title.slice(0, 40)}`)
+    try {
+      await api.updateTask(id, { col, status: col })
+      if (col === 'done') toast.push(`Done — ${t.title.slice(0, 40)}`)
+    } catch {  // roll back — the board must mirror the server
+      setTasks(ts => ts.map(x => x.id === id ? { ...x, col: t.col } : x))
+      toast.push("Couldn't move the task — backend unreachable", 'err')
+    }
   }
 
   const add = async (col) => {
@@ -51,7 +56,8 @@ export default function Tasks() {
     setDraft('')
     // POST /tasks returns only {id, status} — rebuild the card client-side
     const r = await api.addTask(title, col).catch(() => null)
-    setTasks(ts => [...ts, norm({ id: r?.id || `t-${Date.now()}`, title, col, agent: 'sahayak' })])
+    if (!r?.id) { setDraft(title); toast.push("Couldn't save the task — backend unreachable", 'err'); return }
+    setTasks(ts => [...ts, norm({ id: r.id, title, col, agent: 'sahayak' })])
   }
 
   const approve = (t) => { move(t.id, 'done') }

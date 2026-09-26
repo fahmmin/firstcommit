@@ -1,73 +1,41 @@
 import { useEffect, useState } from 'react'
-import { api, TENANT } from '../api.js'
+import { api } from '../api.js'
 import { BrandIcon } from '../components/BrandIcon.jsx'
 import { toast } from '../lib/toast.js'
 import { AppShell } from '../components/AppShell.jsx'
+import { Can } from '../components/rui/Can.jsx'
 import {
-  Server, Braces, Download, Check, Search, TrendingUp,
+  Server, Braces, Download, Check, Search, Sparkles, Loader2, Link2,
 } from 'lucide-react'
 
-const MCP_CATALOG = [
-  { id: 'whatsapp-mcp', name: 'whatsapp-mcp', icon: 'whatsapp', desc: 'Send and read WhatsApp Business messages — reminders land where customers actually reply.', installs: '48.2k', tag: 'messaging' },
-  { id: 'sheets-mcp', name: 'google-sheets-mcp', icon: 'sheets', desc: 'Read/write Sheets — your Excel registers become queryable agent tools.', installs: '61.7k', tag: 'data' },
-  { id: 'tally-mcp', name: 'tally-mcp', icon: 'tally', desc: 'Tally Prime ledger access — invoices, ledgers, GST reports as tools.', installs: '8.9k', tag: 'accounting' },
-  { id: 'razorpay-mcp', name: 'razorpay-mcp', icon: 'razorpay', desc: 'Create payment links and check settlements inside chat.', installs: '22.1k', tag: 'payments' },
-  { id: 'drive-mcp', name: 'gdrive-mcp', icon: 'google_drive', desc: 'Search and read files from Google Drive as agent context.', installs: '39.4k', tag: 'storage' },
-  { id: 'india-logistics-mcp', name: 'india-logistics-mcp', icon: 'mcp', desc: 'Live tracking webhooks from Indian carriers — Delhivery, VRL, SafeRoad.', installs: '3.2k', tag: 'logistics' },
-  { id: 'gmail-mcp', name: 'gmail-mcp', icon: 'gmail', desc: 'Inbox search + send — agents read invoice emails and reply with drafts.', installs: '54.0k', tag: 'messaging' },
-  { id: 'zapier-mcp', name: 'zapier-mcp', icon: 'zapier', desc: 'Bridge to 6,000+ apps through Zapier actions.', installs: '71.3k', tag: 'automation' },
-  { id: 'fb-marketplace-mcp', name: 'fb-marketplace-mcp', icon: 'facebook', desc: 'Publish + manage Marketplace listings as agent tools.', installs: '11.6k', tag: 'commerce' },
-  { id: 'indiamart-mcp', name: 'indiamart-mcp', icon: 'indiamart', desc: 'IndiaMART catalog sync — push products, pull buyer leads.', installs: '6.4k', tag: 'commerce' },
-  { id: 'shopify-mcp', name: 'shopify-mcp', icon: 'shopify', desc: 'Create storefronts, manage products and orders via agents.', installs: '33.8k', tag: 'commerce' },
-  { id: 'perplexity-mcp', name: 'perplexity-mcp', icon: 'perplexity', desc: 'Web + deep research as a tool — cited answers inside chat.', installs: '27.9k', tag: 'research' },
-]
-
-const SKILL_CATALOG = [
-  { id: 'gst-reconcile', name: 'GST Reconciliation', icon: 'tally', desc: 'Match GSTR-2A against your purchase register; flag mismatches automatically.', installs: '12.8k', tag: 'compliance' },
-  { id: 'voice-notes', name: 'Hindi Voice Notes', icon: 'whatsapp', desc: 'Speak in Hindi/Hinglish — transcribed to actions and ledger entries.', installs: '9.4k', tag: 'input' },
-  { id: 'upi-links', name: 'UPI Payment Links', icon: 'phonepe', desc: 'Attach a UPI collect link to every payment reminder.', installs: '18.2k', tag: 'payments' },
-  { id: 'festival-forecast', name: 'Festival Demand Forecast', icon: 'mcp', desc: 'Predicts stock needs around Diwali/wedding season from your history.', installs: '6.7k', tag: 'forecast' },
-  { id: 'ledger-ocr', name: 'Ledger OCR+', icon: 'excel', desc: 'Reads handwritten bahi-khata photos into structured ledger rows.', installs: '15.1k', tag: 'input' },
-  { id: 'credit-score', name: 'Buyer Credit Scoring', icon: 'razorpay', desc: 'Scores buyers on your own payment history before you offer terms.', installs: '11.3k', tag: 'risk' },
-  { id: 'catalog-syndication', name: 'Catalog Syndication', icon: 'shopify', desc: 'One product sheet → listings on every marketplace, auto-formatted.', installs: '7.9k', tag: 'commerce' },
-  { id: 'geo-seo', name: 'SEO + GEO Optimizer', icon: 'perplexity', desc: 'Keeps listings ranking on Google AND inside AI answers.', installs: '5.5k', tag: 'commerce' },
+// Honest marketplace: no install counts, no invented URLs.
+// • Agents + Templates come from the backend catalog (GET /templates) and
+//   install for real (POST /templates/{id}/install → the agent factory).
+// • MCP servers: bring your own server URL — saved to settings.mcp_servers.
+const MCP_SUGGESTIONS = [
+  { id: 'google-sheets', name: 'Google Sheets', icon: 'sheets', desc: 'Read/write your registers as agent tools.', tag: 'data' },
+  { id: 'google-drive', name: 'Google Drive', icon: 'google_drive', desc: 'Search and read Drive files as agent context.', tag: 'storage' },
+  { id: 'gmail', name: 'Gmail', icon: 'gmail', desc: 'Search the inbox and draft replies.', tag: 'messaging' },
+  { id: 'whatsapp', name: 'WhatsApp Business', icon: 'whatsapp', desc: 'Send and read WhatsApp Business messages.', tag: 'messaging' },
+  { id: 'razorpay', name: 'Razorpay', icon: 'razorpay', desc: 'Payment links and settlement lookups.', tag: 'payments' },
+  { id: 'shopify', name: 'Shopify', icon: 'shopify', desc: 'Products and orders on your storefront.', tag: 'commerce' },
+  { id: 'zapier', name: 'Zapier', icon: 'zapier', desc: 'Bridge to thousands of apps via Zapier actions.', tag: 'automation' },
+  { id: 'custom', name: 'Any MCP server', icon: 'mcp', desc: 'Paste the URL of any remote (HTTP/SSE) MCP server.', tag: 'custom' },
 ]
 
 export default function Marketplace() {
-  const [tab, setTab] = useState('mcp')
+  const [tab, setTab] = useState('templates')
   const [q, setQ] = useState('')
   const [settings, setSettings] = useState(null)
-  const [installed, setInstalled] = useState(new Set())
+  const [templates, setTemplates] = useState([])
 
-  useEffect(() => {
-    api.settings().then(s => {
-      setSettings(s)
-      const m = new Set((s?.mcp_servers || []).map(x => x.name))
-      ;(s?.prefs?.installed_skills || []).forEach(x => m.add(x))
-      setInstalled(m)
-    }).catch(() => {})
-  }, [])
+  const load = () => api.settings().then(setSettings).catch(() => setSettings(null))
+  useEffect(() => { load(); api.templates().then(setTemplates).catch(() => setTemplates([])) }, [])
 
-  const install = async (item, kind) => {
-    if (installed.has(kind === 'mcp' ? item.id : item.name)) return
-    if (kind === 'mcp') {
-      const next = [...(settings?.mcp_servers || []),
-        { id: item.id, name: item.id, url: `https://skills.sh/${item.id}/sse`, status: 'configured' }]
-      await api.updateSettings({ mcp_servers: next }).catch(() => {})
-      setSettings(s => ({ ...s, mcp_servers: next }))
-      setInstalled(p => new Set(p).add(item.id))
-      toast.push(`${item.name} saved — live MCP activation ships post-demo`)
-    } else {
-      const next = [...(settings?.prefs?.installed_skills || []), item.name]
-      await api.updateSettings({ prefs: { installed_skills: next } }).catch(() => {})
-      setSettings(s => ({ ...s, prefs: { ...s?.prefs, installed_skills: next } }))
-      setInstalled(p => new Set(p).add(item.name))
-      toast.push(`${item.name} saved — live activation ships post-demo`)
-    }
-  }
-
-  const catalog = (tab === 'mcp' ? MCP_CATALOG : SKILL_CATALOG)
-    .filter(x => !q || `${x.name} ${x.desc} ${x.tag}`.toLowerCase().includes(q.toLowerCase()))
+  const servers = settings?.mcp_servers || []
+  const match = (x) => !q || `${x.name || x.title} ${x.desc} ${x.tag || x.category}`.toLowerCase().includes(q.toLowerCase())
+  const agentTemplates = templates.filter(t => t.agent_spec && match(t))
+  const promptTemplates = templates.filter(t => !t.agent_spec && match(t))
 
   return (
     <AppShell>
@@ -76,19 +44,19 @@ export default function Marketplace() {
         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
           <div>
             <h1 className="text-[24px] font-semibold tracking-tight text-ink">Extend your agents</h1>
-            <p className="text-[12px] text-slate-500 mt-1">MCP servers and skills from the open registry — saved to your workspace now, live tool activation ships post-demo.</p>
+            <p className="text-[12px] text-slate-500 mt-1">Hire ready-made agents, run proven templates, or plug in your own MCP servers.</p>
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 w-64 focus-within:border-ink transition">
             <Search size={13} className="text-slate-400" />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search registry…"
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search…"
               className="flex-1 text-[12px] focus:outline-none bg-transparent" />
           </div>
         </div>
 
-        <AgentTemplates />
+        {agentTemplates.length > 0 && <AgentTemplates items={agentTemplates} />}
 
         <div className="flex gap-1 mb-5 rounded-xl border border-slate-200 bg-white p-1 w-fit">
-          {[['mcp', 'MCP servers', Server], ['skills', 'Skills', Braces]].map(([k, l, I]) => (
+          {[['templates', 'Templates', Braces], ['mcp', 'MCP servers', Server]].map(([k, l, I]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-[12px] font-medium transition
                 ${tab === k ? 'bg-ink text-white' : 'text-slate-500 hover:text-ink'}`}>
@@ -97,103 +65,153 @@ export default function Marketplace() {
           ))}
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-3">
-          {catalog.map(item => {
-            const isInstalled = installed.has(tab === 'mcp' ? item.id : item.name)
-            return (
-              <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 flex items-start gap-3 hover:shadow-float transition">
-                <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 grid place-items-center shrink-0">
-                  <BrandIcon id={item.icon} size={18} />
-                </div>
+        {tab === 'templates' ? (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {promptTemplates.map(t => (
+              <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4 flex items-start gap-3 hover:shadow-float transition">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-ink font-mono">{item.name}</span>
-                    <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{item.tag}</span>
+                    <span className="text-[13px] font-semibold text-ink">{t.title}</span>
+                    <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{t.category}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">{item.desc}</p>
-                  <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-2">
-                    <TrendingUp size={10} /> {item.installs} installs
-                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">{t.desc}</p>
+                  <div className="text-[10px] text-slate-400 mt-2">runs on <span className="font-mono">{t.runs_on}</span></div>
                 </div>
-                <button onClick={() => install(item, tab)} disabled={isInstalled}
-                  className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition flex items-center gap-1
-                    ${isInstalled ? 'bg-emerald-50 text-emerald-600 cursor-default' : 'bg-ink text-white hover:bg-ink/85'}`}>
-                  {isInstalled ? <><Check size={11} /> Saved</> : <><Download size={11} /> Save</>}
-                </button>
+                <a href="#/app" onClick={() => localStorage.setItem('prefill_prompt', t.prompt)}
+                  className="text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 bg-ink text-white hover:bg-ink/85 transition">
+                  Use
+                </a>
               </div>
-            )
-          })}
-        </div>
-        <p className="text-[10px] text-slate-400 mt-6 text-center">
-          Registry compatible with skills.sh — install any community MCP server or skill by URL.
-        </p>
+            ))}
+            {!promptTemplates.length && <p className="text-[12px] text-slate-400">No templates match.</p>}
+          </div>
+        ) : (
+          <McpServers servers={servers} onSaved={load} match={match} />
+        )}
         </div>
       </main>
     </AppShell>
   )
 }
 
-// Hireable agent templates — full agent specs bundled with connectors + skills.
-// "Hire" drops the hiring prompt into the workspace composer (Nirmata builds it).
-function AgentTemplates() {
-  const AGENTS = [
-    {
-      id: 'digital-presence', name: 'Digital Presence Agent', role: 'Sells your catalogue online',
-      desc: 'Publishes products to Facebook Marketplace and IndiaMART, spins up a Shopify storefront, and keeps every listing SEO/GEO-optimized — one prompt, every channel.',
-      connectors: ['facebook', 'indiamart', 'shopify', 'instagram'],
-      connectorNames: ['Facebook Marketplace', 'IndiaMART', 'Shopify storefront', 'Instagram Shop'],
-      skills: ['Catalog syndication', 'SEO + GEO optimization', 'Storefront builder', 'Listing refresh'],
-      installs: '4.1k', tag: 'sales',
-      prompt: 'I want to sell online. Hire an agent that publishes my products to Facebook Marketplace and IndiaMART, builds me a web storefront, and keeps my listings SEO-optimized.',
-    },
-    {
-      id: 'gst-accountant', name: 'GST Accountant Agent', role: 'Compliance on autopilot',
-      desc: 'Watches your ledger for GST mismatches, preps GSTR summaries before filing dates, and flags invoices missing GSTIN.',
-      connectors: ['tally', 'gmail'],
-      connectorNames: ['Tally Prime', 'Gmail'],
-      skills: ['GST reconciliation', 'Filing reminders', 'GSTIN validation'],
-      installs: '2.8k', tag: 'compliance',
-      prompt: 'Hire an agent that watches my books for GST mismatches and reminds me before every filing deadline.',
-    },
-  ]
+// Add a real MCP server: the owner supplies the URL — nothing is invented.
+function McpServers({ servers, onSaved, match }) {
+  const [open, setOpen] = useState(null)
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const has = (name) => servers.some(s => s.name === name)
+
+  const save = async (item) => {
+    const u = url.trim()
+    if (!/^https?:\/\//.test(u)) { toast.push('Enter the server URL (https://…)', 'err'); return }
+    setBusy(true)
+    try {
+      const next = [...servers, { id: `mcp-${Date.now()}`, name: item.id === 'custom' ? new URL(u).hostname : item.name, url: u, status: 'configured' }]
+      const r = await api.updateSettings({ mcp_servers: next })
+      if (r?.status !== 'saved') throw new Error('not saved')
+      toast.push(`${item.name} added — test it from Settings → MCP`)
+      setOpen(null); setUrl(''); onSaved()
+    } catch (e) { toast.push(`Couldn't save — ${e.message}`, 'err') }
+    setBusy(false)
+  }
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-3">
+      {MCP_SUGGESTIONS.filter(match).map(item => {
+        const added = item.id !== 'custom' && has(item.name)
+        return (
+          <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-float transition">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 grid place-items-center shrink-0">
+                <BrandIcon id={item.icon} size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-semibold text-ink">{item.name}</span>
+                  <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{item.tag}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">{item.desc}</p>
+              </div>
+              <Can perm="mcp" reason="Only the owner can add MCP servers">
+                <button onClick={() => setOpen(open === item.id ? null : item.id)} disabled={added}
+                  className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition flex items-center gap-1
+                    ${added ? 'bg-emerald-50 text-emerald-600 cursor-default' : 'bg-ink text-white hover:bg-ink/85'}`}>
+                  {added ? <><Check size={11} /> Added</> : <><Link2 size={11} /> Add</>}
+                </button>
+              </Can>
+            </div>
+            {open === item.id && (
+              <form onSubmit={e => { e.preventDefault(); save(item) }} className="mt-3 flex gap-2">
+                <input autoFocus value={url} onChange={e => setUrl(e.target.value)} placeholder="https://your-server/mcp"
+                  className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-mono focus:outline-none focus:border-ink" />
+                <button disabled={busy} className="rounded-lg bg-ink text-white text-[11px] px-3 disabled:opacity-50">
+                  {busy ? <Loader2 size={11} className="animate-spin" /> : 'Save'}
+                </button>
+              </form>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Ready-made agents from the backend catalog — "Hire" really creates the agent
+// via the factory; templates without a ready toolset hand off to Nirmata.
+function AgentTemplates({ items }) {
+  const [busy, setBusy] = useState('')
+  const [done, setDone] = useState(new Set())
+  const hire = async (t) => {
+    setBusy(t.id)
+    try {
+      const r = await api.installTemplate(t.id)
+      if (r.status === 'needs_factory') {
+        localStorage.setItem('prefill_prompt', r.prompt || t.prompt)
+        location.hash = '#/app'
+        return
+      }
+      setDone(d => new Set(d).add(t.id))
+      toast.push(`${t.agent_spec.name} joined your team`)
+    } catch (e) { toast.push(`Couldn't hire — ${e.message}`, 'err') }
+    setBusy('')
+  }
   return (
     <div className="mb-7">
       <div className="text-[11px] font-semibold text-slate-500 mb-2.5 flex items-center gap-1.5">
-        <TrendingUp size={11} className="text-accent" /> Featured agent templates
-        <span className="text-slate-300 font-normal">— pre-specced, Nirmata hires in one prompt</span>
+        <Sparkles size={11} className="text-accent" /> Ready-made agents
+        <span className="text-slate-300 font-normal">— hired by the agent factory with a fixed, policy-checked toolset</span>
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
-        {AGENTS.map(a => (
-          <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-float transition">
+        {items.map(t => (
+          <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-float transition">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/15 to-magenta/10 border border-slate-100 grid place-items-center text-accent font-bold text-[15px]">
-                  {a.name[0]}
+                  {t.agent_spec.name[0]}
                 </div>
                 <div>
-                  <div className="text-[13px] font-semibold text-ink">{a.name}</div>
-                  <div className="text-[10px] text-slate-400">{a.role} · {a.installs} hires</div>
+                  <div className="text-[13px] font-semibold text-ink">{t.agent_spec.name}</div>
+                  <div className="text-[10px] text-slate-400">{t.title}</div>
                 </div>
               </div>
-              <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{a.tag}</span>
+              <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{t.category}</span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-2.5 leading-snug">{a.desc}</p>
-            <div className="flex items-center gap-3 mt-3 pb-2.5 border-b border-slate-100">
-              {a.connectors.map((c, i) => (
-                <span key={c} className="flex items-center gap-1 text-[10px] text-slate-500" title={a.connectorNames[i]}>
-                  <BrandIcon id={c} size={13} /> {a.connectorNames[i]}
-                </span>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-1 mt-2.5">
-              {a.skills.map(s => (
-                <span key={s} className="text-[9px] font-medium rounded-full border border-accent/20 bg-accent/5 text-accent px-2 py-0.5">{s}</span>
-              ))}
-            </div>
-            <a href="#/app" onClick={() => localStorage.setItem('prefill_prompt', a.prompt)}
-              className="mt-3 w-full rounded-lg bg-ink text-white text-[11px] font-medium py-2 flex items-center justify-center gap-1.5 hover:bg-ink/85 transition">
-              <Download size={11} className="rotate-180" /> Hire this agent
-            </a>
+            <p className="text-[11px] text-slate-500 mt-2.5 leading-snug">{t.agent_spec.goal || t.desc}</p>
+            {t.agent_spec.tools?.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2.5">
+                {t.agent_spec.tools.map(s => (
+                  <span key={s} className="text-[9px] font-mono rounded-full border border-accent/20 bg-accent/5 text-accent px-2 py-0.5">{s}</span>
+                ))}
+              </div>
+            )}
+            <Can perm="hire" reason="Your role can't hire agents">
+              <button onClick={() => hire(t)} disabled={busy === t.id || done.has(t.id)}
+                className="mt-3 w-full rounded-lg bg-ink text-white text-[11px] font-medium py-2 flex items-center justify-center gap-1.5 hover:bg-ink/85 transition disabled:opacity-60">
+                {done.has(t.id) ? <><Check size={11} /> Hired</>
+                  : busy === t.id ? <Loader2 size={11} className="animate-spin" />
+                  : <><Download size={11} className="rotate-180" /> {t.agent_spec.tools?.length ? 'Hire this agent' : 'Hire with Nirmata'}</>}
+              </button>
+            </Can>
           </div>
         ))}
       </div>

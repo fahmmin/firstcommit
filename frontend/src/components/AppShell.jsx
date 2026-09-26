@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, TENANT } from '../api.js'
+import { api, TENANT, offline } from '../api.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { session } from '../lib/auth.js'
 import { groupAgents } from '../lib/agentGroups.js'
@@ -54,6 +54,7 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
   }
 
   const groups = groupAgents(agents)
+  const isOffline = useOffline()
 
   return (
     <div className="h-screen flex bg-white font-sans">
@@ -114,6 +115,19 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
         </div>
       </aside>
       {children}
+      {isOffline && (
+        <div role="status" title="The backend didn't answer — lists show sample rows until it does. Nothing you see here is your data."
+          className="fixed top-3 right-4 z-[80] flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[11px] font-medium text-amber-700 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Offline — sample data
+        </div>
+      )}
     </div>
   )
+}
+
+// true while the last read fell back to sample data (see api.js withSample)
+function useOffline() {
+  const [v, setV] = useState(offline.get())
+  useEffect(() => offline.subscribe(setV), [])
+  return v
 }

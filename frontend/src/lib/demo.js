@@ -1,7 +1,8 @@
-// Demo store — graceful fallbacks so every screen renders with content while
-// backend endpoints land. api.js tries the REAL endpoint first; only a failure
-// drops to this in-browser store (mutations persist for the session).
-// Nothing here is labelled "demo" in the UI — it's the offline cache layer.
+// Sample store — READ-ONLY fallback used only when the backend is unreachable
+// (cold start / offline). api.js tries the real endpoint first; a failed read
+// drops here AND flips api's offline flag, so the UI shows an
+// "Offline — sample data" pill. Writes never fall back here: a failed write fails.
+// Real API responses are never merged with these rows.
 import { contextStore } from './context.js'
 
 export const DEMO = {
@@ -66,46 +67,16 @@ export const DEMO = {
   ],
 }
 
-const uid = () => `demo-${Date.now().toString(36)}`
-
 // In-session mutations — connect/disconnect/add persist while the tab lives.
 export const demo = {
   memories: {
     list: () => DEMO.memories,
-    add: (text, source = 'owner') => {
-      const m = { id: uid(), text, source, created_at: new Date().toISOString() }
-      DEMO.memories.push(m); return { id: m.id, status: 'saved' }
-    },
-    del: (id) => { DEMO.memories = DEMO.memories.filter(m => m.id !== id); return { status: 'deleted' } },
   },
   connectors: {
-    // merge real rows with demo extras so the full catalog always renders
-    merge: (real) => {
-      const have = new Set((real || []).map(c => c.id))
-      return [...(real || []), ...DEMO.connectors.filter(c => !have.has(c.id))]
-    },
-    toggle: (id, connect) => {
-      const c = DEMO.connectors.find(x => x.id === id)
-      if (c) { c.status = connect ? 'connected' : 'available'; if (connect) { c.connected_at = new Date().toISOString(); c.items_synced ??= 0 } }
-      return { id, status: connect ? 'connected' : 'available' }
-    },
+    list: () => DEMO.connectors,
   },
   tasks: {
     list: () => DEMO.tasks,
-    // real /tasks rows use {status, agent_id, due: ISO} — merge with demo extras
-    merge: (real) => {
-      const have = new Set((real || []).map(t => t.id))
-      return [...(real || []), ...DEMO.tasks.filter(t => !have.has(t.id))]
-    },
-    add: (title, col = 'todo', agent = 'sahayak') => {
-      const t = { id: uid(), title, agent, col, priority: 'med', due: '—', tags: [] }
-      DEMO.tasks.push(t); return t
-    },
-    update: (id, patch) => {
-      const t = DEMO.tasks.find(x => x.id === id)
-      if (t) Object.assign(t, patch)
-      return t
-    },
   },
   artifacts: {
     list: () => DEMO.artifacts,
@@ -115,11 +86,7 @@ export const demo = {
       return a
     },
   },
-  importExcel: (filename) => ({
-    file_id: uid(), filename, collection: 'invoices', imported: 34, skipped: 2,
-    sample: [{ invoice_no: 'INV-0101', buyer: 'Kapil Auto', amount: 12400, due_date: '2026-10-02' }],
-  }),
-  // offline fallback — same REPORT_TYPES metadata + a canned business_report artifact
+  // offline fallback — REPORT_TYPES metadata only (generation needs the backend)
   reports: {
     types: () => [
       { id: 'business_overview', name: 'Business overview', desc: 'The whole shop on one page.', sections: ['KPIs', 'Invoice status', 'Top debtors'] },
@@ -128,36 +95,6 @@ export const demo = {
       { id: 'gst_summary', name: 'GST summary', desc: 'Output tax by month + filing docs.', sections: ['Monthly billed + GST'] },
       { id: 'ops_digest', name: 'Operations digest', desc: 'What the AI team did.', sections: ['Active agents', 'Activity'] },
     ],
-    generate: (reportType, title) => {
-      const row = {
-        id: uid(), title: title || 'Business overview', template: 'business_report',
-        created_by: 'reports-page', visibility: 'private',
-        created_at: new Date().toISOString(), share_path: '',
-        data: {
-          business: 'Ramesh Auto Components', period: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-          subtitle: 'Owner digest — receivables, payables and what needs a decision',
-          kpis: [
-            { label: 'Outstanding', value: '₹4.9L', sub: '11 unpaid invoices' },
-            { label: 'Overdue', value: '₹1.8L', sub: '4 invoices' },
-            { label: 'Collected', value: '₹6.2L', sub: 'paid invoices' },
-            { label: 'Payables', value: '₹1.2L', sub: '3 vendor dues' },
-          ],
-          sections: [
-            { heading: 'Invoices by status', kind: 'table', columns: ['Status', 'Invoices', 'Amount'],
-              rows: [['paid', '5', '₹6,20,000'], ['due soon', '7', '₹3,10,000'], ['overdue', '4', '₹1,80,000']] },
-            { heading: 'Largest outstanding — by buyer', kind: 'bars',
-              items: [
-                { label: 'Sharma Constructions', value: 124500, display: '₹1,24,500' },
-                { label: 'Om Sai Electric Works', value: 56000, display: '₹56,000' },
-                { label: 'Kapil Auto', value: 34800, display: '₹34,800' },
-              ] },
-            { heading: 'Read', kind: 'text',
-              text: 'Offline preview — connect the backend for live figures pulled from your ledgers.' },
-          ],
-        },
-      }
-      DEMO.artifacts.push(row); return row
-    },
   },
 }
 

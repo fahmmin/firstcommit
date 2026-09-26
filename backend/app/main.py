@@ -638,9 +638,28 @@ def _sync_google_files(tenant_id: str, conn_id: str) -> int:
     return synced
 
 
+def _connector_catalog() -> list[dict]:
+    """The honest connector catalog (seed.json) — fresh status per tenant."""
+    seed = json.loads(SEED_PATH.read_text())
+    out = []
+    for c in seed.get("connectors", []):
+        row = {k: v for k, v in c.items() if k not in ("connected_at", "last_sync", "url", "last_events")}
+        row["status"] = "coming_soon" if c["id"] in _CONNECTOR_STUBS else "available"
+        row["items_synced"] = 0
+        out.append(row)
+    return out
+
+
 @app.get("/connectors")
 def connectors(tenant_id: str = "ramesh_auto"):
-    return deps.store.list_connectors(tenant_id)
+    """Every connector with its REAL status. Tenants created after seeding get
+    the catalog backfilled here, so the UI never needs client-side filler rows."""
+    rows = deps.store.list_connectors(tenant_id)
+    have = {c["id"] for c in rows}
+    missing = [c for c in _connector_catalog() if c["id"] not in have]
+    for c in missing:
+        deps.store.put_connector(tenant_id, c)
+    return rows + missing if missing else rows
 
 
 @app.post("/connectors/{conn_id}/connect")
@@ -1238,9 +1257,13 @@ def people(tenant_id: str = "ramesh_auto"):
 
 
 @app.get("/logs")
-def logs(tenant_id: str = "ramesh_auto", limit: int = 50):
-    """Unified activity/audit log (dashboard feed + agent actions)."""
-    return deps.store.list_activity(tenant_id, limit=limit)
+def logs(tenant_id: str = "ramesh_auto", limit: int = 50, since: str | None = None):
+    """Unified activity/audit log (dashboard feed + agent actions), newest first.
+    `since` (ISO ts) returns only newer rows — the Logs page polls with it."""
+    rows = deps.store.list_activity(tenant_id, limit=limit)
+    if since:
+        rows = [r for r in rows if r.get("ts", "") > since]
+    return rows
 
 
 @app.get("/metrics")

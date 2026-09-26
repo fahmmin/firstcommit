@@ -38,15 +38,22 @@ def web_search_tools(tenant_id: str) -> list:
         """Search the live web for current info (prices, GST/HSN rules, market data,
         potential buyers). Set deep=True for a broader multi-source pass."""
         if not web_search_available():
+            deps.record_action("web_searched", {"query": query, "deep": deep,
+                                                "provider": "tavily", "configured": False,
+                                                "n_results": 0, "sources": []})
             return {"reply": "Web search isn't configured yet — set TAVILY_API_KEY to enable "
                              "live web lookups. (I can still help from your business data.)"}
         try:
             data = _tavily(query, depth="advanced" if deep else "basic")
         except Exception as e:
             return {"reply": f"Web search failed ({type(e).__name__}). Try again shortly."}
-        deps.record_action("web_searched", {"query": query, "deep": deep})
         results = [{"title": r.get("title"), "url": r.get("url"),
                     "snippet": (r.get("content") or "")[:300]} for r in data.get("results", [])]
+        # the UI's "N sources · via Tavily" label is computed from this — never hardcoded
+        deps.record_action("web_searched", {
+            "query": query, "deep": deep, "provider": "tavily", "configured": True,
+            "n_results": len(results),
+            "sources": [{"title": r["title"], "url": r["url"]} for r in results]})
         answer = data.get("answer") or ""
         lines = "\n".join(f"• {r['title']} — {r['snippet']}" for r in results[:5])
         return {"results": results, "answer": answer,
