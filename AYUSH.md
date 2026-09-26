@@ -11,7 +11,7 @@ The app already runs end-to-end locally (`USE_AWS=0`). **75 tests + 25/25
 
 ---
 
-## STATUS (updated 2026-09-20) — done ✅ / open ⬜
+## STATUS (updated 2026-09-26) — done ✅ / open ⬜
 
 **Live AWS is wired** (profile `sahayak`, region `ap-south-1`, account `055533307288`):
 Strands + Bedrock Nova (Lite+Pro) + Titan embeddings + Textract + DynamoDB (14 tables) + S3 + SES + Cedar. `USE_AWS=1` verified: `check_aws.py` 5/5, parity+policy 32/32, sim 25/25.
@@ -32,6 +32,15 @@ Done ✅
 - ✅ **Hardware-business demo data** — seed.json rewritten (Ramesh Hardware & Electricals: 16 invoices, 20 suppliers, 6 carriers, 6 payables, 11 kanban tasks, 8 notifications, 12 connectors, 8 memories, 4 artifacts); `simulation/seed_hardware.py` generates **real .xlsx/.pdf files** (sales register, inventory, attendance, GSTR-3B, rate list, chalan log, rent agreement, GST cert, fire insurance, trade license) → ingests via `/context/upload` (extract→Bedrock tag→Titan embed) → uploads raw files to S3 `context/{tenant}/` → hires 3 factory agents. Verified USE_AWS=1.
 - ✅ Connector seeds: `facebook_marketplace` (connected) + `indiamart`, `shopify`, `instagram` (available) now in seed.json
 
+**Round 5 (2026-09-26, branch `hardening`)** — honesty pass + backlog, green in both modes
+- ✅ **Honesty gaps closed** — no fake rows merged into real responses (sample data only when the backend is unreachable, labelled "Offline — sample data"); writes never fake success; Logs = real polled `/logs` + `/metrics`; web-search footer counts real Tavily sources; Marketplace has no invented counts/URLs
+- ✅ **Real RBAC** (`app/auth.py`) — HMAC-signed, tenant-bound session tokens; server enforces tenant (403) and route permissions (Cedar role policy); owner "view as" + non-escalatable teammate invites (`/auth/role`, `/auth/invite`, `#/join/<token>`)
+- ✅ **Approvals page** (`#/approvals`) + ledger completion — every gated tool has an executor (no fake "executed"), grants persist, deny only pending, draft dismiss persists
+- ✅ **A2 role registry** (`app/agents/roles.py`) — 8 roles with tool ceilings/limits/extras, `GET /roles`, `POST /agents/batch`, Nirmata `preview_team`/`hire_team`, Marketplace "Hire team"
+- ✅ **A3 MCP** — agents use owner-added MCP servers (real handshake, approval-gated writes, per-request lifecycle) + Sahayak's own tools served at `/mcp` (token-scoped, writes queue for approval)
+- ✅ **B2 provider seam** (`app/providers.py`) — `MODEL_PROVIDER` / `EMBED_PROVIDER` (bedrock/anthropic/openai/ollama/litellm/mock; titan/openai/ollama/none), per-model embedding tags + `/context/reembed`, pricing by real model id, `/health` reports it
+- ⬜ B2 live check on a non-Bedrock provider — needs `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` or a local Ollama (dispatch + REST shapes are unit-tested)
+
 Open ⬜ (not done yet)
 
 **Needed by the live frontend** (Fahmin's pages are shipped — these are the real gaps):
@@ -41,7 +50,7 @@ Open ⬜ (not done yet)
 - ✅ `PATCH /settings` accept `role` — persists to `prefs.role`
 - ✅ `_PAIN_MAP` `too_many_excels` — handled as an "import your ledger" next-step (no specialist agent)
 - ✅ **Textract IAM** — granted via inline policy; PDFs OCR for real on ingest (verified in seeded docs)
-- ⬜ **Real auth** — see §OAuth below (login is demo-only; artifact private ACL needs auth to be real). Connectors: google_* are REAL via service account; the rest are honest `coming_soon` — no fake OAuth
+- 🟡 **Real auth** — sessions are now real (signed, tenant-bound, role-enforced — Round 5); the *identity providers* (Google/phone OTP) are still client-side demo adapters — see §OAuth. Connectors: google_* are REAL via service account; the rest are honest `coming_soon` — no fake OAuth
 
 **Reconcile route names** — ✅ resolved: frontend adopted your routes. Context docs → `POST /context/upload` + `GET /context` + `DELETE /context/{id}` (spec's `/context/docs` dropped). Activity feed → `GET /logs` (spec's `/activity` dropped). contract.json + Round-3 §1 spec updated to match.
 

@@ -34,7 +34,7 @@ from .store import DATA_DIR, get_store
 from .tools.artifacts import TEMPLATES, create_artifact_impl
 from .reports import REPORT_TYPES, build_report
 from .tools.comms import send_alert_impl
-from .tools.documents import cosine, embed_text, ingest_document_impl
+from .tools.documents import ingest_document_impl
 from .tools.importer import import_excel_impl
 from .tools.invoices import create_invoice_impl, draft_reminder_impl, parse_invoice_file
 
@@ -127,8 +127,11 @@ class BatchHireReq(BaseModel):
 
 @app.get("/health")
 def health():
-    model = "bedrock" if os.getenv("USE_AWS", "0") == "1" else "mock"
-    return {"status": "ok", "use_aws": os.getenv("USE_AWS", "0") == "1", "model": model}
+    """Liveness + what's really configured (B2 provider seam), not a hardcoded label."""
+    from .providers import status
+    st = status()
+    return {"status": "ok", "use_aws": os.getenv("USE_AWS", "0") == "1",
+            "model": st.get("provider"), **st}
 
 
 def _clean_reply(raw: str) -> str:
@@ -192,8 +195,8 @@ def chat(req: ChatReq):
     spec = registry.get_spec(agent_name) or {}
     trace = ["sahayak"] + ([agent_name] if agent_name != "sahayak" else [])
     reply = _clean_reply(str(result))
-    model = os.getenv("ORCHESTRATOR_MODEL" if agent_name in ("sahayak", "nirmata")
-                      else "WORKER_MODEL", "mock")
+    from .providers import model_id
+    model = model_id("orchestrator" if agent_name in ("sahayak", "nirmata") else "worker")
     usage = run_metrics(result, _t.ms, model)
     record_run(req.tenant_id, agent_name, usage)
     return {
@@ -946,6 +949,17 @@ def patch_settings(req: SettingsPatch):
 
 
 # ================= A3 — MCP (client management + Sahayak's own MCP server) =================
+
+
+@app.post("/context/reembed")
+def context_reembed(tenant_id: str = "ramesh_auto"):
+    """B2 — after switching EMBED_PROVIDER, rebuild every document's vectors with
+    the current model (old vectors are ignored by search, never mis-compared)."""
+    from .tools.retrieval import reembed_documents
+    res = reembed_documents(tenant_id)
+    deps.log_activity(tenant_id, "context_reembedded",
+                      f"Re-embedded {res['reembedded']} documents with {res['model'] or 'no model'}")
+    return res
 
 
 @app.post("/integrations/mcp/{server_id}/test")

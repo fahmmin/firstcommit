@@ -108,50 +108,49 @@ def _heuristic_tags(text: str, filename: str) -> list[str]:
 
 def _auto_tag(text: str, filename: str) -> tuple[list[str], str]:
     excerpt = (text or "")[:4000]
-    if _use_aws():
+    from ..providers import complete_text
+    out = None
+    try:
+        out = complete_text(
+            "Classify this business document for an Indian SMB. Return strict JSON: "
+            '{"tags": [subset of tax,finance,legal,procurement,logistics,general], '
+            '"summary": "one short sentence"}. Document:\n\n' + excerpt)
+    except Exception as e:  # misconfigured provider → heuristic, never a failed upload
+        print(f"[documents] auto-tag provider unavailable: {e} — heuristic")
+    if out:
         try:
-            import boto3
-            session = boto3.Session(profile_name=os.getenv("AWS_PROFILE") or None,
-                                    region_name=os.getenv("AWS_REGION", "us-east-1"))
-            client = session.client("bedrock-runtime")
-            resp = client.converse(
-                modelId=os.getenv("WORKER_MODEL", "apac.amazon.nova-lite-v1:0"),
-                messages=[{"role": "user", "content": [{"text": (
-                    "Classify this business document for an Indian SMB. Return strict JSON: "
-                    '{"tags": [subset of tax,finance,legal,procurement,logistics,general], '
-                    '"summary": "one short sentence"}. Document:\n\n' + excerpt)}]}],
-            )
-            out = resp["output"]["message"]["content"][0]["text"]
             data = json.loads(out[out.find("{"):out.rfind("}") + 1])
             tags = [t for t in data.get("tags", []) if t] or _heuristic_tags(text, filename)
             summary = data.get("summary") or f"{filename} — business document"
             return tags[:4], summary
         except Exception as e:
-            print(f"[documents] bedrock auto-tag failed ({type(e).__name__}): {e} — heuristic")
+            print(f"[documents] model auto-tag unparseable ({type(e).__name__}): {e} — heuristic")
     tags = _heuristic_tags(text, filename)
     first = next((ln.strip() for ln in (text or "").splitlines() if ln.strip()), "")
     summary = (first[:120] or f"{filename} — business document")
     return tags, summary
 
 
-# ---------- embeddings (Titan) ----------
+# ---------- embeddings (EMBED_PROVIDER — Titan by default on AWS) ----------
 
 def embed_text(text: str) -> list[float] | None:
-    if not _use_aws() or not text:
+    """One vector from the configured embedding provider (providers.py), or None."""
+    if not text:
         return None
     try:
-        import boto3
-        session = boto3.Session(profile_name=os.getenv("AWS_PROFILE") or None,
-                                region_name=os.getenv("AWS_REGION", "us-east-1"))
-        client = session.client("bedrock-runtime")
-        resp = client.invoke_model(
-            modelId=os.getenv("EMBED_MODEL", "amazon.titan-embed-text-v2:0"),
-            body=json.dumps({"inputText": text[:8000]}),
-        )
-        return json.loads(resp["body"].read())["embedding"]
+        from ..providers import embed_one
+        return embed_one(text)
     except Exception as e:
-        print(f"[documents] titan embed failed ({type(e).__name__}): {e}")
+        print(f"[documents] embed failed ({type(e).__name__}): {e}")
         return None
+
+
+def embeddings_on() -> bool:
+    try:
+        from ..providers import embed_provider
+        return embed_provider() != "none"
+    except Exception:
+        return False
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -194,7 +193,7 @@ def ingest_document_impl(tenant_id: str, file_path: str | None = None,
     # B1: chunk + per-chunk embeddings (real hybrid retrieval). Embeddings are
     # None offline, so retrieval degrades to keyword — never a no-op.
     from .retrieval import build_chunks
-    chunks = build_chunks(text, embed=_use_aws())
+    chunks = build_chunks(text, embed=embeddings_on())
     doc = {
         "id": doc_id,
         "filename": filename,
@@ -204,6 +203,7 @@ def ingest_document_impl(tenant_id: str, file_path: str | None = None,
         "text_excerpt": (text or "")[:2000],
         "chunks": chunks,
         "embedding": chunks[0]["embedding"] if chunks else embed_text(text),
+        "embed_model": next((c["embed_model"] for c in chunks if c.get("embed_model")), None),
         "status": "fed_to_agents",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

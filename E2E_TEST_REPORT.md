@@ -48,3 +48,32 @@ modes; **B1/A1/D1 are verified live** (hybrid search + citations, approval queue
 multi-tenant isolation). The one thing to harden before a *live-AWS* demo is
 **orchestrator routing reliability** (the factory-hire moment); the offline demo already
 nails it deterministically.
+
+## Round 3 (Round-5 backlog: honesty · RBAC · Approvals · A2 · A3 · B2) — 2026-09-26
+| Suite | Local (`USE_AWS=0`) | Live AWS (DynamoDB + Bedrock Nova + Titan) |
+|---|---|---|
+| pytest | **232 passed** | 97 unit + parity passed |
+| simulate_demo | **30/30** | **30/30** |
+| evals scorecard | **8/8** | **8/8** |
+| provider seam on AWS | — | Bedrock via `providers.py`: Titan 1024-d embed ✓, Nova `complete_text` ✓ |
+| frontend build | clean | — |
+
+Verified live in the browser (local build, no console errors from the new code):
+1. **Honesty** — Tasks/Connectors show only server rows; stopping the backend shows the amber **"Offline — sample data"** pill and Logs says **"paused — backend unreachable"**; Logs streams real `/logs` rows + `/metrics` header; Marketplace has no counts/invented URLs.
+2. **RBAC** — stale `demo-tok` sessions are sent to sign-in; owner → "view as Viewer" → a direct `POST /alerts/{id}/approve` returns **403 "your role (viewer) can't do this — needs approve"** from the server; switching back to owner works.
+3. **Approvals** — pinned Vasool "bill banao…" → inline approval card in chat → `#/approvals` shows it → Approve → toast "Done" and the card links **"Invoice INV-2302 created →"**; Message-drafts Dismiss persists.
+4. **A2** — Marketplace: select Working Capital + Procurement → **Hire team (2)** → both join, sidebar refreshes.
+5. **A3** — Settings → create an MCP access token → register Sahayak's own `/mcp` as an MCP server → **Test → "connected · 8 tools"** → Vasool calls `mcp_sahayak_self_list_overdue_invoices`; Logs shows `mcp_connected` + `mcp_tool_called`.
+6. **B2** — `/health` reports provider/models; the right rail shows the real model ("Offline mock model" locally, Nova on AWS).
+
+Bugs found **and fixed** this round:
+1. **Nova answers wiped to ''** — the reply cleaner deleted `<response>…</response>` blocks; a hired agent's well-formed answer came back empty on Bedrock (AWS sim "new agent answers" failed). Now drops only `<thinking>`.
+2. **Approvals marked "executed" when nothing ran** — tools without an executor; 3 gated tools never called `gate()`. All ASK tools now have executors; missing executor → `failed`.
+3. **Deny could overwrite an executed action** → 409 unless pending.
+4. **MCP writes would have auto-run** — `risk_for("mcp:…")` defaulted to AUTO and mcp 2.x exposes `read_only_hint` (not `readOnlyHint`); both caught by the dogfood test and fixed.
+5. **Tests reset the dev server's data** — TestClient lifespans re-pointed `deps.store` at `backend/data`; now an isolated temp dir + idempotent lifespan.
+6. **LocalStore.reset kept collections absent from the seed** (approvals survived a demo reset) — parity with DynamoStore restored.
+7. `Reports.jsx` called `toast()` as a function (every report toast threw); `Tasks.jsx` `<Can do=…>` locked managers out.
+8. Seed claimed "Gmail synced — 212 emails" though Gmail is `coming_soon`.
+
+Still open (needs you): B2 live run on a non-Bedrock provider (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` or local Ollama); identity providers are still demo adapters (sessions/roles are now real).

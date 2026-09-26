@@ -53,11 +53,27 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) 
 
 
 def build_chunks(text: str, embed: bool = True) -> list[dict]:
-    """Chunk + (optionally) embed each chunk. Embedding is None offline."""
-    out = []
-    for i, c in enumerate(chunk_text(text)):
-        out.append({"i": i, "text": c, "embedding": embed_text(c) if embed else None})
-    return out
+    """Chunk + (optionally) embed each chunk. Embedding is None offline. Each
+    vector records the model that made it (B2) so search never mixes models."""
+    chunks = chunk_text(text)
+    vecs, mid = (None, None)
+    if embed and chunks:
+        from ..providers import embed
+        vecs, mid = embed(chunks)
+    return [{"i": i, "text": c, "embedding": vecs[i] if vecs else None,
+             "embed_model": mid if vecs else None} for i, c in enumerate(chunks)]
+
+
+# vectors stored before B2 carry no model tag — they were all Titan v2
+LEGACY_EMBED_MODEL = "amazon.titan-embed-text-v2:0"
+
+
+def _compatible(doc: dict, ch: dict, model: str | None, qvec: list | None) -> bool:
+    """Only compare vectors made by the SAME model (dims AND space must match)."""
+    if not (model and qvec and ch.get("embedding")):
+        return False
+    made_by = ch.get("embed_model") or doc.get("embed_model") or LEGACY_EMBED_MODEL
+    return made_by == model and len(ch["embedding"]) == len(qvec)
 
 
 def keyword_score(q_tokens: list[str], text: str) -> float:
@@ -107,7 +123,14 @@ def search_documents(tenant_id: str, query: str, k: int = 6, alpha: float = ALPH
     if not docs or not query.strip():
         return []
     q_toks = tokens(query)
-    has_vectors = any(ch.get("embedding") for d in docs for ch in _doc_chunks(d))
+    from ..providers import embed_model_id
+    try:
+        model = embed_model_id()
+    except Exception:
+        model = None
+    has_vectors = bool(model) and any(
+        (ch.get("embed_model") or d.get("embed_model") or LEGACY_EMBED_MODEL) == model and ch.get("embedding")
+        for d in docs for ch in _doc_chunks(d))
     qvec = embed_text(query) if has_vectors else None
 
     cands: list[dict] = []
@@ -116,8 +139,9 @@ def search_documents(tenant_id: str, query: str, k: int = 6, alpha: float = ALPH
         best = None
         for ch in _doc_chunks(d):
             kw = keyword_score(q_toks, f"{ch['text']} {fname} {' '.join(tags)}")
-            vec = cosine(qvec, ch.get("embedding")) if qvec and ch.get("embedding") else 0.0
-            score = round(alpha * vec + (1 - alpha) * kw, 4) if (qvec and ch.get("embedding")) else kw
+            ok = _compatible(d, ch, model, qvec)
+            vec = cosine(qvec, ch["embedding"]) if ok else 0.0
+            score = round(alpha * vec + (1 - alpha) * kw, 4) if ok else kw
             if best is None or score > best["score"]:
                 best = {"score": score, "kw": kw, "vec": round(vec, 4),
                         "chunk_index": ch.get("i", 0), "snippet": ch["text"][:280]}
@@ -131,5 +155,37 @@ def retrieval_mode(tenant_id: str) -> str:
     """Honest label for how retrieval is running (surfaced to UI/tests)."""
     from .. import deps
     docs = deps.store.list_documents(tenant_id) if deps.store else []
-    vectors = any(ch.get("embedding") for d in docs for ch in _doc_chunks(d))
+    try:
+        from ..providers import embed_model_id
+        model = embed_model_id()
+    except Exception:
+        model = None
+    # only vectors from the CURRENT embedding model count (B2 — no mixed spaces)
+    vectors = bool(model) and any(
+        ch.get("embedding") and (ch.get("embed_model") or d.get("embed_model") or LEGACY_EMBED_MODEL) == model
+        for d in docs for ch in _doc_chunks(d))
     return "hybrid" if vectors else "keyword"
+
+
+def reembed_documents(tenant_id: str) -> dict:
+    """Re-embed every document's chunks with the current EMBED_PROVIDER — run
+    after switching providers so hybrid search works again for old docs."""
+    from .. import deps
+    from ..providers import embed, embed_model_id
+    model = embed_model_id()
+    if not model:
+        return {"model": None, "reembedded": 0, "skipped": 0, "note": "embeddings are off (EMBED_PROVIDER=none)"}
+    done = skipped = 0
+    for d in deps.store.list_documents(tenant_id):
+        chunks = _doc_chunks(d)
+        texts = [c["text"] for c in chunks if c.get("text")]
+        vecs, mid = embed(texts)
+        if not vecs:
+            skipped += 1
+            continue
+        new = [{"i": c.get("i", i), "text": c["text"], "embedding": vecs[i], "embed_model": mid}
+               for i, c in enumerate(c for c in chunks if c.get("text"))]
+        deps.store.update_document(tenant_id, d["id"], chunks=new, embedding=new[0]["embedding"],
+                                   embed_model=mid)
+        done += 1
+    return {"model": model, "reembedded": done, "skipped": skipped}

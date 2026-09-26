@@ -46,6 +46,7 @@ export default function Workspace() {
   const [agents, setAgents] = useState([])
   const [alerts, setAlerts] = useState([])
   const [pendingActions, setPendingActions] = useState([])   // approvals ledger, status=pending
+  const [health, setHealth] = useState(null)                 // real provider/model config (B2)
   const [connectors, setConnectors] = useState([])
   const [settings, setSettings] = useState(null)
   const [context, setContext] = useState(null)
@@ -138,6 +139,7 @@ export default function Workspace() {
   }, [])
   useEffect(() => {
     refresh().catch(console.error)
+    api.health().then(setHealth).catch(() => {})
     const pre = localStorage.getItem('prefill_prompt')
     if (pre) { localStorage.removeItem('prefill_prompt'); setInput(pre); setTimeout(() => inputRef.current?.focus(), 50) }
     const oa = localStorage.getItem('open_agent')
@@ -506,8 +508,10 @@ export default function Workspace() {
             <section>
               <div className="text-[10px] font-semibold text-slate-500 mb-2">Agent Preferences</div>
               <div className="rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] text-slate-600 flex items-center justify-between">
-                <span className="flex items-center gap-1.5"><SparklesDot /> {activeAgent ? 'Nova Lite' : 'Nova Pro'}</span>
-                <span className="text-slate-300">▾</span>
+                <span className="flex items-center gap-1.5" title={`provider: ${health?.provider || '…'}`}>
+                  <SparklesDot /> {prettyModel(activeAgent ? health?.worker_model : health?.orchestrator_model)}
+                </span>
+                <span className="text-[9px] text-slate-300">{health?.provider || ''}</span>
               </div>
               <div className="rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] text-slate-400 mt-1.5 min-h-[44px]">
                 {active?.goal || 'Route messages, hire specialists when needed…'}
@@ -576,6 +580,15 @@ export default function Workspace() {
         alerts={alerts} actions={pendingActions} onChanged={refresh} />
     </AppShell>
   )
+}
+
+// real model id (GET /health, providers.py) → a readable name
+function prettyModel(id) {
+  if (!id) return '…'
+  if (id === 'mock') return 'Offline mock model'
+  const m = id.match(/nova-(pro|lite|micro|premier)/)
+  if (m) return `Amazon Nova ${m[1][0].toUpperCase()}${m[1].slice(1)}`
+  return id
 }
 
 function SparklesDot() { return <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" /> }

@@ -35,12 +35,17 @@ def _days_overdue(due: str) -> int:
 
 
 def parse_invoice_file(file_path: str) -> dict:
-    """Vision-parse an invoice photo/PDF into structured fields."""
-    if os.getenv("USE_AWS", "0") == "1":
+    """Vision-parse an invoice photo/PDF into structured fields (MODEL_PROVIDER)."""
+    from ..providers import chat_provider, vision_available
+    try:
+        use_model = chat_provider() != "mock" and vision_available()
+    except Exception:
+        use_model = False
+    if use_model:
         try:
-            return _parse_via_bedrock(file_path)
-        except Exception as e:  # Bedrock hiccup must never kill the demo
-            print(f"[invoices] bedrock parse failed ({type(e).__name__}): {e} — using fixture")
+            return _parse_via_model(file_path)
+        except Exception as e:  # a model hiccup must never kill the demo
+            print(f"[invoices] vision parse failed ({type(e).__name__}): {e} — using fixture")
             return dict(PARSE_FIXTURE)
     return dict(PARSE_FIXTURE)
 
@@ -54,34 +59,18 @@ def _sniff_image_format(b: bytes) -> str | None:
     return None
 
 
-def _parse_via_bedrock(file_path: str) -> dict:
-    import boto3
-    session = boto3.Session(
-        profile_name=os.getenv("AWS_PROFILE") or None,
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-    )
-    client = session.client("bedrock-runtime")
+def _parse_via_model(file_path: str) -> dict:
+    from ..providers import complete_vision
     with open(file_path, "rb") as f:
         img_bytes = f.read()
     fmt = _sniff_image_format(img_bytes)
     if fmt is None:
         raise ValueError("not a real image (no jpeg/png/webp/gif magic bytes)")
-    resp = client.converse(
-        modelId=os.getenv("WORKER_MODEL", "apac.amazon.nova-lite-v1:0"),
-        messages=[{
-            "role": "user",
-            "content": [
-                {"image": {"format": fmt, "source": {"bytes": img_bytes}}},
-                {"text": (
-                    "Extract this invoice as strict JSON with keys: invoice_no, buyer, "
-                    "amount (number, INR), gst (number), issue_date (YYYY-MM-DD), "
-                    "due_date (YYYY-MM-DD), items (short string), confidence (0-1), "
-                    "low_confidence_fields (list of field names). JSON only."
-                )},
-            ],
-        }],
-    )
-    text = resp["output"]["message"]["content"][0]["text"]
+    text = complete_vision(img_bytes, fmt, (
+        "Extract this invoice as strict JSON with keys: invoice_no, buyer, "
+        "amount (number, INR), gst (number), issue_date (YYYY-MM-DD), "
+        "due_date (YYYY-MM-DD), items (short string), confidence (0-1), "
+        "low_confidence_fields (list of field names). JSON only."))
     start, end = text.find("{"), text.rfind("}")
     data = json.loads(text[start:end + 1])
     data.setdefault("low_confidence_fields", [])

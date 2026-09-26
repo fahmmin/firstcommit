@@ -157,11 +157,8 @@ export const api = {
   updateArtifact: (id, patch) =>
     req(`/artifacts/${id}?tenant_id=${TENANT}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }),
   // share-link route — only resolves public artifacts (no tenant context needed)
-  publicArtifact: (id) => req(`/public/artifacts/${id}`).catch(() => {
-    const a = demo.artifacts.get(id)
-    if (a.visibility === 'private') throw new Error('private')
-    return a
-  }),
+  // public share links are real or nothing — never sample content
+  publicArtifact: (id) => req(`/public/artifacts/${id}`),
   importExcel: (file) => {
     const fd = new FormData()
     fd.append('file', file)

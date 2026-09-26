@@ -12,8 +12,16 @@ from datetime import datetime, timezone
 
 from . import deps
 
-# approx USD per 1M tokens (Amazon Nova, apac inference profiles) — estimate only
-_PRICING = {"nova-pro": (0.80, 3.20), "nova-lite": (0.06, 0.24)}
+# approx USD per 1M tokens (input, output) — ESTIMATES, matched by the longest
+# substring of the real model id (B2: any provider). Unknown model → 0 and
+# priced=False rather than a wrong number; local models genuinely cost 0.
+_PRICING = {
+    "nova-premier": (2.50, 12.50), "nova-pro": (0.80, 3.20), "nova-lite": (0.06, 0.24),
+    "nova-micro": (0.035, 0.14),
+    "claude-opus": (15.0, 75.0), "claude-sonnet": (3.0, 15.0), "claude-haiku": (1.0, 5.0),
+    "gpt-4.1-mini": (0.40, 1.60), "gpt-4.1": (2.0, 8.0), "gpt-4o-mini": (0.15, 0.60), "gpt-4o": (2.5, 10.0),
+    "llama": (0.0, 0.0), "mock": (0.0, 0.0),
+}
 
 
 def _usage(result) -> tuple[int, int]:
@@ -26,10 +34,17 @@ def _usage(result) -> tuple[int, int]:
     return 0, 0
 
 
+def price_for(model: str) -> tuple[float, float] | None:
+    m = (model or "").lower()
+    hits = [k for k in _PRICING if k in m]
+    return _PRICING[max(hits, key=len)] if hits else None
+
+
 def _cost(inp: int, out: int, model: str) -> float:
-    key = "nova-pro" if "pro" in (model or "").lower() else "nova-lite"
-    pi, po = _PRICING[key]
-    return round(inp / 1e6 * pi + out / 1e6 * po, 6)
+    p = price_for(model)
+    if not p:
+        return 0.0
+    return round(inp / 1e6 * p[0] + out / 1e6 * p[1], 6)
 
 
 def run_metrics(result, latency_ms: int, model: str) -> dict:
@@ -38,6 +53,7 @@ def run_metrics(result, latency_ms: int, model: str) -> dict:
     inp, out = _usage(result)
     return {"tools": tools, "input_tokens": inp, "output_tokens": out,
             "total_tokens": inp + out, "cost_usd": _cost(inp, out, model),
+            "priced": price_for(model) is not None, "model": model,
             "latency_ms": latency_ms}
 
 
@@ -54,7 +70,8 @@ def record_run(tenant_id: str, agent: str, metrics: dict) -> None:
                  f"{metrics['latency_ms']}ms · tools: {toolstr}"),
         "agent": agent, **{k: metrics[k] for k in
                            ("tools", "input_tokens", "output_tokens", "total_tokens",
-                            "cost_usd", "latency_ms")},
+                            "cost_usd", "latency_ms") if k in metrics},
+        "model": metrics.get("model", ""),
     })
 
 

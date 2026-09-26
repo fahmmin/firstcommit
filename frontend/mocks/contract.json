@@ -387,8 +387,9 @@
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },
-    "GET /health [EXISTS]": { "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" } }
+    "POST /context/reembed [EXISTS]": { "$comment": "B2 — owner: rebuild document vectors with the current EMBED_PROVIDER (search ignores vectors from other models)", "response": { "model": "amazon.titan-embed-text-v2:0", "reembedded": 10, "skipped": 0 } },
+    "GET /health [EXISTS]": { "$comment": "B2 — reports the real provider seam config (providers.py); provider_error/embed_error present when misconfigured", "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock|anthropic|openai|ollama|litellm", "provider": "bedrock", "orchestrator_model": "apac.amazon.nova-pro-v1:0", "worker_model": "apac.amazon.nova-lite-v1:0", "embed_provider": "titan|openai|ollama|none", "embed_model": "amazon.titan-embed-text-v2:0" } }
   },
 
-  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched", "onboarding_completed", "action_queued", "action_approved"]
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched", "onboarding_completed", "action_queued", "action_approved", "mcp_called", "catalog_synced", "listings_published", "seo_audit"]
 }

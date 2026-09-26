@@ -191,12 +191,7 @@ def _aws_creds_available() -> bool:
 
 
 def make_model(rules: list[MockRule] | None = None, *, role: str = "worker", fallback: str | None = None):
-    """Bedrock Nova if creds + USE_AWS, else deterministic MockModel."""
-    if os.getenv("USE_AWS", "0") == "1" and _aws_creds_available():
-        from strands.models import BedrockModel
-        model_id = os.getenv(
-            "ORCHESTRATOR_MODEL" if role in ("orchestrator", "factory") else "WORKER_MODEL",
-            "apac.amazon.nova-lite-v1:0",
-        )
-        return BedrockModel(model_id=model_id, temperature=0)
-    return MockModel(rules or [], fallback=fallback)
+    """The agent's model — chosen by MODEL_PROVIDER (providers.py, B2). Defaults:
+    Bedrock Nova when USE_AWS=1 + creds, else the deterministic MockModel."""
+    from .providers import make_chat_model
+    return make_chat_model(role=role, rules=rules, fallback=fallback)
