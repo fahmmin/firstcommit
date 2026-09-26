@@ -19,7 +19,8 @@ _PRICING = {
     "nova-premier": (2.50, 12.50), "nova-pro": (0.80, 3.20), "nova-lite": (0.06, 0.24),
     "nova-micro": (0.035, 0.14),
     "claude-opus": (15.0, 75.0), "claude-sonnet": (3.0, 15.0), "claude-haiku": (1.0, 5.0),
-    "gpt-4.1-mini": (0.40, 1.60), "gpt-4.1": (2.0, 8.0), "gpt-4o-mini": (0.15, 0.60), "gpt-4o": (2.5, 10.0),
+    "gpt-4.1-nano": (0.10, 0.40), "gpt-4.1-mini": (0.40, 1.60), "gpt-4.1": (2.0, 8.0),
+    "gpt-4o-mini": (0.15, 0.60), "gpt-4o": (2.5, 10.0), "text-embedding-3-small": (0.02, 0.0),
     "llama": (0.0, 0.0), "mock": (0.0, 0.0),
 }
 
@@ -73,6 +74,56 @@ def record_run(tenant_id: str, agent: str, metrics: dict) -> None:
                             "cost_usd", "latency_ms") if k in metrics},
         "model": metrics.get("model", ""),
     })
+
+
+# ---------------- spend cap ----------------
+# MODEL_BUDGET_USD=0.50 → once estimated spend reaches it, /chat returns 402 and
+# one-shot calls fall back to heuristics. Spend persists in DATA_DIR/spend.json
+# (survives restarts; reset by deleting the file or POST /metrics/spend/reset).
+
+def _spend_file():
+    from .store import DATA_DIR
+    return DATA_DIR / "spend.json"
+
+
+def spent() -> float:
+    import json as _json
+    try:
+        return float(_json.loads(_spend_file().read_text()).get("usd", 0))
+    except Exception:
+        return 0.0
+
+
+def _save(usd: float) -> None:
+    import json as _json
+    f = _spend_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_json.dumps({"usd": round(usd, 6)}))
+
+
+def budget() -> float | None:
+    import os as _os
+    v = _os.getenv("MODEL_BUDGET_USD", "").strip()
+    try:
+        return float(v) if v else None
+    except ValueError:
+        return None
+
+
+def budget_exceeded() -> bool:
+    b = budget()
+    return b is not None and spent() >= b
+
+
+def charge(model: str, inp: int, out: int) -> float:
+    cost = _cost(inp, out, model)
+    if cost:
+        _save(spent() + cost)
+    return cost
+
+
+def reset_spend() -> None:
+    _save(0.0)
 
 
 class timer:

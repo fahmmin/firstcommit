@@ -34,7 +34,8 @@ EMBED_PROVIDERS = ("titan", "openai", "ollama", "none")
 
 _DEFAULT_MODELS = {
     "anthropic": {"orchestrator": "claude-sonnet-5", "worker": "claude-haiku-4-5-20251001"},
-    "openai": {"orchestrator": "gpt-4.1", "worker": "gpt-4.1-mini"},
+    # cheapest OpenAI model that still does reliable tool calling (~$0.002/chat turn)
+    "openai": {"orchestrator": "gpt-4o-mini", "worker": "gpt-4o-mini"},
     "ollama": {"orchestrator": "llama3.1", "worker": "llama3.1"},
     "litellm": {"orchestrator": "anthropic/claude-sonnet-5", "worker": "anthropic/claude-haiku-4-5-20251001"},
 }
@@ -155,9 +156,19 @@ def make_chat_model(role: str = "worker", rules=None, fallback: str | None = Non
 
 def _post(url: str, payload: dict, headers: dict | None = None, timeout: float = 60) -> dict:
     import httpx
+    from .tracing import budget_exceeded, charge
+    if budget_exceeded():
+        raise ProviderUnavailable("MODEL_BUDGET_USD reached — model calls are paused")
     r = httpx.post(url, json=payload, headers=headers or {}, timeout=timeout)
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+    # count what this one-shot call really cost (OpenAI/Anthropic report usage)
+    u = data.get("usage") or {}
+    inp = u.get("prompt_tokens", u.get("input_tokens", 0)) or 0
+    out = u.get("completion_tokens", u.get("output_tokens", 0)) or 0
+    if inp or out:
+        charge(payload.get("model", ""), int(inp), int(out))
+    return data
 
 
 def _bedrock():

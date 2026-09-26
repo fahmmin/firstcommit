@@ -155,6 +155,10 @@ def _invoke(agent, text: str):
 
 @app.post("/chat")
 def chat(req: ChatReq):
+    from .tracing import budget, budget_exceeded, spent
+    if budget_exceeded():
+        raise HTTPException(402, f"Model budget reached (${spent():.4f} of ${budget():.2f}) — "
+                                 "raise MODEL_BUDGET_USD or reset spend to continue")
     registry = reg.get_registry(req.tenant_id)
     text = req.text
     if req.mode in ("web", "deep"):
@@ -199,6 +203,9 @@ def chat(req: ChatReq):
     model = model_id("orchestrator" if agent_name in ("sahayak", "nirmata") else "worker")
     usage = run_metrics(result, _t.ms, model)
     record_run(req.tenant_id, agent_name, usage)
+    from .tracing import _save, spent
+    if usage.get("cost_usd"):
+        _save(spent() + usage["cost_usd"])   # counts toward MODEL_BUDGET_USD
     return {
         "reply": reply,
         "agent_name": agent_name,
@@ -1510,7 +1517,23 @@ def metrics(tenant_id: str = "ramesh_auto"):
         "avg_latency_ms": int(sum(lat) / len(lat)) if lat else 0,
         "by_tool": dict(tool_hist.most_common()),
         "recent": runs[:15],
+        "spend": _spend_view(),
     }
+
+
+def _spend_view() -> dict:
+    from .tracing import budget, spent
+    b = budget()
+    return {"spent_usd": round(spent(), 6), "budget_usd": b,
+            "remaining_usd": round(b - spent(), 6) if b is not None else None}
+
+
+@app.post("/metrics/spend/reset")
+def spend_reset():
+    """Owner: zero the model-spend counter used by MODEL_BUDGET_USD."""
+    from .tracing import reset_spend
+    reset_spend()
+    return _spend_view()
 
 
 # ================= A1 — action approval ledger =================

@@ -157,3 +157,26 @@ def test_status_reports_real_config(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "anthropic")
     st = providers.status()
     assert st["provider"] == "anthropic" and st["provider_error"] == "ANTHROPIC_API_KEY not set"
+
+
+def test_openai_defaults_are_the_cheap_model():
+    assert providers.model_id("orchestrator", "openai") == "gpt-4o-mini"
+    assert providers.model_id("worker", "openai") == "gpt-4o-mini"
+
+
+def test_budget_cap_blocks_chat_and_one_shot_calls(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    tracing.reset_spend()
+    monkeypatch.setenv("MODEL_BUDGET_USD", "0.001")
+    assert tracing.charge("gpt-4o-mini", 5000, 0) == 0.00075 and not tracing.budget_exceeded()
+    tracing.charge("gpt-4o-mini", 2000, 0)                       # crosses $0.001
+    assert tracing.budget_exceeded()
+    with TestClient(app) as c:
+        r = c.post("/chat", json={"tenant_id": "ramesh_auto", "text": "overdue invoices"})
+        assert r.status_code == 402 and "budget" in r.json()["detail"].lower()
+        assert c.get("/metrics", params={"tenant_id": "ramesh_auto"}).json()["spend"]["remaining_usd"] < 0
+        assert c.post("/metrics/spend/reset").json()["spent_usd"] == 0
+    with pytest.raises(providers.ProviderUnavailable, match="BUDGET"):
+        tracing.charge("gpt-4o-mini", 10**7, 0)
+        providers._post("https://example.invalid", {})
