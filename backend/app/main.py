@@ -25,7 +25,7 @@ class UTF8JSONResponse(JSONResponse):
         return json.dumps(content, ensure_ascii=False, allow_nan=False,
                           separators=(",", ":"), default=str).encode("utf-8")
 
-from . import deps, gcp
+from . import auth, deps, gcp
 from .agents import registry as reg
 from .agents.specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec
 from .notifier import get_notifier
@@ -60,6 +60,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+# real auth + RBAC: signed tenant-bound tokens, route permissions via Cedar (auth.py)
+app.add_middleware(auth.AuthMiddleware)
 
 
 @app.middleware("http")
@@ -360,13 +362,61 @@ def login(req: LoginReq):
     biz = s.get("business", {})
     # onboarded if explicitly flagged OR the tenant already has ledger data (the showcase)
     onboarded = bool(s.get("onboarded")) or bool(deps.store.list_invoices(tenant_id))
+    # the person who signs in to a workspace owns it (base=owner); prefs.role is
+    # the view they last chose. Teammates get non-escalatable tokens via /auth/invite.
+    pref = (s.get("prefs") or {}).get("role")
+    role = pref if pref in auth.ROLE_PERMS else "owner"
     return {
-        "token": f"demo-tok-{tenant_id}",
+        "token": auth.issue(tenant_id, role=role, base="owner"),
+        "role": role, "base_role": "owner",
         "tenant_id": tenant_id,
         "user": {"name": req.name, "business": req.business or biz.get("name", ""),
                  "city": biz.get("city", ""), "line": biz.get("line", "")},
         "onboarded": onboarded,
     }
+
+
+class RoleReq(BaseModel):
+    role: str
+
+
+def _principal() -> dict:
+    c = auth.current_principal.get()
+    if not c:
+        raise HTTPException(401, "sign in required")
+    return c
+
+
+@app.get("/auth/me")
+def auth_me():
+    """Who this token is: tenant, active role, highest role it may assume, perms."""
+    c = _principal()
+    perms = auth.ROLE_PERMS[c["role"]]
+    return {"tenant_id": c["tid"], "role": c["role"], "base_role": c["base"],
+            "perms": perms, "exp": c["exp"]}
+
+
+@app.post("/auth/role")
+def auth_switch_role(req: RoleReq):
+    """'View as' — re-issue the token with another role, never above `base`."""
+    c = _principal()
+    if not auth.can_switch(c, req.role):
+        raise HTTPException(403, f"a {c['base']} session can't become {req.role}")
+    deps.log_activity(c["tid"], "role_switched", f"Session now viewing as {req.role}")
+    return {"token": auth.issue(c["tid"], role=req.role, base=c["base"]),
+            "role": req.role, "base_role": c["base"]}
+
+
+@app.post("/auth/invite")
+def auth_invite(req: RoleReq):
+    """Owner mints a teammate token whose ceiling IS the role — a manager/viewer
+    invited here can never escalate (the base is baked into the signature)."""
+    c = _principal()
+    if req.role not in auth.ROLE_PERMS:
+        raise HTTPException(400, "unknown role")
+    tok = auth.issue(c["tid"], role=req.role, base=req.role, ttl=30 * 24 * 3600)
+    deps.log_activity(c["tid"], "invite_created", f"Invite link created for a {req.role}")
+    return {"token": tok, "role": req.role, "tenant_id": c["tid"], "expires_in_days": 30}
 
 
 @app.get("/dashboard/summary")
@@ -750,7 +800,7 @@ class SettingsPatch(BaseModel):
     prefs: dict | None = None
     onboarded: bool | None = None
     mcp_servers: list | None = None
-    role: str | None = None   # RBAC pick (owner|accountant|manager|worker) → prefs.role
+    role: str | None = None   # workspace's default view role (owner|manager|viewer) → prefs.role
 
 
 @app.patch("/settings")

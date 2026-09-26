@@ -1,13 +1,16 @@
 // Permission gate — wraps an action element; without the permission it
-// renders locked (dimmed, non-interactive) with an access-rings tooltip.
+// renders locked (dimmed, non-interactive) with an access-rings tooltip, or the
+// `fallback` element when given. UI only — the backend enforces the same
+// permission with a 403 (backend/app/auth.py).
 import { useState } from 'react'
 import { can, useRole, ROLES } from '../../lib/role.js'
 import { AccessRings } from './Circles.jsx'
 
-export function Can({ perm, children, reason }) {
+export function Can({ perm, children, reason, fallback }) {
   const r = useRole()
   const [hover, setHover] = useState(false)
   if (can(perm, r)) return children
+  if (fallback !== undefined) return fallback
   return (
     <span className="relative inline-block"
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>

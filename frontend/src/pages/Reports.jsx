@@ -6,6 +6,7 @@ import { AppShell } from '../components/AppShell.jsx'
 import { ARTIFACT_TEMPLATES } from '../components/artifacts/index.jsx'
 import { ThinkingOrb } from 'thinking-orbs'
 import { toast } from '../lib/toast.js'
+import { Can } from '../components/rui/Can.jsx'
 import {
   FileBarChart, Hourglass, TrendingUp, Receipt, Bot, Download,
   Share2, Globe, Lock, ChevronRight, Sparkles,
@@ -45,8 +46,8 @@ export default function Reports() {
     try {
       const row = await api.generateReport(sel, title.trim(), share ? 'public' : 'private')
       setReport(row); setTitle(''); loadHistory()
-      toast('Report generated', 'ok')
-    } catch (e) { toast(`Couldn't generate — ${e.message}`, 'err') }
+      toast.push('Report generated', 'ok')
+    } catch (e) { toast.push(`Couldn't generate — ${e.message}`, 'err') }
     setBusy(false)
   }
 
@@ -56,8 +57,8 @@ export default function Reports() {
     try {
       const { blob, filename } = await api.reportPdf(row.id, row.visibility === 'public')
       downloadBlob(blob, filename)
-      toast('PDF downloaded', 'ok')
-    } catch { toast('PDF export needs the backend', 'err') }
+      toast.push('PDF downloaded', 'ok')
+    } catch { toast.push('PDF export needs the backend', 'err') }
     setPdfBusy(false)
   }
 
@@ -70,9 +71,9 @@ export default function Reports() {
       if (vis === 'public') {
         const link = `${location.origin}${location.pathname}#${row.share_path}`
         navigator.clipboard?.writeText(link)
-        toast('Public link copied — anyone with it can view + download PDF', 'ok')
-      } else toast('Report made private', 'ok')
-    } catch (e) { toast(e.message, 'err') }
+        toast.push('Public link copied — anyone with it can view + download PDF', 'ok')
+      } else toast.push('Report made private', 'ok')
+    } catch (e) { toast.push(e.message, 'err') }
   }
 
   const Report = report && ARTIFACT_TEMPLATES[report.template]
@@ -116,10 +117,12 @@ export default function Reports() {
                 ${share ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`}>
               {share ? <><Globe size={12} /> Share publicly</> : <><Lock size={12} /> Keep private</>}
             </button>
+            <Can perm="artifacts" reason="Your role can't generate reports">
             <button onClick={generate} disabled={busy}
               className="rounded-xl bg-ink text-white px-5 py-2 text-[12.5px] font-medium hover:bg-ink/85 active:scale-95 transition disabled:opacity-40 flex items-center gap-2">
               {busy ? <><ThinkingOrb size={20} state="composing" /> Building…</> : <><Sparkles size={12} /> Generate report</>}
             </button>
+            </Can>
           </div>
 
           {/* ── the generated document ── */}

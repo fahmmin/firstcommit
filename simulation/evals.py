@@ -31,6 +31,7 @@ def main() -> int:
     passed = total = 0
     rows = []
     with TestClient(app) as c:
+        c.headers["Authorization"] = "Bearer " + c.post("/auth/login", json={"provider": "guest"}).json()["token"]
         if os.getenv("DEMO_GATE_TOKEN"):
             c.headers["x-demo-token"] = os.environ["DEMO_GATE_TOKEN"]
         c.post("/demo/reset", params={"tenant_id": TENANT})

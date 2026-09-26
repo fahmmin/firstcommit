@@ -119,8 +119,8 @@ export default function Tasks() {
                       <span className="text-[10px] text-slate-400 flex items-center gap-0.5"><Clock size={9} />{t.due}</span>
                     </div>
                     {col.id === 'approval' && (
-                      <Can do="approve" fallback={
-                        <div className="mt-2.5 text-[10px] text-slate-400 italic">Owner approval required</div>
+                      <Can perm="approve" fallback={
+                        <div className="mt-2.5 text-[10px] text-slate-400 italic">Manager or owner approval required</div>
                       }>
                         <button onClick={() => approve(t)}
                           className="mt-2.5 w-full text-[11px] font-medium bg-ink text-white rounded-lg py-1.5 hover:bg-ink/85 transition flex items-center justify-center gap-1">

@@ -49,7 +49,7 @@ RUNTIME_DEPS = [
 # creds) and never AWS_REGION (Lambda reserves + sets it itself)
 ENV_FORWARD = ("USE_AWS", "ORCHESTRATOR_MODEL", "WORKER_MODEL",
                "EMBED_MODEL", "SES_SENDER", "S3_BUCKET", "DEFAULT_TENANT",
-               "DEMO_GATE_TOKEN", "TAVILY_API_KEY", "TOKEN_STORE",
+               "DEMO_GATE_TOKEN", "AUTH_SECRET", "TAVILY_API_KEY", "TOKEN_STORE",
                "GOOGLE_SERVICE_ACCOUNT_JSON")
 LAMBDA_POLICY = {
     "Version": "2012-10-17",
@@ -204,6 +204,12 @@ def deploy_lambda(role_arn: str, zip_path: Path) -> str | None:
         import secrets
         env["DEMO_GATE_TOKEN"] = secrets.token_urlsafe(9)
         print(f"[gate] generated DEMO_GATE_TOKEN={env['DEMO_GATE_TOKEN']}  ← save this, it is the passcode")
+    if not env.get("AUTH_SECRET"):
+        # signs RBAC tokens (app/auth.py) — keep it stable across deploys by
+        # putting it in .env, or every redeploy signs everyone out
+        import secrets
+        env["AUTH_SECRET"] = secrets.token_urlsafe(32)
+        print("[auth] generated AUTH_SECRET — add AUTH_SECRET=<value from Lambda env> to .env to keep sessions across deploys")
     if not env.get("DEFAULT_TENANT"):
         env["DEFAULT_TENANT"] = "ramesh_auto"
 

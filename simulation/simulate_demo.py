@@ -35,6 +35,12 @@ def main() -> int:
         # (so the sim also exercises the gate path end-to-end)
         if os.getenv("DEMO_GATE_TOKEN"):
             c.headers["x-demo-token"] = os.environ["DEMO_GATE_TOKEN"]
+        # 0. Sign in — every later call carries the signed, tenant-bound token
+        login = c.post("/auth/login", json={"provider": "guest"}).json()
+        c.headers["Authorization"] = f"Bearer {login['token']}"
+        check("signed login", "owner token for ramesh_auto",
+              f"{login['tenant_id']}/{login['base_role']}",
+              login["tenant_id"] == TENANT and login["base_role"] == "owner")
         c.post("/demo/reset", params={"tenant_id": TENANT})
 
         # 1. Onboarding — agents visible
@@ -91,8 +97,9 @@ def main() -> int:
         check("scheduler ran", ">=0 moved", str(moved["moved"]), moved["moved"] >= 0)
 
         # 8. Tenant isolation
-        other = c.get("/invoices", params={"tenant_id": "other_tenant"}).json()
-        check("tenant isolation", "0 rows", str(len(other)), len(other) == 0)
+        # a Ramesh token can't even ask for another tenant's rows (server 403)
+        other = c.get("/invoices", params={"tenant_id": "other_tenant"})
+        check("tenant isolation", "403 cross-tenant", str(other.status_code), other.status_code == 403)
 
         # 9. Dashboard summary composes real numbers
         d = c.get("/dashboard/summary", params={"tenant_id": TENANT}).json()

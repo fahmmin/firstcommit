@@ -7,6 +7,7 @@ import { Can } from '../components/rui/Can.jsx'
 import { AccessRings } from '../components/rui/Circles.jsx'
 import { useRole, role, ROLES } from '../lib/role.js'
 import { a11y } from '../lib/a11y.js'
+import { toast } from '../lib/toast.js'
 import { AppShell } from '../components/AppShell.jsx'
 import {
   Building2, SlidersHorizontal, PlugZap, Braces, Server,
@@ -50,8 +51,10 @@ export default function Settings() {
   const flash = () => { setSaved(true); setTimeout(() => setSaved(false), 1500) }
 
   const patch = async (body) => {
-    const r = await api.updateSettings(body)
-    if (r.status === 'saved') { flash(); load() }
+    try {
+      const r = await api.updateSettings(body)
+      if (r.status === 'saved') { flash(); load() }
+    } catch { load() }  // 403 → api toasts the server's reason; re-sync the form
   }
 
   const toggleConnector = async (c) => {
@@ -213,12 +216,14 @@ export default function Settings() {
               </button>
             </Field>
             <Field label="Approval mode">
+              <Can perm="settings" reason="Only the owner changes approval mode">
               <select defaultValue={settings?.prefs?.approval_mode}
                 onChange={e => patch({ prefs: { approval_mode: e.target.value } })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] focus:outline-none focus:border-ink bg-white">
                 <option value="manual">Manual — approve everything</option>
                 <option value="auto_low_risk">Auto — low-risk only</option>
               </select>
+              </Can>
             </Field>
             <Field label="Language">
               <select defaultValue={settings?.prefs?.language}
@@ -349,14 +354,16 @@ export default function Settings() {
 
         {/* role / access — RBAC demo surface */}
         <section>
-          <SectionHead icon={ShieldCheck} title="Access role" sub={<span className="text-[10px] text-slate-400">What this login can do — drives button permissions across the app</span>} />
+          <SectionHead icon={ShieldCheck} title="Access role" sub={<span className="text-[10px] text-slate-400">Enforced by the server on every request — signed, workspace-bound session</span>} />
           <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-center gap-6">
             <AccessRings allowed={currentRole === 'owner'} size={84} />
             <div className="flex-1">
               <div className="flex gap-2">
                 {Object.entries(ROLES).map(([k, r]) => (
-                  <button key={k} onClick={() => role.set(k)}
-                    className={`rounded-xl border px-4 py-2.5 text-left transition
+                  <button key={k} disabled={!role.canBecome(k)}
+                    title={role.canBecome(k) ? `View the workspace as ${r.label}` : `A ${role.base()} session can't become ${r.label}`}
+                    onClick={() => role.set(k).then(() => toast.push(`Now viewing as ${r.label}`)).catch(() => {})}
+                    className={`rounded-xl border px-4 py-2.5 text-left transition disabled:opacity-40 disabled:cursor-not-allowed
                       ${currentRole === k ? 'border-ink bg-ink text-white' : 'border-slate-200 hover:border-slate-300'}`}>
                     <div className="text-[12px] font-semibold">{r.label}</div>
                     <div className={`text-[9px] mt-0.5 ${currentRole === k ? 'text-white/60' : 'text-slate-400'}`}>{r.desc}</div>
@@ -364,8 +371,10 @@ export default function Settings() {
                 ))}
               </div>
               <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
-                Viewer sees everything but can't act; Manager can approve drafts and hire agents; Owner controls connectors, MCP and skills.
+                Viewer reads and chats; Manager also approves drafts and hires agents; Owner controls settings, connectors, data and MCP.
+                Owners can switch down to preview a role and back — the server refuses anything above your session's ceiling.
               </p>
+              <InviteTeammate />
             </div>
           </div>
         </section>
@@ -440,3 +449,32 @@ const Toggle = ({ on, onClick }) => (
     <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
   </button>
 )
+
+// Owner mints a teammate link — its role is baked into the signed token, so an
+// invited manager/viewer can never escalate (POST /auth/invite).
+function InviteTeammate() {
+  const [link, setLink] = useState('')
+  const [pick, setPick] = useState('manager')
+  const make = async () => {
+    try {
+      const r = await api.invite(pick)
+      setLink(`${location.origin}${location.pathname}#/join/${r.token}`)
+    } catch { /* 403 toasted by api */ }
+  }
+  return (
+    <Can perm="settings" reason="Only the owner can invite teammates">
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <select value={pick} onChange={e => setPick(e.target.value)}
+          className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] bg-white">
+          <option value="manager">Manager</option><option value="viewer">Viewer</option>
+        </select>
+        <button onClick={make} className="rounded-lg bg-ink text-white text-[11px] px-3 py-1.5">Create invite link</button>
+        {link && (
+          <button onClick={() => { navigator.clipboard?.writeText(link); toast.push('Invite link copied') }}
+            className="max-w-[260px] truncate rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-mono text-slate-500 hover:text-ink"
+            title={link}>{link}</button>
+        )}
+      </div>
+    </Can>
+  )
+}

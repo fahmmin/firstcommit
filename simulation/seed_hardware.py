@@ -218,6 +218,7 @@ def main() -> int:
     print(f"[fixtures] generated {len(files)} files in {FIXTURES}")
 
     with TestClient(app) as c:
+        c.headers["Authorization"] = "Bearer " + c.post("/auth/login", json={"provider": "guest"}).json()["token"]
         # demo gate — deployed backend requires x-demo-token; local runs don't set it
         if os.getenv("DEMO_GATE_TOKEN"):
             c.headers["x-demo-token"] = os.environ["DEMO_GATE_TOKEN"]

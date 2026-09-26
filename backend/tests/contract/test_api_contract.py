@@ -592,3 +592,14 @@ def test_chat_web_mode_ok(client):
     r = client.post("/chat", json={"tenant_id": "ramesh_auto",
                                    "text": "latest steel price", "mode": "web"})
     assert r.status_code == 200 and r.json()["reply"]
+
+
+def test_auth_shapes(client):
+    r = client.post("/auth/login", json={"provider": "guest"})
+    assert _keys(r.json()) >= _keys(_ep("POST /auth/login")["response"])
+    h = {"Authorization": f"Bearer {r.json()['token']}"}
+    assert _keys(client.get("/auth/me", headers=h).json()) >= _keys(_ep("GET /auth/me")["response"])
+    sw = client.post("/auth/role", json={"role": "manager"}, headers=h).json()
+    assert _keys(sw) >= _keys(_ep("POST /auth/role")["response"])
+    inv = client.post("/auth/invite", json={"role": "viewer"}, headers=h).json()
+    assert _keys(inv) >= _keys(_ep("POST /auth/invite")["response"])

@@ -1,7 +1,7 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH — full API surface + frontend flow. Fahmin builds ALL UI against these shapes (never waits on Ayush). Ayush implements until every response matches (contract tests + sim must stay green). Shapes marked [EXISTS] already work; [TODO] are Ayush's build list. To change a shape: BOTH agree, edit here first, then code.",
   "base_url": "http://localhost:8000",
-  "auth": "Demo login only — POST /auth/login returns a token; send as Authorization: Bearer or ignore it. NO real auth (post-hackathon).",
+  "auth": "Real signed sessions — POST /auth/login returns an HMAC token bound to {tenant_id, role, base_role}. Send it as Authorization: Bearer on EVERY call (media URLs may use ?access_token=). Server rejects missing/forged/expired tokens (401), another tenant's tenant_id (403) and routes the role can't use (403). Roles: owner [*], manager [approve, hire, chat, artifacts], viewer [chat]. Public: /health, /auth/login, /public/*.",
 
   "frontend_flow": {
     "$comment": "Every page, the route, and which endpoints feed it. Ayush: this is your endpoint build list.",
@@ -25,15 +25,31 @@
   },
 
   "endpoints": {
-    "POST /auth/login [TODO]": {
-      "$comment": "provider adapters live client-side (Google chooser / phone+OTP); this endpoint just resolves the tenant + token. Keep name/business optional when provider_id present.",
-      "request": { "provider": "google|phone|guest", "provider_id": "ramesh@gmail.com", "name": "Ramesh Gupta", "business": "Ramesh Auto Components" },
+    "POST /auth/login [EXISTS]": {
+      "$comment": "provider adapters live client-side (Google chooser / phone+OTP); this endpoint resolves the tenant and issues a signed session token (backend/app/auth.py).",
+      "request": { "provider": "google|phone|guest", "provider_id": "ramesh@gmail.com", "name": "Ramesh Gupta", "business": "Ramesh Hardware & Electricals" },
       "response": {
-        "token": "demo-tok-ramesh",
+        "token": "<signed HMAC token>",
+        "role": "owner",
+        "base_role": "owner",
         "tenant_id": "ramesh_auto",
-        "user": { "name": "Ramesh Gupta", "business": "Ramesh Auto Components", "city": "Faridabad", "line": "auto components" },
+        "user": { "name": "Ramesh Gupta", "business": "Ramesh Hardware & Electricals", "city": "Faridabad", "line": "hardware" },
         "onboarded": true
       }
+    },
+    "GET /auth/me [EXISTS]": {
+      "$comment": "who this token is",
+      "response": { "tenant_id": "ramesh_auto", "role": "owner", "base_role": "owner", "perms": ["*"], "exp": 1790000000 }
+    },
+    "POST /auth/role [EXISTS]": {
+      "$comment": "'View as' — re-issues the token; 403 above base_role",
+      "request": { "role": "viewer" },
+      "response": { "token": "<signed>", "role": "viewer", "base_role": "owner" }
+    },
+    "POST /auth/invite [EXISTS]": {
+      "$comment": "owner-only teammate link; base_role = role so it can't escalate. Frontend route #/join/<token>",
+      "request": { "role": "manager" },
+      "response": { "token": "<signed>", "role": "manager", "tenant_id": "ramesh_auto", "expires_in_days": 30 }
     },
 
     "GET /dashboard/summary [TODO]": {

@@ -1,18 +1,32 @@
-// Lightweight role/permission model — demo-visible RBAC.
-// Role persists in localStorage; Can/RoleGate components gate UI actions.
+// Role/permission model — mirrors backend/app/auth.py ROLE_PERMS.
+// The ACTIVE role comes from the signed session token the backend issued; the
+// server enforces every permission (403). These helpers only decide what the UI
+// shows, so a locked button always matches what the API would allow.
 import { useSyncExternalStore } from 'react'
+import { session } from './auth.js'
 
 export const ROLES = {
   owner:   { label: 'Owner',      desc: 'Full control',        perms: ['*'] },
   manager: { label: 'Manager',    desc: 'Approve + hire',      perms: ['approve', 'hire', 'chat', 'artifacts'] },
-  viewer:  { label: 'Viewer',     desc: 'Read-only',           perms: ['chat'] },
+  viewer:  { label: 'Viewer',     desc: 'Read + chat',         perms: ['chat'] },
 }
+const RANK = { viewer: 0, manager: 1, owner: 2 }
 
-const KEY = 'sahayak_role'
 const listeners = new Set()
+const emit = () => listeners.forEach(f => f())
 export const role = {
-  get: () => localStorage.getItem(KEY) || 'owner',
-  set: (r) => { localStorage.setItem(KEY, r); listeners.forEach(f => f()) },
+  get: () => session.get()?.role || 'owner',
+  base: () => session.get()?.base_role || session.get()?.role || 'owner',
+  // "View as" — the backend re-issues a token; it refuses anything above base
+  set: async (r) => {
+    const { api } = await import('../api.js')
+    const res = await api.switchRole(r)
+    session.set({ ...session.get(), token: res.token, role: res.role, base_role: res.base_role })
+    emit()
+    return res
+  },
+  canBecome: (r) => (RANK[r] ?? 9) <= (RANK[role.base()] ?? 0),
+  refresh: emit,
   sub: (f) => { listeners.add(f); return () => listeners.delete(f) },
 }
 
