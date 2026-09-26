@@ -371,6 +371,19 @@
       "response": { "hired": [{ "id": "agent-ab12cd", "name": "Compliance Agent", "role_id": "compliance", "tools": ["list_alerts"], "refused_tools": [] }], "errors": [{ "role_id": "ghost", "error": "unknown role" }] }
     },
 
+    "POST /integrations/mcp/{id}/test [EXISTS]": {
+      "$comment": "A3 — real MCP handshake with an owner-added server (settings.mcp_servers[]): connect → tools/list; persists status/tools/last_checked and logs mcp_connected|mcp_error. mcp_servers rows: {id,name,url,transport:'streamable-http'|'sse',auth_token(write-only → '••••' + has_token),enabled,agents:'all'|[agent_id|'sahayak'],trusted,status:'untested'|'connected'|'error',last_checked,tools:[{name,read_only,description}],error?}. PATCH /settings validates URLs (https, or http on localhost) → 422.",
+      "response": { "id": "mcp-1", "status": "connected", "tools": [{ "name": "list_overdue_invoices", "read_only": true, "description": "…" }], "last_checked": "2026-09-26T10:00:00Z" }
+    },
+    "POST /integrations/mcp/token [EXISTS]": {
+      "$comment": "owner-only: token for EXTERNAL MCP clients to use Sahayak at <backend>/mcp (streamable HTTP, stateless, JSON). scope=mcp — rejected by the app API. Read tools need any token; write tools need manager+ and queue in Approvals.",
+      "response": { "token": "<signed, scope=mcp>", "endpoint_path": "/mcp", "expires_in_days": 90, "tools": ["aging_report", "create_invoice", "list_overdue_invoices"] }
+    },
+    "GET /marketplace [EXISTS]": {
+      "$comment": "curated MCP catalogue — no install counts, no URLs we can't vouch for (the owner supplies the endpoint); installed = this workspace's servers with live status",
+      "response": { "mcp": [{ "id": "custom", "name": "Any MCP server", "icon": "mcp", "category": "custom", "desc": "…", "url_hint": "https://…/mcp" }], "installed": [], "sahayak_mcp_tools": ["list_overdue_invoices"] }
+    },
+
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },

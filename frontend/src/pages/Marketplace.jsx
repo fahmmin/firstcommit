@@ -11,17 +11,8 @@ import {
 // Honest marketplace: no install counts, no invented URLs.
 // • Agents come from the role registry (GET /roles) and hire for real
 //   (POST /agents/batch); prompt templates from GET /templates.
-// • MCP servers: bring your own server URL — saved to settings.mcp_servers.
-const MCP_SUGGESTIONS = [
-  { id: 'google-sheets', name: 'Google Sheets', icon: 'sheets', desc: 'Read/write your registers as agent tools.', tag: 'data' },
-  { id: 'google-drive', name: 'Google Drive', icon: 'google_drive', desc: 'Search and read Drive files as agent context.', tag: 'storage' },
-  { id: 'gmail', name: 'Gmail', icon: 'gmail', desc: 'Search the inbox and draft replies.', tag: 'messaging' },
-  { id: 'whatsapp', name: 'WhatsApp Business', icon: 'whatsapp', desc: 'Send and read WhatsApp Business messages.', tag: 'messaging' },
-  { id: 'razorpay', name: 'Razorpay', icon: 'razorpay', desc: 'Payment links and settlement lookups.', tag: 'payments' },
-  { id: 'shopify', name: 'Shopify', icon: 'shopify', desc: 'Products and orders on your storefront.', tag: 'commerce' },
-  { id: 'zapier', name: 'Zapier', icon: 'zapier', desc: 'Bridge to thousands of apps via Zapier actions.', tag: 'automation' },
-  { id: 'custom', name: 'Any MCP server', icon: 'mcp', desc: 'Paste the URL of any remote (HTTP/SSE) MCP server.', tag: 'custom' },
-]
+// • MCP servers: curated catalogue from GET /marketplace (no URLs we can't vouch
+//   for) — the owner pastes their provider's URL; Add saves + runs a real handshake.
 
 export default function Marketplace() {
   const [tab, setTab] = useState('templates')
@@ -29,6 +20,7 @@ export default function Marketplace() {
   const [settings, setSettings] = useState(null)
   const [templates, setTemplates] = useState([])
   const [roles, setRoles] = useState([])
+  const [mcpCatalog, setMcpCatalog] = useState([])
   const [hiredRoles, setHiredRoles] = useState(new Set())
 
   const load = () => api.settings().then(setSettings).catch(() => setSettings(null))
@@ -37,6 +29,7 @@ export default function Marketplace() {
     load(); loadRoster()
     api.templates().then(setTemplates).catch(() => setTemplates([]))
     api.roles().then(setRoles).catch(() => setRoles([]))
+    api.marketplace().then(m => setMcpCatalog(m.mcp || [])).catch(() => setMcpCatalog([]))
   }, [])
 
   const servers = settings?.mcp_servers || []
@@ -93,7 +86,7 @@ export default function Marketplace() {
             {!promptTemplates.length && <p className="text-[12px] text-slate-400">No templates match.</p>}
           </div>
         ) : (
-          <McpServers servers={servers} onSaved={load} match={match} />
+          <McpServers catalog={mcpCatalog} servers={servers} onSaved={load} match={match} />
         )}
         </div>
       </main>
@@ -102,30 +95,34 @@ export default function Marketplace() {
 }
 
 // Add a real MCP server: the owner supplies the URL — nothing is invented.
-function McpServers({ servers, onSaved, match }) {
+function McpServers({ catalog, servers, onSaved, match }) {
   const [open, setOpen] = useState(null)
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
-  const has = (name) => servers.some(s => s.name === name)
+  const has = (name) => servers.find(s => s.name === name)
 
   const save = async (item) => {
     const u = url.trim()
     if (!/^https?:\/\//.test(u)) { toast.push('Enter the server URL (https://…)', 'err'); return }
     setBusy(true)
     try {
-      const next = [...servers, { id: `mcp-${Date.now()}`, name: item.id === 'custom' ? new URL(u).hostname : item.name, url: u, status: 'configured' }]
-      const r = await api.updateSettings({ mcp_servers: next })
-      if (r?.status !== 'saved') throw new Error('not saved')
-      toast.push(`${item.name} added — test it from Settings → MCP`)
+      const id = `mcp-${Date.now().toString(36)}`
+      const name = item.id === 'custom' ? new URL(u).hostname : item.name
+      await api.updateSettings({ mcp_servers: [...servers, { id, name, url: u }] })
+      // real handshake right away — the card shows the server's actual answer
+      const t = await api.testMcp(id)
+      toast.push(t.status === 'connected' ? `${name}: connected — ${t.tools.length} tools` : `${name} saved, but the handshake failed: ${t.error}`,
+        t.status === 'connected' ? 'ok' : 'err')
       setOpen(null); setUrl(''); onSaved()
-    } catch (e) { toast.push(`Couldn't save — ${e.message}`, 'err') }
+    } catch (e) { if (e.status !== 403) toast.push(`Couldn't save — ${e.message}`, 'err') }
     setBusy(false)
   }
 
   return (
     <div className="grid sm:grid-cols-2 gap-3">
-      {MCP_SUGGESTIONS.filter(match).map(item => {
+      {catalog.filter(x => match({ name: x.name, desc: x.desc, tag: x.category })).map(item => {
         const added = item.id !== 'custom' && has(item.name)
+        item = { ...item, tag: item.category }
         return (
           <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-float transition">
             <div className="flex items-start gap-3">
@@ -143,13 +140,13 @@ function McpServers({ servers, onSaved, match }) {
                 <button onClick={() => setOpen(open === item.id ? null : item.id)} disabled={added}
                   className={`text-[11px] font-medium rounded-lg px-3 py-1.5 shrink-0 transition flex items-center gap-1
                     ${added ? 'bg-emerald-50 text-emerald-600 cursor-default' : 'bg-ink text-white hover:bg-ink/85'}`}>
-                  {added ? <><Check size={11} /> Added</> : <><Link2 size={11} /> Add</>}
+                  {added ? <><Check size={11} /> {added.status === 'connected' ? `${added.tools?.length || 0} tools` : added.status || 'added'}</> : <><Link2 size={11} /> Add</>}
                 </button>
               </Can>
             </div>
             {open === item.id && (
               <form onSubmit={e => { e.preventDefault(); save(item) }} className="mt-3 flex gap-2">
-                <input autoFocus value={url} onChange={e => setUrl(e.target.value)} placeholder="https://your-server/mcp"
+                <input autoFocus value={url} onChange={e => setUrl(e.target.value)} placeholder={item.url_hint || 'https://your-server/mcp'}
                   className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-mono focus:outline-none focus:border-ink" />
                 <button disabled={busy} className="rounded-lg bg-ink text-white text-[11px] px-3 disabled:opacity-50">
                   {busy ? <Loader2 size={11} className="animate-spin" /> : 'Save'}

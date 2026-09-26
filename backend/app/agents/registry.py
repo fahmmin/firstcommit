@@ -127,9 +127,10 @@ class AgentRegistry:
         if reset:
             self.get_agent(spec.id)  # warm
             self._orchestrator = None  # rebuild the routing table — the new hire must be reachable
-        deps.log_activity(self.tenant_id, "agent_created", f"Nirmata hired '{spec.name}' for you")
+        how = f"from the {role_id.replace('_', ' ')} role" if role_id else "as a custom specialist"
+        deps.log_activity(self.tenant_id, "agent_created", f"Hired '{spec.name}' {how}")
         deps.notify(self.tenant_id, "info", f"{spec.name} hired",
-                    body="Nirmata created this specialist from your description",
+                    body=f"The agent factory created this specialist {how}",
                     ref_id=spec.id)
         return stored
 
@@ -152,7 +153,8 @@ class AgentRegistry:
 
     # ---- agent instantiation ----
 
-    def _build_agent(self, raw: dict, only_tools: set[str] | None = None) -> Agent:
+    def _build_agent(self, raw: dict, only_tools: set[str] | None = None,
+                     extra_tools: list | None = None) -> Agent:
         spec = AgentSpec(**{k: v for k, v in raw.items() if k in AgentSpec.model_fields})
         resolved = spec.resolved_tools(self.tenant_id)
         from .policy import tool_allowed
@@ -164,24 +166,30 @@ class AgentRegistry:
         if only_tools is not None:
             resolved = [t for t in resolved if name_of(t) in only_tools]
             extra = [t for t in extra if name_of(t) in only_tools]
+        mcp = list(extra_tools or [])   # per-request MCP tools (mcp/client.py), already gated
         return Agent(
             name=spec.name,
-            model=make_model(rules=mock_rules.rules_for_tools(spec.tools), role="worker"),
+            model=make_model(rules=mock_rules.rules_for_mcp([name_of(t) for t in mcp])
+                             + mock_rules.rules_for_tools(spec.tools), role="worker"),
             system_prompt=f"{spec.persona_prompt}\nYour goal: {spec.goal}"
                           + build_memory_suffix(self.tenant_id),
-            tools=resolved + extra,
+            tools=resolved + extra + mcp,
             session_manager=_session_manager(f"{self.tenant_id}-{spec.id}"),
             callback_handler=None,
         )
 
-    def get_agent(self, spec_id: str, only_tools: list[str] | None = None) -> Agent | None:
+    def get_agent(self, spec_id: str, only_tools: list[str] | None = None,
+                  extra_tools: list | None = None) -> Agent | None:
         """only_tools=None → cached full agent. A scope list builds an uncached
-        variant restricted to the named tools (owner's per-reply capability pick)."""
+        variant restricted to the named tools (owner's per-reply capability pick).
+        extra_tools (live MCP tools for this request) also build an uncached
+        variant — their connections close when the request ends."""
         raw = self.get_spec(spec_id)
         if not raw:
             return None
-        if only_tools is not None:
-            return self._build_agent(raw, only_tools=set(only_tools))
+        if only_tools is not None or extra_tools:
+            return self._build_agent(raw, only_tools=set(only_tools) if only_tools is not None else None,
+                                     extra_tools=extra_tools)
         if spec_id not in self._agents:
             self._agents[spec_id] = self._build_agent(raw)
         return self._agents[spec_id]
@@ -312,7 +320,7 @@ class AgentRegistry:
 
     # ---- orchestrator ----
 
-    def _build_orchestrator(self, only: set[str] | None = None) -> Agent:
+    def _build_orchestrator(self, only: set[str] | None = None, extra_tools: list | None = None) -> Agent:
         """Routing table = every spec in the registry (builtins + factory hires)
         + Nirmata + web search. `only` scopes the reply to named sub-tools."""
         subs = []
@@ -351,10 +359,13 @@ class AgentRegistry:
             ))
         if only is None or "web_search" in only:
             subs += web_search_tools(self.tenant_id)  # web/deep mode
+        mcp = list(extra_tools or [])
+        subs += mcp   # the owner's MCP servers assigned to the front desk (per request)
         return Agent(
             name="Sahayak",
             model=make_model(
-                rules=mock_rules.orchestrator_rules(self.specs()), role="orchestrator"),
+                rules=mock_rules.rules_for_mcp([getattr(t, "tool_name", "") for t in mcp])
+                + mock_rules.orchestrator_rules(self.specs()), role="orchestrator"),
             system_prompt=(
                 "You are Sahayak (सहायक), the front-desk AI for a small Indian business. "
                 "Your ONLY job: route each request to the right specialist tool and relay its "
@@ -383,11 +394,11 @@ class AgentRegistry:
             callback_handler=None,
         )
 
-    def orchestrator(self, only: list[str] | None = None) -> Agent:
-        """only=None → the cached full router. A scope list builds an uncached
-        variant whose tool set is restricted to the named sub-agents/tools."""
-        if only:
-            return self._build_orchestrator(only=set(only))
+    def orchestrator(self, only: list[str] | None = None, extra_tools: list | None = None) -> Agent:
+        """only=None → the cached full router. A scope list (or live MCP tools)
+        builds an uncached variant."""
+        if only or extra_tools:
+            return self._build_orchestrator(only=set(only) if only else None, extra_tools=extra_tools)
         if not self._orchestrator:
             self._orchestrator = self._build_orchestrator()
         return self._orchestrator

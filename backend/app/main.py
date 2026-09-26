@@ -67,15 +67,30 @@ app.add_middleware(
 app.add_middleware(auth.AuthMiddleware)
 
 
+class _MCPApp:
+    """ASGI shim so /mcp (exact) and /mcp/… both reach Sahayak's MCP server."""
+    async def __call__(self, scope, receive, send):
+        from .mcp.server import mcp_asgi
+        await mcp_asgi(scope, receive, send)
+
+
+from starlette.routing import Mount, Route  # noqa: E402
+app.router.routes.append(Route("/mcp", endpoint=_MCPApp(), methods=["GET", "POST", "DELETE"]))
+app.router.routes.append(Mount("/mcp", app=_MCPApp()))
+
+
 @app.middleware("http")
 async def _demo_gate(request, call_next):
     """Demo gate — project rule says auth stays demo-only, so instead of real
     auth we gate the API behind a shared passcode (DEMO_GATE_TOKEN). Judges get
     the URL with ?gate=TOKEN baked in; crawlers and link-followers get a 401.
-    Exempt: health + public artifact shares (recipients have no passcode)."""
+    Exempt: health + public artifact shares (recipients have no passcode) and
+    /mcp (external MCP clients authenticate with their own workspace token)."""
     token = os.getenv("DEMO_GATE_TOKEN", "")
-    if (token and request.method != "OPTIONS"
-            and not request.url.path.startswith(("/health", "/public/artifacts"))):
+    path = request.url.path
+    exempt = (path.startswith(("/health", "/public/artifacts"))
+              or path == "/mcp" or path.startswith("/mcp/"))
+    if token and request.method != "OPTIONS" and not exempt:
         if (request.headers.get("x-demo-token") != token
                 and request.query_params.get("gate") != token):
             return JSONResponse({"detail": "demo passcode required"}, status_code=401,
@@ -116,6 +131,15 @@ def health():
     return {"status": "ok", "use_aws": os.getenv("USE_AWS", "0") == "1", "model": model}
 
 
+def _clean_reply(raw: str) -> str:
+    """Nova wraps output as <thinking>…</thinking><response>…</response>: drop the
+    reasoning, KEEP the answer. (The old regex deleted <response> blocks too, so a
+    well-formed answer could come back as an empty reply.)"""
+    out = re.sub(r"<thinking>.*?</thinking>", "", raw, flags=re.DOTALL)
+    out = re.sub(r"</?response>", "", out)
+    return out.strip() or raw.strip()
+
+
 def _invoke(agent, text: str):
     """Nova occasionally emits an invalid ToolUse stream — one retry absorbs it."""
     try:
@@ -137,18 +161,22 @@ def chat(req: ChatReq):
     token = deps.current_actions.set(actions)
     from .tracing import record_run, run_metrics, timer
     _t = timer().__enter__()
+    from .mcp.client import mcp_tools_for
     try:
+        if req.agent_id and not registry.get_spec(req.agent_id):
+            raise HTTPException(404, f"unknown agent {req.agent_id}")
+        # A3 — the owner's MCP servers assigned to this agent, open for THIS request only
+        with mcp_tools_for(req.tenant_id, req.agent_id) as mcp_tools:
+            if req.agent_id:
+                agent = registry.get_agent(req.agent_id, only_tools=req.scope, extra_tools=mcp_tools)
+                result = _invoke(agent, text)
+            else:
+                agent = registry.orchestrator(only=req.scope, extra_tools=mcp_tools)
+                result = _invoke(agent, text)
         if req.agent_id:
-            agent = (registry.get_agent(req.agent_id, only_tools=req.scope)
-                     if req.scope else registry.get_agent(req.agent_id))
-            if not agent:
-                raise HTTPException(404, f"unknown agent {req.agent_id}")
-            result = _invoke(agent, text)
             agent_name = req.agent_id
             registry.bump_stats(req.agent_id)
         else:
-            agent = registry.orchestrator(only=req.scope)
-            result = _invoke(agent, text)
             # credit the specialist that actually ran — last invoked tool that
             # maps to a spec or nirmata (utility tools like web_search must not
             # steal the byline, and nirmata isn't a stored spec)
@@ -163,7 +191,7 @@ def chat(req: ChatReq):
     _t.__exit__()
     spec = registry.get_spec(agent_name) or {}
     trace = ["sahayak"] + ([agent_name] if agent_name != "sahayak" else [])
-    reply = re.sub(r"</?(thinking|response)>.*?</(thinking|response)>|</?(thinking|response)>", "", str(result), flags=re.DOTALL).strip()
+    reply = _clean_reply(str(result))
     model = os.getenv("ORCHESTRATOR_MODEL" if agent_name in ("sahayak", "nirmata")
                       else "WORKER_MODEL", "mock")
     usage = run_metrics(result, _t.ms, model)
@@ -631,7 +659,7 @@ def run_task(task_id: str, tenant_id: str = "ramesh_auto"):
         if t.get("details"):
             prompt += f" Details: {t['details']}."
         result = _invoke(agent, prompt)
-        reply = re.sub(r"</?(thinking|response)>.*?</(thinking|response)>|</?(thinking|response)>", "", str(result), flags=re.DOTALL).strip()
+        reply = _clean_reply(str(result))
     finally:
         deps.current_actions.reset(token)
     deps.store.update_task(tenant_id, task_id, status="done", result=reply)
@@ -865,11 +893,13 @@ def settings(tenant_id: str = "ramesh_auto"):
         # brand-new tenant (pre-onboarding) → honest empty skeleton, not a 404
         return {"business": {}, "onboarded": False,
                 "prefs": {"disabled_tools": []}, "mcp_servers": []}
+    from .mcp.client import public_view
     return {
         "business": s.get("business", {}),
         "onboarded": s.get("onboarded", True),
         "prefs": {"disabled_tools": [], **s.get("prefs", {})},
-        "mcp_servers": s.get("mcp_servers", []),
+        # MCP auth tokens are write-only — masked on the way out
+        "mcp_servers": [public_view(m) for m in s.get("mcp_servers", [])],
     }
 
 
@@ -892,14 +922,67 @@ def patch_settings(req: SettingsPatch):
         "business": {**cur.get("business", {}), **(req.business or {})},
         "prefs": prefs,
     }
-    for k in ("onboarded", "mcp_servers"):
-        v = getattr(req, k)
-        if v is not None:
-            nxt[k] = v
-        elif k in cur:
-            nxt[k] = cur[k]
+    if req.onboarded is not None:
+        nxt["onboarded"] = req.onboarded
+    elif "onboarded" in cur:
+        nxt["onboarded"] = cur["onboarded"]
+    if req.mcp_servers is not None:
+        # validate + normalize; a masked token (••••) keeps the stored secret
+        from .mcp.client import normalize, validate_url
+        prev = {m.get("id"): m for m in cur.get("mcp_servers", [])}
+        rows = []
+        for m in req.mcp_servers:
+            if not isinstance(m, dict):
+                raise HTTPException(422, "each MCP server must be an object")
+            err = validate_url(m.get("url", ""))
+            if err:
+                raise HTTPException(422, f"{m.get('name') or 'MCP server'}: {err}")
+            rows.append(normalize(m, prev.get(m.get("id"))))
+        nxt["mcp_servers"] = rows
+    elif "mcp_servers" in cur:
+        nxt["mcp_servers"] = cur["mcp_servers"]
     deps.store.put_settings(req.tenant_id, nxt)
     return {"status": "saved"}
+
+
+# ================= A3 — MCP (client management + Sahayak's own MCP server) =================
+
+
+@app.post("/integrations/mcp/{server_id}/test")
+def mcp_test(server_id: str, tenant_id: str = "ramesh_auto"):
+    """Real handshake with an owner-added MCP server: connect → tools/list →
+    persist status + tool list (+ an mcp_connected/mcp_error log row)."""
+    from .mcp.client import test_server
+    res = test_server(tenant_id, server_id)
+    if res.get("status") == "not_found":
+        raise HTTPException(404, "no such MCP server")
+    return res
+
+
+@app.post("/integrations/mcp/token")
+def mcp_token(tenant_id: str = "ramesh_auto"):
+    """Owner mints a workspace token for external MCP clients (Claude, Cursor…).
+    Scope 'mcp' — valid on /mcp only, never on the app API."""
+    c = auth.current_principal.get() or {"tid": tenant_id, "role": "owner"}
+    tok = auth.issue(c["tid"], role="owner", base="owner", ttl=90 * 24 * 3600, scope="mcp")
+    deps.log_activity(c["tid"], "mcp_token_created", "MCP access token created for an external AI client")
+    return {"token": tok, "endpoint_path": "/mcp", "expires_in_days": 90,
+            "tools": sorted(t.name for t in _mcp_tool_list())}
+
+
+def _mcp_tool_list():
+    from .mcp.server import mcp_server
+    return mcp_server._tool_manager.list_tools()
+
+
+@app.get("/marketplace")
+def marketplace(tenant_id: str = "ramesh_auto"):
+    """Curated MCP catalogue (no install counts, no invented URLs — the owner
+    supplies each server's URL) + live status of what this workspace added."""
+    from .marketplace import MCP_CATALOG
+    from .mcp.client import public_view, servers
+    return {"mcp": MCP_CATALOG, "installed": [public_view(m) for m in servers(tenant_id)],
+            "sahayak_mcp_tools": sorted(t.name for t in _mcp_tool_list())}
 
 
 # ================= Round 2 — import / memories / artifacts / search =================

@@ -9,6 +9,7 @@ import { useRole, role, ROLES } from '../lib/role.js'
 import { a11y } from '../lib/a11y.js'
 import { toast } from '../lib/toast.js'
 import { AppShell } from '../components/AppShell.jsx'
+import { McpServers, ConnectAiTools } from '../components/McpSettings.jsx'
 import {
   Building2, SlidersHorizontal, PlugZap, Braces, Server,
   CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store, ShieldCheck,
@@ -27,8 +28,6 @@ export default function Settings() {
   const [settings, setSettings] = useState(null)
   const [connectors, setConnectors] = useState([])
   const [memories, setMemories] = useState([])
-  const [mcpName, setMcpName] = useState('')
-  const [mcpUrl, setMcpUrl] = useState('')
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
@@ -41,8 +40,10 @@ export default function Settings() {
   const mcps = settings?.mcp_servers || []
   const disabledTools = settings?.prefs?.disabled_tools || []
 
+  const [agentList, setAgentList] = useState([])
   const load = () => {
     api.settings().then(setSettings).catch(() => {})
+    api.agents().then(setAgentList).catch(() => {})
     api.connectors().then(setConnectors).catch(() => {})
     api.memories().then(setMemories).catch(() => setMemories([]))
   }
@@ -83,12 +84,6 @@ export default function Settings() {
     patch({ prefs: { disabled_tools: next } })
   }
 
-  const setMcps = (next) => patch({ mcp_servers: next })
-  const addMcp = () => {
-    if (!mcpName.trim() || !mcpUrl.trim()) return
-    setMcps([...mcps, { id: `mcp-${Date.now()}`, name: mcpName.trim(), url: mcpUrl.trim(), status: 'configured' }])
-    setMcpName(''); setMcpUrl('')
-  }
 
   const doImport = async (f) => {
     if (!f) return
@@ -379,37 +374,20 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* mcp servers */}
+        {/* mcp servers — agents consume external MCP tools (A3) */}
         <section>
-          <SectionHead icon={Server} title="MCP servers" sub={<span className="text-[9px] font-bold text-magenta bg-magenta/10 rounded px-1.5 py-0.5">BETA</span>}
+          <SectionHead icon={Server} title="MCP servers"
             right={<a href="#/marketplace" className="text-[11px] text-accent hover:text-ink flex items-center gap-1 transition"><Store size={11} /> Browse marketplace</a>} />
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <p className="text-[12px] text-slate-500 leading-relaxed">
-              Save external MCP endpoints here — live tool activation for agents ships post-demo.
-            </p>
-            {mcps.map(m => (
-              <div key={m.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-2.5">
-                <Server size={13} className="text-slate-400" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-medium text-ink">{m.name}</div>
-                  <div className="text-[10px] text-slate-400 truncate">{m.url}</div>
-                </div>
-                <span className="text-[9px] font-medium text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">saved</span>
-                <button onClick={() => setMcps(mcps.filter(x => x.id !== m.id))} className="text-slate-300 hover:text-rose-500 transition"><Trash2 size={13} /></button>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <input value={mcpName} onChange={e => setMcpName(e.target.value)} placeholder="Server name (e.g. tally-mcp)"
-                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[12px] focus:outline-none focus:border-ink" />
-              <input value={mcpUrl} onChange={e => setMcpUrl(e.target.value)} placeholder="https://…/sse"
-                className="flex-[1.5] rounded-lg border border-slate-200 px-3 py-2 text-[12px] focus:outline-none focus:border-ink" />
-              <Can perm="mcp" reason="Adding MCP servers needs Owner">
-                <button onClick={addMcp}
-                  className="rounded-lg bg-ink text-white px-4 text-[12px] font-medium flex items-center gap-1 hover:bg-ink/85 transition">
-                  <Plus size={12} /> Add
-                </button>
-              </Can>
-            </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <McpServers servers={mcps} agents={agentList} onSaved={load} />
+          </div>
+        </section>
+
+        {/* Sahayak as an MCP server (A3) */}
+        <section>
+          <SectionHead icon={PlugZap} title="Connect your AI tools to Sahayak" />
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <ConnectAiTools />
           </div>
         </section>
         </div>

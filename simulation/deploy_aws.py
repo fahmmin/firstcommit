@@ -42,7 +42,7 @@ ROLE_NAME = os.getenv("LAMBDA_ROLE_NAME", "sahayak-lambda-role")
 RULE_NAME = "sahayak-scheduler"
 RUNTIME_DEPS = [
     "strands-agents==1.56.0", "fastapi", "mangum", "python-dotenv", "python-multipart",
-    "boto3", "pydantic", "openpyxl", "cedarpy", "fpdf2",
+    "boto3", "pydantic", "openpyxl", "cedarpy", "fpdf2", "mcp>=2.1,<2.2",
     "google-api-python-client", "google-auth",  # gcp.py — google_* connectors
 ]
 # forwarded to the Lambda env verbatim — never AWS keys/profile (role supplies

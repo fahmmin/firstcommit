@@ -77,6 +77,10 @@ def summarize(tool: str, args: dict) -> str:
 
 
 def risk_for(tool: str) -> str:
+    # MCP tools only reach the gate when the server didn't mark them read-only
+    # (mcp/client.py GatedMCPTool) → an external side effect → ask
+    if tool.startswith("mcp:"):
+        return ASK
     return TOOL_RISK.get(tool, AUTO)
 
 

@@ -287,3 +287,15 @@ NIRMATA_RULES: list[MockRule] = [
         args=lambda t: {},
     ),
 ]
+
+
+def rules_for_mcp(tool_names: list[str]) -> list[MockRule]:
+    """Offline routing for live MCP tools: naming the tool (its prefixed name,
+    or its words) calls it. Real Nova picks MCP tools from their descriptions."""
+    out = []
+    for name in tool_names:
+        if not name:
+            continue
+        words = name.split("_", 2)[-1].replace("_", " ") if name.startswith("mcp_") else name
+        out.append(MockRule(keywords=[name, f"mcp {words}"], tool=name, args=lambda t: {}))
+    return out

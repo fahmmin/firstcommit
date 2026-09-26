@@ -47,6 +47,8 @@ export const checkGate = async (code) => {
 
 // signed session token (backend/app/auth.py) — the server enforces tenant + role
 export const authToken = () => session.get()?.token || ''
+// absolute backend origin for things handed to OTHER apps (MCP clients)
+export const API_ORIGIN = import.meta.env.VITE_API_URL || `${location.protocol}//${location.hostname}:8000`
 
 async function req(path, opts = {}) {
   const headers = { ...(opts.headers || {}) }
@@ -69,7 +71,11 @@ async function req(path, opts = {}) {
     toast.push(detail.charAt(0).toUpperCase() + detail.slice(1), 'err')
     const e = new Error(detail); e.status = 403; throw e
   }
-  if (!r.ok) throw new Error(`${opts.method || 'GET'} ${path} → ${r.status}`)
+  if (!r.ok) {
+    const detail = (await r.json().catch(() => ({})))?.detail
+    const e = new Error(typeof detail === 'string' ? detail : `${opts.method || 'GET'} ${path} → ${r.status}`)
+    e.status = r.status; throw e
+  }
   return r.json()
 }
 
@@ -111,6 +117,10 @@ export const api = {
     req('/approvals/grant', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ tenant_id: TENANT, tool, on }) }),
   approvalGrants: () => req(`/approvals/grants?tenant_id=${TENANT}`),
+  // A3 — MCP: handshake an owner-added server; mint a token for external AI clients
+  testMcp: (id) => req(`/integrations/mcp/${id}/test?tenant_id=${TENANT}`, { method: 'POST' }),
+  mcpToken: () => req(`/integrations/mcp/token?tenant_id=${TENANT}`, { method: 'POST' }),
+  marketplace: () => req(`/marketplace?tenant_id=${TENANT}`),
   suppliers: (q) => req(`/suppliers?tenant_id=${TENANT}${q ? `&q=${q}` : ''}`),
   carriers: (to) => req(`/carriers?tenant_id=${TENANT}${to ? `&to=${to}` : ''}`),
   cashflow: () => req(`/cashflow?tenant_id=${TENANT}`),

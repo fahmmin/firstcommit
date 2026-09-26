@@ -149,8 +149,15 @@ _RULES: list[tuple[str, re.Pattern, str]] = [(m, re.compile(p), perm) for m, p, 
 # connectors/sync is a GET with side effects → owner
 _OWNER_GETS = [re.compile(r"^/connectors/[^/]+/sync$")]
 
-PUBLIC_PREFIXES = ("/health", "/auth/login", "/public/", "/docs", "/redoc",
-                   "/openapi.json", "/mcp")
+PUBLIC_PREFIXES = ("/health", "/auth/login", "/public/", "/docs", "/redoc", "/openapi.json")
+# /mcp is authenticated by its own token check (mcp/server.py) — exact path only,
+# so e.g. "/mcp-anything" is NOT exempt
+_OWN_AUTH = ("/mcp",)
+
+
+def is_public(path: str) -> bool:
+    return (path == "/" or path.startswith(PUBLIC_PREFIXES)
+            or any(path == p or path.startswith(p + "/") for p in _OWN_AUTH))
 
 
 def required_perm(method: str, path: str) -> str | None:
@@ -184,7 +191,7 @@ class AuthMiddleware:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         method, path = scope["method"], scope["path"]
-        if method == "OPTIONS" or path == "/" or path.startswith(PUBLIC_PREFIXES):
+        if method == "OPTIONS" or is_public(path):
             return await self.app(scope, receive, send)
 
         headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}

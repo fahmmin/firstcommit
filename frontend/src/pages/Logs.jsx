@@ -18,7 +18,7 @@ export default function Logs() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-[20px] font-semibold tracking-tight text-ink">Agent activity</h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">Agent runs, tool calls, approvals and connector syncs — straight from the audit log.</p>
+            <p className="text-[12px] text-slate-500 mt-0.5">Agent runs, tool calls, MCP handshakes, approvals and connector syncs — straight from the audit log.</p>
           </div>
           <div className="flex gap-2 text-[10px]">
             {[['bg-sky-50 text-sky-600 border-sky-100', 'INFO'], ['bg-emerald-50 text-emerald-600 border-emerald-100', 'TOOL'],

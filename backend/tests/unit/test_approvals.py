@@ -103,3 +103,7 @@ def test_grants_persist_in_settings(tenant):
     assert appr.list_grants(tenant) == ["sync_catalog"]
     appr.revoke_session(tenant, "sync_catalog")
     assert appr.list_grants(tenant) == []
+
+
+def test_mcp_writes_always_ask():
+    assert appr.risk_for("mcp:any-server:delete_everything") == appr.ASK

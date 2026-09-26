@@ -76,3 +76,11 @@ def test_aging_math(tenant):
     total = sum(report["buckets"].values())
     expected = sum(r["amount"] for r in deps.store.list_invoices(tenant, status="overdue"))
     assert total == expected
+
+
+def test_clean_reply_keeps_response_drops_thinking():
+    from app.main import _clean_reply
+    raw = "<thinking>plan</thinking>\n\n<response>SafeRoad at ₹3.9/kg</response>\n"
+    assert _clean_reply(raw) == "SafeRoad at ₹3.9/kg"
+    assert _clean_reply("plain answer") == "plain answer"
+    assert _clean_reply("<thinking>a</thinking>b<thinking>c</thinking>") == "b"
