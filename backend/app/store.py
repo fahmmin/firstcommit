@@ -458,12 +458,18 @@ class DynamoStore(Store):
         if not fields:
             return None
         expr = "SET " + ", ".join(f"#{k} = :{k}" for k in fields)
-        self.tables[coll].update_item(
-            Key={"tenant_id": tenant_id, "id": row_id},
-            UpdateExpression=expr,
-            ExpressionAttributeNames={f"#{k}": k for k in fields},
-            ExpressionAttributeValues={f":{k}": _to_ddb(v) for k, v in fields.items()},
-        )
+        try:
+            self.tables[coll].update_item(
+                Key={"tenant_id": tenant_id, "id": row_id},
+                UpdateExpression=expr,
+                # only update an EXISTING row — a bare UpdateExpression would upsert a
+                # ghost row on an unknown id; this matches LocalStore (None on missing).
+                ConditionExpression="attribute_exists(id)",
+                ExpressionAttributeNames={f"#{k}": k for k in fields},
+                ExpressionAttributeValues={f":{k}": _to_ddb(v) for k, v in fields.items()},
+            )
+        except self.tables[coll].meta.client.exceptions.ConditionalCheckFailedException:
+            return None
         return self._put_get(coll, tenant_id, row_id)
 
     def _put_get(self, coll, tenant_id, row_id):

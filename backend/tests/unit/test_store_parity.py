@@ -148,3 +148,12 @@ class TestStoreParity:
         s.update_approval(self.T, "apr-1", status="executed")
         assert s.get_approval(self.T, "apr-1")["status"] == "executed"
         assert len(s.list_approvals(self.T)) == 1
+
+    def test_update_unknown_id_returns_none_no_ghost(self, impl, tmp_path):
+        # DynamoDB UpdateExpression would upsert a ghost row on a missing id;
+        # both stores must return None and create nothing (drives correct 404s).
+        s = self._store(impl, tmp_path)
+        assert s.update_task(self.T, "ghost", status="done") is None
+        assert s.get_task(self.T, "ghost") is None
+        assert s.update_approval(self.T, "ghost", status="denied") is None
+        assert s.update_invoice(self.T, "ghost", status="paid") is None
