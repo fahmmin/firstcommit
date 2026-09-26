@@ -18,7 +18,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 COLLS = ["specs", "invoices", "suppliers", "carriers", "alerts", "payables",
          "tasks", "notifications", "connectors", "settings", "activity",
-         "memories", "artifacts", "documents"]
+         "memories", "artifacts", "documents", "listings", "approvals"]
 
 ok = fail = 0
 def check(name, fn):

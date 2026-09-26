@@ -185,6 +185,25 @@ def main() -> int:
               len(cats) >= 5 and inst.get("created_by") == "factory"
               and inst["id"] in after_agents and inst["id"] not in before_agents)
 
+        # 18a. A1 — agent side-effecting action is queued, not executed, until approved
+        from app.agents import approvals as _appr
+        _appr.revoke_session(TENANT, "create_invoice")
+        inv_before = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        qr = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                                   "text": "bill banao for Approval Test Co"}).json()
+        pend = [a for a in c.get("/approvals", params={"tenant_id": TENANT, "status": "pending"}).json()
+                if a["tool"] == "create_invoice"]
+        inv_mid = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        ap_ok = False
+        if pend:
+            ap = c.post(f"/approvals/{pend[0]['id']}/approve", params={"tenant_id": TENANT}).json()
+            ap_ok = ap.get("status") == "executed"
+        inv_after = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        check("approval gate: queue→approve→execute",
+              "not-run-until-approved then +1",
+              f"queued={bool(pend)} mid={inv_mid-inv_before} after={inv_after-inv_before}",
+              bool(pend) and inv_mid == inv_before and ap_ok and inv_after == inv_before + 1)
+
         # 18b. Round 4 fix — kanban drag persists via PATCH /tasks/{id} (col↔status)
         tk = c.post("/tasks", json={"tenant_id": TENANT, "title": "Kanban card",
                                     "agent": "vasool", "col": "todo"}).json()

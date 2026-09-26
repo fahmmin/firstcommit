@@ -169,6 +169,12 @@ def artifact_tools(tenant_id: str, created_by: str = "agent") -> list:
         storefront (business, tagline, contact, products[{title,price,unit,category,desc}],
         marketplaces[], note).
         Fill `data` for the chosen template; returns a share link."""
+        from ..agents.approvals import gate
+        q = gate(tenant_id, "create_artifact",
+                 {"title": title, "template": template, "data": data, "created_by": created_by},
+                 f"Publish artifact '{title}'")
+        if q:  # queued for owner approval — don't publish yet
+            return q
         try:
             row = create_artifact_impl(tenant_id, title, template, data, created_by=created_by)
         except ValueError as e:

@@ -1188,6 +1188,53 @@ def logs(tenant_id: str = "ramesh_auto", limit: int = 50):
     return deps.store.list_activity(tenant_id, limit=limit)
 
 
+# ================= A1 — action approval ledger =================
+
+
+@app.get("/approvals")
+def approvals_list(tenant_id: str = "ramesh_auto", status: str | None = None):
+    """Durable ledger of agent actions awaiting / past owner approval."""
+    rows = deps.store.list_approvals(tenant_id)
+    if status:
+        rows = [r for r in rows if r.get("status") == status]
+    rows.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+    return rows
+
+
+@app.post("/approvals/{approval_id}/approve")
+def approvals_approve(approval_id: str, tenant_id: str = "ramesh_auto"):
+    """Owner taps approve → the queued action actually executes now."""
+    from .agents.approvals import execute_action
+    res = execute_action(tenant_id, approval_id)
+    if res.get("status") == "not_found":
+        raise HTTPException(404, "no such approval")
+    return {"id": approval_id, **res}
+
+
+@app.post("/approvals/{approval_id}/deny")
+def approvals_deny(approval_id: str, tenant_id: str = "ramesh_auto"):
+    a = deps.store.update_approval(tenant_id, approval_id, status="denied",
+                                  decided_at=datetime.now(timezone.utc).isoformat(),
+                                  via="owner_denied")
+    if not a:
+        raise HTTPException(404, "no such approval")
+    return {"id": approval_id, "status": "denied"}
+
+
+class GrantReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    tool: str
+    on: bool = True
+
+
+@app.post("/approvals/grant")
+def approvals_grant(req: GrantReq):
+    """Session-grant: auto-approve this tool for the rest of the session (fights fatigue)."""
+    from .agents.approvals import grant_session, revoke_session
+    (grant_session if req.on else revoke_session)(req.tenant_id, req.tool)
+    return {"tool": req.tool, "granted": req.on}
+
+
 @app.get("/search")
 def search(q: str = "", tenant_id: str = "ramesh_auto"):
     """Enterprise search — case-insensitive substring over title/desc/meta fields."""

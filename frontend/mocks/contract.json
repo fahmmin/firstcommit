@@ -323,11 +323,26 @@
       }
     },
 
+    "GET /approvals?tenant_id=&status= [TODO]": {
+      "$comment": "A1 durable action-approval ledger. Side-effecting agent actions are queued here (status=pending) until the owner approves/denies. Reads auto-run and never appear.",
+      "response": [{ "id": "apr-1", "tool": "create_invoice", "title": "Add invoice for Kapil Auto (₹12,400)", "agent": "vasool", "risk": "ask", "status": "pending", "args": {}, "created_at": "2026-09-26T04:00:00Z" }]
+    },
+    "POST /approvals/{id}/approve [TODO]": {
+      "$comment": "Owner approves → the queued action executes now.",
+      "response": { "id": "apr-1", "status": "executed", "result": {} }
+    },
+    "POST /approvals/{id}/deny [TODO]": { "response": { "id": "apr-1", "status": "denied" } },
+    "POST /approvals/grant [TODO]": {
+      "$comment": "Session-grant: auto-approve this tool for the rest of the session (approval-fatigue escape hatch).",
+      "request": { "tenant_id": "ramesh_auto", "tool": "create_invoice", "on": true },
+      "response": { "tool": "create_invoice", "granted": true }
+    },
+
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },
     "GET /health [EXISTS]": { "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" } }
   },
 
-  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched", "onboarding_completed"]
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched", "onboarding_completed", "action_queued", "action_approved"]
 }

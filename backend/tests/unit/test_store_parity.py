@@ -20,7 +20,7 @@ class TestStoreParity:
 
     _ALL_COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
                         "tasks", "notifications", "connectors", "settings", "activity",
-                        "memories", "artifacts", "documents")
+                        "memories", "artifacts", "documents", "listings", "approvals")
 
     def _store(self, impl, tmp_path):
         if impl == "local":
@@ -139,3 +139,12 @@ class TestStoreParity:
         assert s.delete_document(self.T, "doc-1") is True
         assert s.delete_document(self.T, "doc-1") is False
         assert s.list_documents(self.T) == []
+
+    def test_approval_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_approval(self.T, {"id": "apr-1", "tool": "create_invoice", "status": "pending",
+                                "title": "Add invoice", "args": {"amount": 100}})
+        assert s.get_approval(self.T, "apr-1")["status"] == "pending"
+        s.update_approval(self.T, "apr-1", status="executed")
+        assert s.get_approval(self.T, "apr-1")["status"] == "executed"
+        assert len(s.list_approvals(self.T)) == 1

@@ -331,6 +331,47 @@ def test_recall_context_cites_documents(client):
     assert r.status_code == 200 and "falcon" in r.json()["reply"].lower()
 
 
+# ---------- A1: per-action approval engine ----------
+
+def test_agent_action_queues_for_approval(client):
+    """An agent 'create invoice' is queued (not executed) → owner approves → it runs."""
+    from app.agents import approvals as appr
+    appr.revoke_session("ramesh_auto", "create_invoice")
+    before = len(client.get("/invoices").json())
+    chat = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                      "text": "bill banao for Test Traders"}).json()
+    # queued, not executed
+    assert "approval" in chat["reply"].lower()
+    assert len(client.get("/invoices").json()) == before
+    pend = [a for a in client.get("/approvals", params={"status": "pending"}).json()
+            if a["tool"] == "create_invoice"]
+    assert pend, "expected a pending approval"
+    assert _keys(pend[0]) >= _keys(_ep("GET /approvals?tenant_id=&status=")["response"][0])
+    # approve → executes
+    ap = client.post(f"/approvals/{pend[0]['id']}/approve", params={"tenant_id": "ramesh_auto"})
+    assert ap.status_code == 200 and ap.json()["status"] == "executed"
+    assert len(client.get("/invoices").json()) == before + 1
+
+
+def test_approval_deny_and_session_grant(client):
+    from app.agents import approvals as appr
+    appr.revoke_session("ramesh_auto", "create_invoice")
+    q = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                   "text": "bill banao for Deny Co"}).json()
+    pend = [a for a in client.get("/approvals", params={"status": "pending"}).json()
+            if a["tool"] == "create_invoice"][0]
+    d = client.post(f"/approvals/{pend['id']}/deny", params={"tenant_id": "ramesh_auto"})
+    assert d.status_code == 200 and d.json()["status"] == "denied"
+    # session-grant → next agent create runs immediately (no queue)
+    client.post("/approvals/grant", json={"tenant_id": "ramesh_auto", "tool": "create_invoice", "on": True})
+    before = len(client.get("/invoices").json())
+    r = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                   "text": "bill banao for Granted Co"}).json()
+    assert "approval" not in r["reply"].lower()
+    assert len(client.get("/invoices").json()) == before + 1
+    appr.revoke_session("ramesh_auto", "create_invoice")
+
+
 # ---------- Phase A: people / logs / brief ----------
 
 def test_people_aggregation(client):

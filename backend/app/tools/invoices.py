@@ -193,6 +193,12 @@ def invoice_tools(tenant_id: str) -> list:
     @tool
     def create_invoice(buyer: str, amount: float, due_date: str, items: str = "", invoice_no: str = "") -> dict:
         """Create an invoice row in the ledger."""
+        from ..agents.approvals import gate
+        args = {"buyer": buyer, "amount": amount, "due_date": due_date,
+                "items": items, "invoice_no": invoice_no}
+        q = gate(tenant_id, "create_invoice", args, f"Add invoice for {buyer} (₹{amount:,.0f})")
+        if q:  # queued for owner approval (or denied) — don't write yet
+            return q
         inv = create_invoice_impl(tenant_id, buyer, amount, due_date, items, invoice_no)
         return {"invoice": inv, "reply": f"Invoice {inv['invoice_no']} for {buyer} (₹{amount:,}) added to the ledger."}
 

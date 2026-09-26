@@ -19,7 +19,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 COLLS = ["specs", "invoices", "suppliers", "carriers", "alerts", "payables",
          "tasks", "notifications", "connectors", "settings", "activity",
-         "memories", "artifacts", "documents", "listings"]
+         "memories", "artifacts", "documents", "listings", "approvals"]
 
 if os.getenv("USE_AWS") != "1":
     print("USE_AWS != 1 — set it in .env first"); sys.exit(1)

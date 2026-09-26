@@ -134,6 +134,16 @@ class Store(ABC):
     @abstractmethod
     def delete_document(self, tenant_id: str, doc_id: str) -> bool: ...
 
+    # approvals (durable action-approval ledger — A1)
+    @abstractmethod
+    def list_approvals(self, tenant_id: str) -> list[dict]: ...
+    @abstractmethod
+    def get_approval(self, tenant_id: str, approval_id: str) -> dict | None: ...
+    @abstractmethod
+    def put_approval(self, tenant_id: str, approval: dict) -> dict: ...
+    @abstractmethod
+    def update_approval(self, tenant_id: str, approval_id: str, **fields) -> dict | None: ...
+
     # seed/reset
     @abstractmethod
     def reset(self, tenant_id: str, seed: dict) -> None: ...
@@ -144,7 +154,7 @@ class LocalStore(Store):
 
     _COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
                     "tasks", "notifications", "connectors", "settings", "activity",
-                    "memories", "artifacts", "documents", "listings")
+                    "memories", "artifacts", "documents", "listings", "approvals")
 
     def __init__(self, data_dir: Path | None = None):
         self.dir = data_dir or DATA_DIR
@@ -356,6 +366,19 @@ class LocalStore(Store):
     def delete_document(self, tenant_id, doc_id):
         return self._delete("documents", tenant_id, doc_id)
 
+    # approvals
+    def list_approvals(self, tenant_id):
+        return self._rows("approvals", tenant_id)
+
+    def get_approval(self, tenant_id, approval_id):
+        return next((a for a in self.list_approvals(tenant_id) if a["id"] == approval_id), None)
+
+    def put_approval(self, tenant_id, approval):
+        return self._put("approvals", tenant_id, approval)
+
+    def update_approval(self, tenant_id, approval_id, **fields):
+        return self._update("approvals", tenant_id, approval_id, **fields)
+
     def reset(self, tenant_id, seed):
         for coll in self._COLLECTIONS:
             if coll in seed:
@@ -407,6 +430,7 @@ class DynamoStore(Store):
         "artifacts": "DDB_TABLE_ARTIFACTS",
         "documents": "DDB_TABLE_DOCUMENTS",
         "listings": "DDB_TABLE_LISTINGS",
+        "approvals": "DDB_TABLE_APPROVALS",
     }
 
     def __init__(self, region: str | None = None):
@@ -600,6 +624,19 @@ class DynamoStore(Store):
             return False
         self.tables["documents"].delete_item(Key={"tenant_id": tenant_id, "id": doc_id})
         return True
+
+    # approvals
+    def list_approvals(self, tenant_id):
+        return self._all("approvals", tenant_id)
+
+    def get_approval(self, tenant_id, approval_id):
+        return self._put_get("approvals", tenant_id, approval_id)
+
+    def put_approval(self, tenant_id, approval):
+        return self._put("approvals", tenant_id, approval)
+
+    def update_approval(self, tenant_id, approval_id, **fields):
+        return self._update("approvals", tenant_id, approval_id, **fields)
 
     def reset(self, tenant_id, seed):
         # clear every existing row for the tenant first — a spec-free seed
