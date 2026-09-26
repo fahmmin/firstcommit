@@ -315,18 +315,42 @@ class LoginReq(BaseModel):
     provider_id: str | None = None
 
 
+def _tenant_slug(req: "LoginReq") -> str:
+    """Guests land on the seeded showcase; real logins get their own tenant."""
+    if req.provider == "guest":
+        return "ramesh_auto"
+    raw = req.provider_id or req.name or "user"
+    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")[:24] or "user"
+    return "ramesh_auto" if slug in ("ramesh_auto", "ramesh") else slug
+
+
+def _ensure_tenant(tenant_id: str, name: str = "", business: str = "") -> bool:
+    """Create a minimal settings row for a brand-new tenant. Returns True if created."""
+    if deps.store.get_settings(tenant_id):
+        return False
+    deps.store.put_settings(tenant_id, {
+        "business": {"name": business, "owner": name}, "prefs": {}, "onboarded": False,
+        "mcp_servers": [],
+    })
+    return True
+
+
 @app.post("/auth/login")
 def login(req: LoginReq):
-    """Demo login — provider adapters are client-side; this resolves tenant + token."""
-    s = deps.store.get_settings("ramesh_auto") or {}
+    """Demo login — provider adapters are client-side; this resolves tenant + token.
+    Real multi-tenant: the session carries tenant_id; new tenants start empty → onboarding."""
+    tenant_id = _tenant_slug(req)
+    _ensure_tenant(tenant_id, name=req.name, business=req.business)
+    s = deps.store.get_settings(tenant_id) or {}
     biz = s.get("business", {})
-    slug = re.sub(r"[^a-z0-9]+", "", (req.provider_id or req.name).lower())[:12] or "user"
+    # onboarded if explicitly flagged OR the tenant already has ledger data (the showcase)
+    onboarded = bool(s.get("onboarded")) or bool(deps.store.list_invoices(tenant_id))
     return {
-        "token": f"demo-tok-{slug}",
-        "tenant_id": "ramesh_auto",
-        "user": {"name": req.name, "business": req.business,
+        "token": f"demo-tok-{tenant_id}",
+        "tenant_id": tenant_id,
+        "user": {"name": req.name, "business": req.business or biz.get("name", ""),
                  "city": biz.get("city", ""), "line": biz.get("line", "")},
-        "onboarded": bool(s.get("onboarded", True)),
+        "onboarded": onboarded,
     }
 
 
@@ -661,7 +685,9 @@ def sync_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
 def settings(tenant_id: str = "ramesh_auto"):
     s = deps.store.get_settings(tenant_id)
     if not s:
-        raise HTTPException(404, "no settings seeded")
+        # brand-new tenant (pre-onboarding) → honest empty skeleton, not a 404
+        return {"business": {}, "onboarded": False,
+                "prefs": {"disabled_tools": []}, "mcp_servers": []}
     return {
         "business": s.get("business", {}),
         "onboarded": s.get("onboarded", True),

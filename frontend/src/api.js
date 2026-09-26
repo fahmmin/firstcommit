@@ -2,7 +2,12 @@
 // Vite proxies /api → localhost:8000 in dev. Point VITE_API_URL elsewhere for prod.
 
 const BASE = import.meta.env.VITE_API_URL || '/api'
-export const TENANT = 'ramesh_auto'
+// Multi-tenant: the logged-in session carries tenant_id (guests → ramesh_auto
+// showcase). `export let` is a live binding, so reassigning it on login updates
+// every page that reads TENANT — no per-call plumbing needed.
+const _session = () => { try { return JSON.parse(localStorage.getItem('sahayak_session')) } catch { return null } }
+export let TENANT = _session()?.tenant_id || 'ramesh_auto'
+export const setTenant = (id) => { TENANT = id || 'ramesh_auto' }
 
 import { demo, demoSearch } from './lib/demo.js'
 

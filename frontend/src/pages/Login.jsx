@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api } from '../api.js'
+import { api, setTenant } from '../api.js'
 import { session } from '../lib/auth.js'
 import { MFACode } from '../components/rui/MFACode.jsx'
 import { Blobs } from '../components/Logo.jsx'
@@ -19,6 +19,7 @@ export default function Login() {
     try {
       const r = await api.login({ provider, provider_id, name, business })
       session.set(r)
+      setTenant(r.tenant_id)   // route all subsequent API calls to this tenant
       location.hash = r.onboarded ? '#/app' : '#/onboarding'
     } catch (e) {
       setErr('Couldn\'t reach the backend — it may be cold-starting; retry in a few seconds.')

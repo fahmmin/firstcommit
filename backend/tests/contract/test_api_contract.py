@@ -121,6 +121,23 @@ def test_login(client):
     assert _keys(r.json()) >= _keys(_ep("POST /auth/login")["response"])
 
 
+def test_login_multitenant_isolation(client):
+    # guest → seeded showcase, already onboarded
+    g = client.post("/auth/login", json={"provider": "guest", "name": "Ramesh Gupta"}).json()
+    assert g["tenant_id"] == "ramesh_auto" and g["onboarded"] is True
+    # real login → own tenant, empty, not onboarded → routes to onboarding
+    n = client.post("/auth/login", json={"provider": "google",
+                    "provider_id": "neha@newco.in", "name": "Neha", "business": "NewCo"}).json()
+    assert n["tenant_id"] != "ramesh_auto" and n["onboarded"] is False
+    tid = n["tenant_id"]
+    # new tenant: /settings returns a skeleton (not 404), and no ledger data (isolation)
+    s = client.get("/settings", params={"tenant_id": tid})
+    assert s.status_code == 200 and s.json()["onboarded"] is False
+    assert client.get("/invoices", params={"tenant_id": tid}).json() == []
+    # showcase tenant still has its data
+    assert len(client.get("/invoices", params={"tenant_id": "ramesh_auto"}).json()) > 0
+
+
 def test_dashboard_summary(client):
     r = client.get("/dashboard/summary", params={"tenant_id": "ramesh_auto"})
     assert r.status_code == 200
