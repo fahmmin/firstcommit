@@ -59,7 +59,8 @@
         "agent_name": "vasool",
         "agent_tagline": "पैसा वसूलने वाला",
         "actions": [{ "type": "invoices_listed", "data": {} }],
-        "trace": ["sahayak", "vasool"]
+        "trace": ["sahayak", "vasool"],
+        "usage": { "tools": ["vasool"], "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0, "latency_ms": 12 }
       }
     },
 
@@ -279,8 +280,12 @@
       }
     },
     "GET /logs?tenant_id= [TODO]": {
-      "$comment": "Unified activity/audit log — dashboard activity feed + agent actions.",
+      "$comment": "Unified activity/audit log — dashboard activity feed + agent actions + agent_run telemetry.",
       "response": [{ "id": "act-1", "ts": "2026-09-19T02:10:00Z", "kind": "agent_created", "text": "Nirmata hired 'Logistics Agent'" }]
+    },
+    "GET /metrics?tenant_id= [TODO]": {
+      "$comment": "D2 observability — aggregate agent-run telemetry (tokens, est cost, latency, tool histogram). Each POST /chat also returns a per-run `usage` block.",
+      "response": { "runs": 12, "total_tokens": 48213, "est_cost_usd": 0.0412, "avg_latency_ms": 1830, "by_tool": { "vasool": 5, "sourcer": 2 }, "recent": [] }
     },
     "GET /templates?tenant_id= [TODO]": {
       "$comment": "Prompt/agent template catalog. category ∈ money|procurement|logistics|new_agent|presence. runs_on names the agent; new_agent/presence carry an agent_spec that /templates/{id}/install feeds to the factory.",

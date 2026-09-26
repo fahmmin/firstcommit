@@ -124,6 +124,8 @@ def chat(req: ChatReq):
                 f"web_search tool{' with deep=True' if req.mode == 'deep' else ''}] " + text)
     actions: list[dict] = []
     token = deps.current_actions.set(actions)
+    from .tracing import record_run, run_metrics, timer
+    _t = timer().__enter__()
     try:
         if req.agent_id:
             agent = (registry.get_agent(req.agent_id, only_tools=req.scope)
@@ -147,15 +149,21 @@ def chat(req: ChatReq):
     finally:
         deps.current_actions.reset(token)
 
+    _t.__exit__()
     spec = registry.get_spec(agent_name) or {}
     trace = ["sahayak"] + ([agent_name] if agent_name != "sahayak" else [])
     reply = re.sub(r"</?(thinking|response)>.*?</(thinking|response)>|</?(thinking|response)>", "", str(result), flags=re.DOTALL).strip()
+    model = os.getenv("ORCHESTRATOR_MODEL" if agent_name in ("sahayak", "nirmata")
+                      else "WORKER_MODEL", "mock")
+    usage = run_metrics(result, _t.ms, model)
+    record_run(req.tenant_id, agent_name, usage)
     return {
         "reply": reply,
         "agent_name": agent_name,
         "agent_tagline": spec.get("hindi_tagline", ""),
         "actions": actions,
         "trace": trace,
+        "usage": usage,
     }
 
 
@@ -1226,6 +1234,26 @@ def people(tenant_id: str = "ramesh_auto"):
 def logs(tenant_id: str = "ramesh_auto", limit: int = 50):
     """Unified activity/audit log (dashboard feed + agent actions)."""
     return deps.store.list_activity(tenant_id, limit=limit)
+
+
+@app.get("/metrics")
+def metrics(tenant_id: str = "ramesh_auto"):
+    """D2 observability — aggregate agent-run telemetry (tokens, est cost, latency, tools)."""
+    from collections import Counter
+    runs = [a for a in deps.store.list_activity(tenant_id, limit=1000)
+            if a.get("kind") == "agent_run"]
+    tool_hist: Counter = Counter()
+    for r in runs:
+        tool_hist.update(r.get("tools", []))
+    lat = [r.get("latency_ms", 0) for r in runs]
+    return {
+        "runs": len(runs),
+        "total_tokens": sum(r.get("total_tokens", 0) for r in runs),
+        "est_cost_usd": round(sum(r.get("cost_usd", 0) for r in runs), 4),
+        "avg_latency_ms": int(sum(lat) / len(lat)) if lat else 0,
+        "by_tool": dict(tool_hist.most_common()),
+        "recent": runs[:15],
+    }
 
 
 # ================= A1 — action approval ledger =================
