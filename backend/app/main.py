@@ -98,10 +98,16 @@ class ChatReq(BaseModel):
 
 class SpecReq(BaseModel):
     tenant_id: str = "ramesh_auto"
-    name: str
-    goal: str
-    tools: list[str]
+    name: str = ""
+    goal: str = ""
+    tools: list[str] = []
     hindi_tagline: str = ""
+    role_id: str | None = None   # A2 — hire from the role registry (roles.py)
+
+
+class BatchHireReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    roles: list[dict]            # [{role_id, name?, tools?}]
 
 
 @app.get("/health")
@@ -177,8 +183,29 @@ def agents(tenant_id: str = "ramesh_auto"):
     return reg.get_registry(tenant_id).specs()
 
 
+@app.get("/roles")
+def roles():
+    """A2 — the data-driven catalogue of hireable roles (tools, limits, guardrails)."""
+    from .agents.roles import catalog
+    return catalog()
+
+
 @app.post("/agents/preview")
 def preview_agent(req: SpecReq):
+    if req.role_id:
+        from .agents.roles import ROLE_REGISTRY
+        role = ROLE_REGISTRY.get(req.role_id)
+        if not role:
+            raise HTTPException(404, "unknown role")
+        tools, refused = role.resolve_tools(req.tools or None)
+        return {
+            "valid": bool(tools),
+            "spec": {"name": req.name or role.name, "goal": req.goal or role.goal, "tools": tools,
+                     "hindi_tagline": req.hindi_tagline or role.hindi_tagline, "role_id": role.id,
+                     "guardrails": {"allowed_tools": tools, "max_action": role.max_action}},
+            "warnings": [f"refused (outside role or over its {role.tool_limit}-tool limit): {refused}"]
+                        if refused else [],
+        }
     tools = [t for t in req.tools if t in ALL_TOOL_NAMES]
     warnings = [f"dropped unknown tools: {sorted(set(req.tools) - set(tools))}"] if len(tools) != len(req.tools) else []
     if not tools:
@@ -194,6 +221,16 @@ def preview_agent(req: SpecReq):
 
 @app.post("/agents")
 def create_agent(req: SpecReq):
+    if req.role_id:
+        try:
+            spec = reg.get_registry(req.tenant_id).create_spec(
+                name=req.name, goal=req.goal, tools=req.tools or None,
+                hindi_tagline=req.hindi_tagline, role_id=req.role_id)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"], "spec": spec}
+    if not req.name or not req.goal:
+        raise HTTPException(422, "name and goal are required (or pass role_id)")
     valid = [t for t in req.tools if t in ALL_TOOL_NAMES]
     if not valid:
         raise HTTPException(400, f"no valid tools — allowed: {sorted(ALL_TOOL_NAMES)}")
@@ -201,6 +238,21 @@ def create_agent(req: SpecReq):
         name=req.name, goal=req.goal, tools=valid, hindi_tagline=req.hindi_tagline
     )
     return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"], "spec": spec}
+
+
+@app.post("/agents/batch")
+def hire_batch(req: BatchHireReq):
+    """Hire several role-based agents at once (one routing rebuild). Partial
+    success is normal: each item lands in `hired` or `errors`."""
+    if not req.roles:
+        raise HTTPException(400, "roles is empty")
+    res = reg.get_registry(req.tenant_id).hire_roles(req.roles)
+    for spec in res["hired"]:
+        deps.record_action("agent_created", {"spec": spec})
+    return {"hired": [{"id": s["id"], "name": s["name"], "role_id": s.get("role_id"),
+                       "tools": s["tools"], "refused_tools": s.get("refused_tools", [])}
+                      for s in res["hired"]],
+            "errors": res["errors"]}
 
 
 @app.post("/upload")
@@ -1212,7 +1264,6 @@ class OnboardingReq(BaseModel):
 @app.post("/onboarding")
 def onboarding(req: OnboardingReq):
     """Rich first-run wizard — one call: profile + prefs + memories + agent setup."""
-    from .agents.specs import ALL_TOOL_NAMES
     from .templates_catalog import get_template
     tid = req.tenant_id
 
@@ -1243,7 +1294,7 @@ def onboarding(req: OnboardingReq):
     # 3. pains → agents (auto-hire the magic, or suggest)
     registry = reg.get_registry(tid)
     existing_names = {s.get("name", "").lower() for s in registry.specs()}
-    agents_installed, suggested, seen = [], [], set()
+    agents_installed, suggested, seen, to_hire = [], [], set(), []
     for pain in req.pains:
         entry = _PAIN_MAP.get(pain)
         if not entry or entry[0] in seen:
@@ -1252,14 +1303,16 @@ def onboarding(req: OnboardingReq):
         seen.add(tmpl_id)
         t = get_template(tmpl_id) or {}
         spec_def = t.get("agent_spec")
-        valid = [x for x in (spec_def or {}).get("tools", []) if x in ALL_TOOL_NAMES]
-        if req.auto_hire and spec_def and valid and spec_def["name"].lower() not in existing_names:
-            spec = registry.create_spec(name=spec_def["name"], goal=spec_def["goal"],
-                                        tools=valid, hindi_tagline=spec_def.get("hindi_tagline", ""))
-            agents_installed.append({"id": spec["id"], "name": spec["name"]})
+        if req.auto_hire and spec_def and t.get("role_id") and spec_def["name"].lower() not in existing_names:
+            to_hire.append({"role_id": t["role_id"], "name": spec_def["name"],
+                            "goal": spec_def.get("goal", ""), "tools": spec_def.get("tools")})
         else:
             suggested.append({"template_id": tmpl_id, "title": t.get("title", tmpl_id),
-                              "reason": reason})
+                              "role_id": t.get("role_id"), "reason": reason})
+    if to_hire:  # one batch → one routing rebuild (A2 hire_roles)
+        res = registry.hire_roles(to_hire)
+        agents_installed = [{"id": s["id"], "name": s["name"], "role_id": s.get("role_id")}
+                            for s in res["hired"]]
 
     next_steps = []
     # too_many_excels is a pain with no specialist agent → it's a next-step (import ledger)
@@ -1294,7 +1347,7 @@ def install_template(template_id: str, req: TemplateInstallReq):
     if spec_def and valid_tools:
         spec = reg.get_registry(req.tenant_id).create_spec(
             name=spec_def["name"], goal=spec_def["goal"], tools=valid_tools,
-            hindi_tagline=spec_def.get("hindi_tagline", ""))
+            hindi_tagline=spec_def.get("hindi_tagline", ""), role_id=t.get("role_id"))
         deps.record_action("template_installed", {"template": template_id, "agent_id": spec["id"]})
         return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"]}
     # no ready toolset (e.g. digital presence) → the owner runs it and Nirmata hires live

@@ -177,52 +177,48 @@ def orchestrator_rules(specs: list[dict]) -> list[MockRule]:
 
 # ---- Nirmata interview (2-turn) ----
 
+_PREVIEWS = ("preview_spec", "preview_team")
+
+
+def _last_preview(messages: Messages) -> str | None:
+    """Name of the most recent preview tool call in the transcript, if any."""
+    for m in reversed(messages):
+        for c in m.get("content", []):
+            tu = c.get("toolUse")
+            if tu and tu.get("name") in _PREVIEWS:
+                return tu["name"]
+    return None
+
+
 def _already_previewed(messages: Messages) -> bool:
-    return any(
-        "toolUse" in c and c["toolUse"]["name"] == "preview_spec"
-        for m in messages for c in m.get("content", [])
-    )
+    return _last_preview(messages) is not None
 
 
 def _not_yet_previewed(messages: Messages) -> bool:
     return not _already_previewed(messages)
 
 
+def _team_previewed(messages: Messages) -> bool:
+    return _last_preview(messages) == "preview_team"
+
+
+def _spec_previewed(messages: Messages) -> bool:
+    return _last_preview(messages) == "preview_spec"
+
+
+def _preview_team_args(text: str) -> dict:
+    """Roles drafted from the owner's own words — data-driven (roles.py), and
+    several problems in one message preview several hires. Logistics is the
+    factory's default when nothing specific matches."""
+    from .roles import match_roles
+    return {"role_ids": match_roles(text) or ["logistics"]}
+
+
 def _preview_args(text: str) -> dict:
-    """Spec drafted from the owner's own words — the preview mirrors intent."""
-    t = text.lower()
-    if any(k in t for k in ("online", "storefront", "website", "marketplace", "indiamart",
-                            "shopify", "instagram", "facebook", "listing", "seo", "sell")):
-        return {"name": "Digital Presence Agent",
-                "goal": "Put the catalogue online — storefront, marketplace listings, SEO",
-                "tools": ["sync_catalog", "publish_listing", "seo_audit", "storefront_builder"],
-                "hindi_tagline": "ऑनलाइन दुकान"}
-    if any(k in t for k in ("gst", "tax", "filing", "compliance", "deadline")):
-        return {"name": "Compliance Agent",
-                "goal": "Watch GST deadlines, filings and what needs signing",
-                "tools": ["list_alerts", "schedule_alert", "aging_report", "timeline"],
-                "hindi_tagline": "कानून का ख्याल"}
-    if any(k in t for k in ("supplier", "vendor", "purchase", "stock", "moq", "price", "sourcing")):
-        return {"name": "Procurement Agent",
-                "goal": "Track suppliers, compare prices and watch reorder points",
-                "tools": ["search_catalog", "check_stock", "compare_prices", "trust_score",
-                          "suggest_moq_pool"],
-                "hindi_tagline": "सही दाम पे सामान"}
-    if any(k in t for k in ("cash", "working capital", "terms", "margin", "loan", "90 day")):
-        return {"name": "Working Capital Agent",
-                "goal": "Guard against cash-flow gaps and bad payment terms",
-                "tools": ["timeline", "term_gap_analysis", "order_advisor"],
-                "hindi_tagline": "कैश का हिसाब"}
-    if any(k in t for k in ("payment", "invoice", "overdue", "collect", "udhaar", "reminder")):
-        return {"name": "Collections Agent",
-                "goal": "Chase overdue invoices and draft payment reminders",
-                "tools": ["list_overdue", "aging_report", "draft_reminder", "schedule_alert",
-                          "list_alerts"],
-                "hindi_tagline": "पैसा वसूलने वाला"}
-    return {"name": "Logistics Agent",
-            "goal": "Find backup transport and book pickups when scheduled carriers fail",
-            "tools": ["list_carriers", "quote_pickup", "book_pickup", "send_reminder", "list_alerts"],
-            "hindi_tagline": "सामान पहुँचाने वाला"}
+    """Single-spec view of the best-matching role (legacy preview_spec shape)."""
+    from .roles import get_role
+    r = get_role(_preview_team_args(text)["role_ids"][0])
+    return {"name": r.name, "goal": r.goal, "tools": r.default_tools, "hindi_tagline": r.hindi_tagline}
 
 
 def _create_args_from_preview(messages: Messages) -> dict:
@@ -243,6 +239,19 @@ def _create_args_from_preview(messages: Messages) -> dict:
 _create_args_from_preview._wants_messages = True
 
 
+def _hire_args_from_preview(messages: Messages) -> dict:
+    """hire_team hires exactly the roles the owner saw in preview_team."""
+    for m in reversed(messages):
+        for c in m.get("content", []):
+            tu = c.get("toolUse")
+            if tu and tu.get("name") == "preview_team":
+                return {"role_ids": tu.get("input", {}).get("role_ids", [])}
+    return {"role_ids": ["logistics"]}
+
+
+_hire_args_from_preview._wants_messages = True
+
+
 NIRMATA_RULES: list[MockRule] = [
     # turn 2 — owner confirms → actually create (spec = the preview they saw).
     # Keywords stay pure affirmatives: a NEW request carrying "hire"/"agent"
@@ -250,9 +259,16 @@ NIRMATA_RULES: list[MockRule] = [
     MockRule(
         keywords=["yes", "haan", "ok", "sure", "do it", "confirm", "go ahead",
                   "sounds good", "looks good", "perfect", "theek hai"],
+        tool="hire_team",
+        args=_hire_args_from_preview,
+        when=_team_previewed,
+    ),
+    MockRule(
+        keywords=["yes", "haan", "ok", "sure", "do it", "confirm", "go ahead",
+                  "sounds good", "looks good", "perfect", "theek hai"],
         tool="create_agent",
         args=_create_args_from_preview,
-        when=_already_previewed,
+        when=_spec_previewed,
     ),
     # turn 1 — problem stated → draft the spec. Always eligible: a fresh request
     # re-previews even while an older preview is still pending.
@@ -260,9 +276,10 @@ NIRMATA_RULES: list[MockRule] = [
         keywords=["transporter", "ditch", "didn't show", "nahi aaya", "no show", "stranded",
                   "agent", "build", "create", "hire", "logistics", "delivery", "pickup", "truck",
                   "sell online", "online", "storefront", "website", "marketplace", "gst",
-                  "compliance", "filing", "supplier", "collections", "specialist", "problem"],
-        tool="preview_spec",
-        args=_preview_args,
+                  "compliance", "filing", "supplier", "collections", "specialist", "problem",
+                  "customer support", "reporting", "report agent", "team"],
+        tool="preview_team",
+        args=_preview_team_args,
     ),
     MockRule(
         keywords=["tools", "what can", "available", "list tools"],

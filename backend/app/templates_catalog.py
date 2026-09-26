@@ -3,8 +3,9 @@
 Two kinds:
 - prompt templates: `runs_on` names an existing agent; the client drops `prompt`
   into the composer (no agent created).
-- agent templates: carry an `agent_spec` (name/goal/tools). Installing one that
-  has valid tools creates the agent via the factory (registry.create_spec).
+- agent templates: carry an `agent_spec` (name/goal/tools) and a `role_id` from
+  the role registry (agents/roles.py). Installing one creates the agent via the
+  factory (registry.create_spec(role_id=…)), clamped to that role's tool limits.
   `runs_on: nirmata` with empty tools → the owner runs `prompt` and Nirmata
   interviews + hires live (the demo "factory moment").
 """
@@ -56,21 +57,21 @@ TEMPLATES: list[dict] = [
      "prompt": "Build a tracking page for my latest shipment to Ludhiana.", "runs_on": "nirmata"},
 
     # ---- new agent (factory) ----
-    {"id": "hire-logistics", "category": "new_agent", "title": "Hire a logistics agent",
+    {"id": "hire-logistics", "role_id": "logistics", "category": "new_agent", "title": "Hire a logistics agent",
      "desc": "The magic moment — Nirmata builds one live",
      "prompt": "Mera transporter nahi aaya, order stranded hai — I need a logistics agent.",
      "runs_on": "nirmata",
      "agent_spec": {"name": "Logistics Agent", "goal": "Find backup transport and book pickups when carriers fail",
                     "tools": ["list_carriers", "quote_pickup", "book_pickup"],
                     "hindi_tagline": "सामान पहुँचाने वाला"}},
-    {"id": "collections-agent", "category": "new_agent", "title": "Dedicated collections agent",
+    {"id": "collections-agent", "role_id": "collections", "category": "new_agent", "title": "Dedicated collections agent",
      "desc": "A specialist that only chases money",
      "prompt": "Hire an agent whose only job is chasing overdue payments.",
      "runs_on": "nirmata",
      "agent_spec": {"name": "Collections Agent", "goal": "Relentlessly track and recover overdue receivables",
                     "tools": ["list_overdue", "aging_report", "draft_reminder", "schedule_alert"],
                     "hindi_tagline": "वसूली विशेषज्ञ"}},
-    {"id": "compliance-agent", "category": "new_agent", "title": "Compliance agent",
+    {"id": "compliance-agent", "role_id": "compliance", "category": "new_agent", "title": "Compliance agent",
      "desc": "GST / TDS filing deadline watcher",
      "prompt": "Hire an agent to watch my GST and filing deadlines.",
      "runs_on": "nirmata",
@@ -78,7 +79,7 @@ TEMPLATES: list[dict] = [
                     "tools": ["schedule_alert", "list_alerts"], "hindi_tagline": "कानूनी पहरेदार"}},
 
     # ---- presence / growth ----
-    {"id": "digital-presence", "category": "presence", "title": "Digital presence agent",
+    {"id": "digital-presence", "role_id": "digital_presence", "category": "presence", "title": "Digital presence agent",
      "desc": "Facebook Marketplace, IndiaMART, Shopify + SEO — one agent",
      "prompt": "I want to sell online. Hire an agent that publishes my products to Facebook "
                "Marketplace and IndiaMART, builds a web storefront, and keeps listings SEO-optimized.",

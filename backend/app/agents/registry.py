@@ -20,7 +20,9 @@ from ..tools.artifacts import artifact_tools
 from ..tools.context import build_memory_suffix, memory_tools
 from ..tools.websearch import web_search_tools
 from . import mock_rules
-from .specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec, BUILTIN_SPECS, build_tool_map
+from .roles import ROLE_REGISTRY, catalog as role_catalog, get_role
+from .specs import (ALL_EXTRA_TOOL_NAMES, ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec, BUILTIN_SPECS,
+                    build_tool_map, extra_tool_names)
 
 
 def _session_manager(session_id: str):
@@ -78,10 +80,32 @@ class AgentRegistry:
         self._agents.clear()
         self._orchestrator = None
 
-    def create_spec(self, name: str, goal: str, tools: list[str],
-                    hindi_tagline: str = "", persona_prompt: str = "") -> dict:
-        """Validate → persist → warm the agent. This IS the Factory's output artifact."""
-        tools = [t for t in tools if t in ALL_TOOL_NAMES]
+    def create_spec(self, name: str = "", goal: str = "", tools: list[str] | None = None,
+                    hindi_tagline: str = "", persona_prompt: str = "",
+                    role_id: str | None = None, reset: bool = True) -> dict:
+        """Validate → persist → warm the agent. This IS the Factory's output artifact.
+
+        With `role_id` the hire is clamped by the RoleDef (roles.py): tools default
+        to the role's, requests outside `allowed_tools` are refused, the rest are
+        capped at `tool_limit`, and guardrails/extras come from the role.
+        `reset=False` lets hire_roles batch several hires behind ONE rebuild."""
+        refused: list[str] = []
+        max_action, extras, description, icon = "draft_only", None, "", "sparkles"
+        if role_id:
+            role = get_role(role_id)
+            tools, refused = role.resolve_tools(tools)
+            name = name or role.name
+            goal = goal or role.goal
+            hindi_tagline = hindi_tagline or role.hindi_tagline
+            max_action, extras = role.max_action, extra_tool_names(role.extras)
+            description, icon = role.description, role.icon
+        else:
+            tools = [t for t in (tools or []) if t in ALL_TOOL_NAMES]
+        if not name or not goal:
+            raise ValueError("a hire needs a name and a goal (or a role_id)")
+        guardrails = {"allowed_tools": tools, "max_action": max_action}
+        if extras is not None:
+            guardrails["extra_tools"] = extras
         spec = AgentSpec(
             id=f"agent-{uuid.uuid4().hex[:6]}",
             name=name, goal=goal, tools=tools,
@@ -94,27 +118,50 @@ class AgentRegistry:
             ),
             created_by="factory",
             created_at=datetime.now(timezone.utc).isoformat(),
-            icon="sparkles",
-            guardrails={"allowed_tools": tools, "max_action": "draft_only"},
+            icon=icon, description=description, role_id=role_id,
+            guardrails=guardrails,
         )
         stored = deps.store.put_spec(self.tenant_id, spec.model_dump())
-        self.get_agent(spec.id)  # warm
-        self._orchestrator = None  # rebuild the routing table — the new hire must be reachable
+        if refused:
+            stored = {**stored, "refused_tools": refused}
+        if reset:
+            self.get_agent(spec.id)  # warm
+            self._orchestrator = None  # rebuild the routing table — the new hire must be reachable
         deps.log_activity(self.tenant_id, "agent_created", f"Nirmata hired '{spec.name}' for you")
         deps.notify(self.tenant_id, "info", f"{spec.name} hired",
                     body="Nirmata created this specialist from your description",
                     ref_id=spec.id)
         return stored
 
+    def hire_roles(self, items: list[dict]) -> dict:
+        """Hire several role-based agents at once — one routing rebuild at the end.
+        items: [{role_id, name?, tools?}]. One bad item never aborts the batch."""
+        hired, errors = [], []
+        for it in items:
+            try:
+                hired.append(self.create_spec(name=it.get("name", ""), goal=it.get("goal", ""),
+                                              tools=it.get("tools"), role_id=it.get("role_id"),
+                                              reset=False))
+            except Exception as e:
+                errors.append({"role_id": it.get("role_id"), "error": str(e)})
+        if hired:
+            self._orchestrator = None
+            for h in hired:
+                self.get_agent(h["id"])
+        return {"hired": hired, "errors": errors}
+
     # ---- agent instantiation ----
 
     def _build_agent(self, raw: dict, only_tools: set[str] | None = None) -> Agent:
-        spec = AgentSpec(**raw)
+        spec = AgentSpec(**{k: v for k, v in raw.items() if k in AgentSpec.model_fields})
         resolved = spec.resolved_tools(self.tenant_id)
-        extra = (artifact_tools(self.tenant_id, created_by=spec.id)
-                 + memory_tools(self.tenant_id) + web_search_tools(self.tenant_id))
+        from .policy import tool_allowed
+        name_of = lambda t: getattr(t, "tool_name", None) or t.__name__
+        # always-on extras are Cedar-authorized per agent like everything else
+        extra = [t for t in (artifact_tools(self.tenant_id, created_by=spec.id)
+                             + memory_tools(self.tenant_id) + web_search_tools(self.tenant_id))
+                 if tool_allowed(spec, name_of(t))]
         if only_tools is not None:
-            name_of = lambda t: getattr(t, "tool_name", None) or t.__name__
             resolved = [t for t in resolved if name_of(t) in only_tools]
             extra = [t for t in extra if name_of(t) in only_tools]
         return Agent(
@@ -188,27 +235,76 @@ class AgentRegistry:
                          f"dashboard and ready to work. Try asking it something!",
             }
 
+        @tool
+        def list_roles() -> dict:
+            """The catalogue of ready-made specialist roles you can hire (preferred over
+            bespoke agents): id, what it does, default tools, tool limit."""
+            rows = role_catalog()
+            return {"roles": rows, "reply": "Hireable roles:\n" + "\n".join(
+                f"• {r['id']} — {r['name']}: {r['description']} "
+                f"(tools: {', '.join(r['default_tools'])}; max {r['tool_limit']})" for r in rows)}
+
+        @tool
+        def preview_team(role_ids: list[str]) -> dict:
+            """Draft one or more role-based hires for the owner to approve (does NOT hire).
+            role_ids: ids from list_roles, e.g. ["compliance", "digital_presence"]."""
+            team, bad = [], []
+            for rid in role_ids:
+                r = ROLE_REGISTRY.get(rid)
+                if not r:
+                    bad.append(rid)
+                    continue
+                team.append({"role_id": rid, "name": r.name, "goal": r.goal,
+                             "tools": r.default_tools, "hindi_tagline": r.hindi_tagline})
+            lines = [f"**{m['name']}** {m['hindi_tagline']}\nJob: {m['goal']}\n"
+                     f"Capabilities: {', '.join(t.replace('_', ' ') for t in m['tools'])}"
+                     for m in team]
+            return {"valid": bool(team), "team": team, "unknown": bad,
+                    "reply": ("Here's the team I'd hire:\n\n" if len(team) > 1 else
+                              "Here's the specialist I'd hire:\n\n") + "\n\n".join(lines)
+                             + "\nGuardrails: drafts only; anything that acts waits for your approval."
+                             + "\n\nSay 'haan' or 'yes' and I'll hire " + ("them." if len(team) > 1 else "it.")
+                             + (f"\n(Unknown roles skipped: {', '.join(bad)})" if bad else "")}
+
+        @tool
+        def hire_team(role_ids: list[str]) -> dict:
+            """Actually hire the previewed role-based agents (one or many) in one go."""
+            res = registry.hire_roles([{"role_id": r} for r in role_ids])
+            for spec in res["hired"]:
+                deps.record_action("agent_created", {"spec": spec})
+            names = ", ".join(f"**{s['name']}**" for s in res["hired"])
+            err = "; ".join(f"{e['role_id']}: {e['error']}" for e in res["errors"])
+            return {"hired": res["hired"], "errors": res["errors"],
+                    "reply": (f"Done — {names} {'are' if len(res['hired']) > 1 else 'is'} live on your "
+                              "dashboard and ready to work." if res["hired"] else "Nobody was hired.")
+                             + (f" (Couldn't hire: {err})" if err else "")}
+
         self._agents["nirmata"] = Agent(
             name="Nirmata",
             model=make_model(rules=mock_rules.NIRMATA_RULES, role="factory"),
             system_prompt=(
                 "You are Nirmata (निर्माता — 'the maker'), the agent who hires other agents.\n"
+                "Ready-made roles (prefer these — they carry vetted tools + limits): "
+                + ", ".join(f"{r.id} ({r.description})" for r in ROLE_REGISTRY.values()) + ".\n"
                 "Flow — follow it exactly:\n"
-                "1. When the owner describes a recurring problem, call preview_spec IMMEDIATELY "
-                "in your first reply — pick name, goal, and tools (list_available_tools shows the "
-                "menu). You may add ONE short clarifying question in the same message, but your "
-                "reply MUST show the preview and ask for confirmation.\n"
+                "1. When the owner describes a recurring problem, IMMEDIATELY preview in your "
+                "first reply: if one or more roles above fit, call preview_team with their ids "
+                "(several problems → several roles in ONE call). Only if no role fits, call "
+                "preview_spec with a bespoke name/goal/tools (list_available_tools shows the "
+                "menu). You may add ONE short clarifying question, but your reply MUST show the "
+                "preview and ask for confirmation.\n"
                 "2. Only if the request is so vague you cannot name a goal (e.g. just 'I need help'), "
-                "ask at most ONE question — then preview_spec next turn. NEVER call create_agent "
-                "in the same turn as a preview_spec.\n"
+                "ask at most ONE question — then preview next turn. NEVER hire (hire_team / "
+                "create_agent) in the same turn as a preview.\n"
                 "3. When the owner says anything affirmative (haan/yes/ok/do it/create/sounds good), "
-                "call create_agent in THAT SAME turn — no more questions.\n"
-                "Never create before showing a preview. Never claim an agent is live unless "
-                "create_agent succeeded. Only tools from list_available_tools. Draft-only "
+                "hire in THAT SAME turn — hire_team with the previewed role ids (after "
+                "preview_team) or create_agent (after preview_spec). No more questions.\n"
+                "Never hire before showing a preview. Never claim an agent is live unless "
+                "hire_team/create_agent succeeded. Only tools from list_available_tools. Draft-only "
                 "guardrails always apply."
                 + build_memory_suffix(self.tenant_id)
             ),
-            tools=[list_available_tools, preview_spec, create_agent],
+            tools=[list_roles, preview_team, hire_team, list_available_tools, preview_spec, create_agent],
             session_manager=_session_manager(f"{self.tenant_id}-nirmata"),
             callback_handler=None,
         )

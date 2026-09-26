@@ -25,6 +25,16 @@ TOOL_REGISTRY = {
 }
 ALL_TOOL_NAMES = {t for group in TOOL_REGISTRY.values() for t in group}
 
+# always-on capability groups every agent historically got; now granted per
+# role and Cedar-gated like any other tool (guardrails.extra_tools)
+EXTRA_TOOLS = {"artifact": ["create_artifact"], "memory": ["recall_context"],
+               "web_search": ["web_search"]}
+ALL_EXTRA_TOOL_NAMES = [t for g in EXTRA_TOOLS.values() for t in g]
+
+
+def extra_tool_names(groups: list[str] | None) -> list[str]:
+    return [t for g in (groups or []) for t in EXTRA_TOOLS.get(g, [])]
+
 
 def build_tool_map(tenant_id: str) -> dict:
     """Instantiate every registry tool bound to a tenant, keyed by tool name."""
@@ -50,6 +60,7 @@ class AgentSpec(BaseModel):
     status: str = "active"
     icon: str = "bot"
     guardrails: dict = {}
+    role_id: str | None = None   # A2 — which RoleDef this hire came from (roles.py)
 
     @field_validator("tools")
     @classmethod

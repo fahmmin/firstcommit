@@ -361,6 +361,16 @@
     "GET /approvals/grants [EXISTS]": { "response": { "grants": ["sync_catalog"], "gated_tools": ["create_artifact", "create_invoice", "publish_listing", "schedule_alert", "sync_catalog"] } },
     "POST /alerts/{id}/dismiss [EXISTS]": { "$comment": "reject a drafted reminder/booking — persisted, never sent; 409 if already sent", "response": { "id": "alert-1", "status": "dismissed" } },
 
+    "GET /roles [EXISTS]": {
+      "$comment": "A2 role registry (backend/app/agents/roles.py) — the data-driven catalogue the factory hires from. allowed_tools is the ceiling, tool_limit the cap, extras = always-on groups (artifact/memory/web_search) granted + Cedar-gated per role.",
+      "response": [{ "id": "compliance", "name": "Compliance Agent", "hindi_tagline": "कानून का ख्याल", "category": "compliance", "icon": "shield", "description": "Watches GST/TDS deadlines", "goal": "Track GST/TDS filing deadlines", "default_tools": ["list_alerts", "schedule_alert"], "allowed_tools": ["list_alerts", "schedule_alert", "aging_report"], "tool_limit": 4, "max_action": "draft_only", "extras": ["artifact", "memory"], "intent_keywords": ["gst"] }]
+    },
+    "POST /agents/batch [EXISTS]": {
+      "$comment": "Hire several role-based agents in one call (single routing rebuild). POST /agents and /agents/preview also accept role_id.",
+      "request": { "tenant_id": "ramesh_auto", "roles": [{ "role_id": "compliance", "tools": ["list_alerts"] }, { "role_id": "digital_presence" }] },
+      "response": { "hired": [{ "id": "agent-ab12cd", "name": "Compliance Agent", "role_id": "compliance", "tools": ["list_alerts"], "refused_tools": [] }], "errors": [{ "role_id": "ghost", "error": "unknown role" }] }
+    },
+
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },

@@ -9,8 +9,8 @@ import {
 } from 'lucide-react'
 
 // Honest marketplace: no install counts, no invented URLs.
-// • Agents + Templates come from the backend catalog (GET /templates) and
-//   install for real (POST /templates/{id}/install → the agent factory).
+// • Agents come from the role registry (GET /roles) and hire for real
+//   (POST /agents/batch); prompt templates from GET /templates.
 // • MCP servers: bring your own server URL — saved to settings.mcp_servers.
 const MCP_SUGGESTIONS = [
   { id: 'google-sheets', name: 'Google Sheets', icon: 'sheets', desc: 'Read/write your registers as agent tools.', tag: 'data' },
@@ -28,14 +28,21 @@ export default function Marketplace() {
   const [q, setQ] = useState('')
   const [settings, setSettings] = useState(null)
   const [templates, setTemplates] = useState([])
+  const [roles, setRoles] = useState([])
+  const [hiredRoles, setHiredRoles] = useState(new Set())
 
   const load = () => api.settings().then(setSettings).catch(() => setSettings(null))
-  useEffect(() => { load(); api.templates().then(setTemplates).catch(() => setTemplates([])) }, [])
+  const loadRoster = () => api.agents().then(as => setHiredRoles(new Set(as.map(a => a.role_id).filter(Boolean)))).catch(() => {})
+  useEffect(() => {
+    load(); loadRoster()
+    api.templates().then(setTemplates).catch(() => setTemplates([]))
+    api.roles().then(setRoles).catch(() => setRoles([]))
+  }, [])
 
   const servers = settings?.mcp_servers || []
   const match = (x) => !q || `${x.name || x.title} ${x.desc} ${x.tag || x.category}`.toLowerCase().includes(q.toLowerCase())
-  const agentTemplates = templates.filter(t => t.agent_spec && match(t))
   const promptTemplates = templates.filter(t => !t.agent_spec && match(t))
+  const roleRows = roles.filter(r => match({ name: r.name, desc: r.description, tag: r.category }))
 
   return (
     <AppShell>
@@ -53,7 +60,7 @@ export default function Marketplace() {
           </div>
         </div>
 
-        {agentTemplates.length > 0 && <AgentTemplates items={agentTemplates} />}
+        {roleRows.length > 0 && <RoleCatalog roles={roleRows} hiredRoles={hiredRoles} onHired={loadRoster} />}
 
         <div className="flex gap-1 mb-5 rounded-xl border border-slate-200 bg-white p-1 w-fit">
           {[['templates', 'Templates', Braces], ['mcp', 'MCP servers', Server]].map(([k, l, I]) => (
@@ -156,64 +163,73 @@ function McpServers({ servers, onSaved, match }) {
   )
 }
 
-// Ready-made agents from the backend catalog — "Hire" really creates the agent
-// via the factory; templates without a ready toolset hand off to Nirmata.
-function AgentTemplates({ items }) {
-  const [busy, setBusy] = useState('')
-  const [done, setDone] = useState(new Set())
-  const hire = async (t) => {
-    setBusy(t.id)
+// Hireable roles from the backend role registry (GET /roles). Pick one or
+// several → "Hire team" calls POST /agents/batch, which clamps each hire to its
+// role's tool ceiling + limit and rebuilds routing once.
+function RoleCatalog({ roles, hiredRoles, onHired }) {
+  const [pick, setPick] = useState(new Set())
+  const [busy, setBusy] = useState(false)
+  const toggle = (id) => setPick(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const hire = async () => {
+    setBusy(true)
     try {
-      const r = await api.installTemplate(t.id)
-      if (r.status === 'needs_factory') {
-        localStorage.setItem('prefill_prompt', r.prompt || t.prompt)
-        location.hash = '#/app'
-        return
-      }
-      setDone(d => new Set(d).add(t.id))
-      toast.push(`${t.agent_spec.name} joined your team`)
-    } catch (e) { toast.push(`Couldn't hire — ${e.message}`, 'err') }
-    setBusy('')
+      const r = await api.hireTeam([...pick].map(role_id => ({ role_id })))
+      if (r.hired.length) toast.push(`${r.hired.map(h => h.name).join(', ')} joined your team`)
+      if (r.errors.length) toast.push(`Couldn't hire: ${r.errors.map(e => e.role_id).join(', ')}`, 'err')
+      setPick(new Set()); onHired?.()
+      window.dispatchEvent(new Event('sahayak:agents-changed'))
+    } catch (e) { if (e.status !== 403) toast.push(`Couldn't hire — ${e.message}`, 'err') }
+    setBusy(false)
   }
   return (
     <div className="mb-7">
-      <div className="text-[11px] font-semibold text-slate-500 mb-2.5 flex items-center gap-1.5">
-        <Sparkles size={11} className="text-accent" /> Ready-made agents
-        <span className="text-slate-300 font-normal">— hired by the agent factory with a fixed, policy-checked toolset</span>
+      <div className="flex items-center justify-between mb-2.5 gap-2 flex-wrap">
+        <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+          <Sparkles size={11} className="text-accent" /> Hire specialists
+          <span className="text-slate-300 font-normal">— each role has a fixed tool ceiling and limit, checked by policy</span>
+        </div>
+        <Can perm="hire" reason="Your role can't hire agents">
+          <button onClick={hire} disabled={!pick.size || busy}
+            className="rounded-lg bg-ink text-white text-[11px] font-medium px-3.5 py-1.5 flex items-center gap-1.5 hover:bg-ink/85 disabled:opacity-40 transition">
+            {busy ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} className="rotate-180" />}
+            {pick.size > 1 ? `Hire team (${pick.size})` : 'Hire'}
+          </button>
+        </Can>
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
-        {items.map(t => (
-          <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4 hover:shadow-float transition">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/15 to-magenta/10 border border-slate-100 grid place-items-center text-accent font-bold text-[15px]">
-                  {t.agent_spec.name[0]}
+        {roles.map(r => {
+          const on = pick.has(r.id)
+          const have = hiredRoles.has(r.id)
+          return (
+            <button key={r.id} type="button" onClick={() => toggle(r.id)}
+              className={`text-left rounded-2xl border bg-white p-4 transition hover:shadow-float
+                ${on ? 'border-ink ring-2 ring-ink/10' : 'border-slate-200'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/15 to-magenta/10 border border-slate-100 grid place-items-center text-accent font-bold text-[15px]">
+                    {r.name[0]}
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-semibold text-ink">{r.name} <span className="text-[10px] font-normal text-slate-400">{r.hindi_tagline}</span></div>
+                    <div className="text-[10px] text-slate-400">{r.description}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[13px] font-semibold text-ink">{t.agent_spec.name}</div>
-                  <div className="text-[10px] text-slate-400">{t.title}</div>
-                </div>
+                <span className={`w-4 h-4 rounded border grid place-items-center shrink-0 ${on ? 'bg-ink border-ink text-white' : 'border-slate-300'}`}>
+                  {on && <Check size={10} />}
+                </span>
               </div>
-              <span className="text-[9px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.5">{t.category}</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-2.5 leading-snug">{t.agent_spec.goal || t.desc}</p>
-            {t.agent_spec.tools?.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2.5">
-                {t.agent_spec.tools.map(s => (
-                  <span key={s} className="text-[9px] font-mono rounded-full border border-accent/20 bg-accent/5 text-accent px-2 py-0.5">{s}</span>
+                {r.default_tools.map(t => (
+                  <span key={t} className="text-[9px] font-mono rounded-full border border-accent/20 bg-accent/5 text-accent px-2 py-0.5">{t}</span>
                 ))}
               </div>
-            )}
-            <Can perm="hire" reason="Your role can't hire agents">
-              <button onClick={() => hire(t)} disabled={busy === t.id || done.has(t.id)}
-                className="mt-3 w-full rounded-lg bg-ink text-white text-[11px] font-medium py-2 flex items-center justify-center gap-1.5 hover:bg-ink/85 transition disabled:opacity-60">
-                {done.has(t.id) ? <><Check size={11} /> Hired</>
-                  : busy === t.id ? <Loader2 size={11} className="animate-spin" />
-                  : <><Download size={11} className="rotate-180" /> {t.agent_spec.tools?.length ? 'Hire this agent' : 'Hire with Nirmata'}</>}
-              </button>
-            </Can>
-          </div>
-        ))}
+              <div className="flex items-center gap-2 mt-2 text-[9px] text-slate-400">
+                <span>max {r.tool_limit} tools</span><span>·</span><span>{r.max_action.replace('_', ' ')}</span>
+                {have && <span className="ml-auto text-emerald-600 font-medium">on your team</span>}
+              </div>
+            </button>
+          )
+        })}
       </div>
     </div>
   )

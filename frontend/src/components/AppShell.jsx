@@ -32,7 +32,13 @@ const NAV = [
 // deep-link into #/app (open_agent prefill) so the sidebar always works.
 export function AppShell({ children, agents: agentsProp, activeAgent, onAgentClick, onNewChat, onReset }) {
   const [agents, setAgents] = useState(agentsProp || [])
-  useEffect(() => { if (!agentsProp) api.agents().then(setAgents).catch(() => {}) }, [agentsProp])
+  useEffect(() => {
+    if (agentsProp) return
+    const load = () => api.agents().then(setAgents).catch(() => {})
+    load()
+    window.addEventListener('sahayak:agents-changed', load)   // fired after a hire
+    return () => window.removeEventListener('sahayak:agents-changed', load)
+  }, [agentsProp])
   useEffect(() => { if (agentsProp) setAgents(agentsProp) }, [agentsProp])
 
   const hash = location.hash.split('?')[0]

@@ -171,3 +171,40 @@ def test_grants_endpoint(client):
     assert "schedule_alert" in g["grants"] and "create_invoice" in g["gated_tools"]
     client.post("/approvals/grant", json={"tenant_id": T, "tool": "schedule_alert", "on": False})
     assert client.post("/approvals/grant", json={"tenant_id": T, "tool": "list_overdue"}).status_code == 400
+
+
+# ---- Phase 3 — A2 role registry API ----
+
+def test_roles_catalog(client):
+    rows = client.get("/roles").json()
+    ids = {r["id"] for r in rows}
+    assert {"logistics", "compliance", "digital_presence", "collections"} <= ids
+    assert all({"default_tools", "allowed_tools", "tool_limit", "max_action"} <= set(r) for r in rows)
+
+
+def test_batch_hire_and_partial_failure(client):
+    client.post("/demo/reset", params={"tenant_id": T})
+    r = client.post("/agents/batch", json={"tenant_id": T, "roles": [
+        {"role_id": "compliance", "tools": ["list_alerts", "publish_listing"]},
+        {"role_id": "digital_presence"}, {"role_id": "ghost"}]}).json()
+    assert [h["role_id"] for h in r["hired"]] == ["compliance", "digital_presence"]
+    assert r["hired"][0]["refused_tools"] == ["publish_listing"]
+    assert r["errors"][0]["role_id"] == "ghost"
+    roster = {a["id"]: a for a in client.get("/agents", params={"tenant_id": T}).json()}
+    assert all(h["id"] in roster for h in r["hired"])
+    assert client.post("/agents/batch", json={"tenant_id": T, "roles": []}).status_code == 400
+
+
+def test_preview_and_create_by_role(client):
+    p = client.post("/agents/preview", json={"tenant_id": T, "role_id": "logistics"}).json()
+    assert p["valid"] and p["spec"]["role_id"] == "logistics"
+    c = client.post("/agents", json={"tenant_id": T, "role_id": "reporting", "name": "MIS Bot"}).json()
+    assert c["spec"]["name"] == "MIS Bot" and c["spec"]["role_id"] == "reporting"
+    assert client.post("/agents", json={"tenant_id": T, "role_id": "nope"}).status_code == 400
+    assert client.post("/agents/preview", json={"tenant_id": T, "role_id": "nope"}).status_code == 404
+
+
+def test_template_install_carries_role(client):
+    r = client.post("/templates/compliance-agent/install", json={"tenant_id": T}).json()
+    spec = next(a for a in client.get("/agents", params={"tenant_id": T}).json() if a["id"] == r["id"])
+    assert spec["role_id"] == "compliance"

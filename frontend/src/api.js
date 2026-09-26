@@ -85,6 +85,10 @@ export const api = {
   createAgent: (spec) =>
     req('/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ tenant_id: TENANT, ...spec }) }),
+  roles: () => req('/roles'),
+  hireTeam: (roles) =>
+    req('/agents/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                           body: JSON.stringify({ tenant_id: TENANT, roles }) }),
   previewAgent: (spec) =>
     req('/agents/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                              body: JSON.stringify({ tenant_id: TENANT, ...spec }) }),

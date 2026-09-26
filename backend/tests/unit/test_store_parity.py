@@ -169,3 +169,11 @@ class TestStoreParity:
         s = self._store(impl, tmp_path)
         s.put_settings(self.T, {"prefs": {"approval_grants": ["sync_catalog"]}})
         assert s.get_settings(self.T)["prefs"]["approval_grants"] == ["sync_catalog"]
+
+    def test_spec_role_id_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_spec(self.T, {"id": "a9", "name": "C", "goal": "g", "tools": ["list_alerts"],
+                            "role_id": "compliance",
+                            "guardrails": {"allowed_tools": ["list_alerts"], "extra_tools": ["recall_context"]}})
+        got = s.get_spec(self.T, "a9")
+        assert got["role_id"] == "compliance" and got["guardrails"]["extra_tools"] == ["recall_context"]

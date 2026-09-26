@@ -87,6 +87,16 @@ def main() -> int:
         check("new agent answers", "carrier info", r3["reply"][:80],
               "₹" in r3["reply"] or "carrier" in r3["reply"].lower() or "kg" in r3["reply"].lower())
 
+        # 5b. A2 — one ask, several problems → the factory hires a TEAM from the role registry
+        before_ids = {a["id"] for a in c.get("/agents", params={"tenant_id": TENANT}).json()}
+        t1 = c.post("/chat", json={"tenant_id": TENANT,
+                                   "text": "hire a team: customer support for buyer queries and monthly reports for my accountant"}).json()
+        c.post("/chat", json={"tenant_id": TENANT, "text": "haan"})
+        team = [a for a in c.get("/agents", params={"tenant_id": TENANT}).json() if a["id"] not in before_ids]
+        roles_hired = sorted(a.get("role_id") or "" for a in team)
+        check("multi-role hire (A2)", "customer_support + reporting", ",".join(roles_hired),
+              {"customer_support", "reporting"} <= set(roles_hired) and "team" in t1["reply"].lower())
+
         # 6. Cash-flow gap advisor
         cf = c.get("/cashflow", params={"tenant_id": TENANT}).json()
         check("cashflow data", "receivables+payables", f"{len(cf['receivables'])}/{len(cf['payables'])}",
