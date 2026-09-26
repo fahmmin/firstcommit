@@ -47,7 +47,6 @@ export default function Onboarding() {
     try {
       // chosen role drives RBAC gates across the app
       const rbac = ROLE_OPTIONS.find(r => r.id === rolePick)?.rbac || 'owner'
-      role.set(rbac)
       const pickedRole = ROLE_OPTIONS.find(r => r.id === rolePick)
       // one rich call: profile+prefs → settings, answers+pains → memories,
       // pains → agents auto-hired by the factory. Granular calls are the fallback.
@@ -66,6 +65,9 @@ export default function Onboarding() {
           api.addMemory(`${name || 'User'} is the ${pickedRole?.label.toLowerCase() || 'owner'} of ${business || 'the business'}`, 'onboarding').catch(() => {}),
         ])
       }
+      // switch the session's active view AFTER the owner-only setup calls; the
+      // signup session keeps an owner ceiling so they can always switch back
+      if (rbac !== 'owner') await role.set(rbac).catch(() => {})
       if (r?.agents_installed?.length) toast.push(`${r.agents_installed.length} agent${r.agents_installed.length > 1 ? 's' : ''} hired for your problems`)
       location.hash = '#/app'
     } catch { setBusy(false) }
@@ -74,7 +76,7 @@ export default function Onboarding() {
   const steps = [
     { key: 'name', q: 'What should we call you?', ph: 'Ramesh Gupta', val: name, set: setName, ok: name.trim().length > 1 },
     { key: 'role' },   // role picker — rendered specially below
-    { key: 'biz', q: "What's your business called?", ph: 'Ramesh Auto Components', val: business, set: setBusiness, ok: business.trim().length > 1 },
+    { key: 'biz', q: "What's your business called?", ph: 'e.g. Sharma Textiles', val: business, set: setBusiness, ok: business.trim().length > 1 },
     { key: 'city', q: 'Which city do you operate from?', ph: 'Faridabad', val: city, set: setCity, ok: city.trim().length > 1 },
   ]
   const s = steps[step]

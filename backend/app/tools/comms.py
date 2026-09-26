@@ -1,7 +1,8 @@
 """Comms tools — send approved messages, schedule alerts, list alerts.
 
-Guardrail: send_reminder only sends alerts in pending_approval status —
-an agent cannot self-approve; the owner clicks approve in the UI.
+Guardrails: send_reminder refuses drafts (pending_approval) — only the owner's
+Approve tap sends, so an agent cannot self-approve. schedule_alert goes through
+the approvals ledger (agents/approvals.py) like every other side effect.
 """
 from __future__ import annotations
 
@@ -30,11 +31,23 @@ def send_alert_impl(tenant_id: str, alert_id: str) -> dict:
     return {"reply": f"Sent to {a.get('to', '')} via {msg['via']}.", "message": msg}
 
 
+def schedule_alert_impl(tenant_id: str, title: str, fires_at: str = "", kind: str = "reminder") -> dict:
+    alert = deps.store.put_alert(tenant_id, {
+        "id": f"alert-{uuid.uuid4().hex[:6]}", "kind": kind, "title": title,
+        "status": "scheduled",
+        "fires_at": fires_at or datetime.now(timezone.utc).isoformat(),
+    })
+    deps.record_action("alert_scheduled", {"alert_id": alert["id"], "title": title})
+    deps.log_activity(tenant_id, "alert_scheduled", f"Scheduled: {title}")
+    return {"alert": alert, "reply": f"Scheduled: '{title}' → fires {alert['fires_at']}."}
+
+
 def comms_tools(tenant_id: str) -> list:
 
     @tool
     def send_reminder(alert_id: str = "") -> dict:
-        """Send an APPROVED reminder alert. Refuses pending ones — owner must approve in UI."""
+        """Send an owner-APPROVED reminder/booking. Drafts (pending_approval) and
+        future-scheduled alerts are refused — only the owner's Approve tap sends."""
         targets = [a for a in deps.store.list_alerts(tenant_id)
                    if (not alert_id or a["id"] == alert_id) and a.get("kind") in ("reminder", "booking")]
         if not targets:
@@ -43,18 +56,23 @@ def comms_tools(tenant_id: str) -> list:
         if a["status"] == "pending_approval":
             return {"reply": f"'{a['title']}' is still a draft — approve it in the Alerts panel first.",
                     "blocked": True}
+        if a["status"] == "scheduled":
+            return {"reply": f"'{a['title']}' is scheduled for {a.get('fires_at', '')[:10]} — "
+                             "it isn't due yet, and sending needs your approval anyway.",
+                    "blocked": True}
         return send_alert_impl(tenant_id, a["id"])
 
     @tool
     def schedule_alert(title: str, fires_at: str = "", kind: str = "reminder") -> dict:
-        """Schedule a future alert (due-date reminder, payment chase, etc.)."""
-        alert = deps.store.put_alert(tenant_id, {
-            "id": f"alert-{uuid.uuid4().hex[:6]}", "kind": kind, "title": title,
-            "status": "scheduled",
-            "fires_at": fires_at or datetime.now(timezone.utc).isoformat(),
-        })
-        deps.record_action("alert_scheduled", {"alert_id": alert["id"], "title": title})
-        return {"alert": alert, "reply": f"Scheduled: '{title}' → fires {alert['fires_at']}."}
+        """Schedule a future alert (due-date reminder, payment chase, etc.).
+        Side-effecting → queued for owner approval unless granted this session."""
+        from ..agents.approvals import gate
+        args = {"title": title, "fires_at": fires_at, "kind": kind}
+        q = gate(tenant_id, "schedule_alert", args,
+                 f"Schedule {kind}: {title}" + (f" on {fires_at[:10]}" if fires_at else ""))
+        if q:
+            return q
+        return schedule_alert_impl(tenant_id, title, fires_at, kind)
 
     @tool
     def list_alerts() -> dict:

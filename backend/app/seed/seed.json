@@ -736,8 +736,8 @@
     {
       "id": "n-7",
       "kind": "info",
-      "title": "Gmail connector synced",
-      "body": "212 emails parsed — 3 new PO attachments found",
+      "title": "Google Drive connector synced",
+      "body": "Supplier rate cards shared to the service account were indexed",
       "created_at": "2026-09-19T01:00:00Z",
       "status": "read"
     },
@@ -751,6 +751,14 @@
     }
   ],
   "connectors": [
+    {
+      "id": "web",
+      "name": "Web / RSS",
+      "icon": "globe",
+      "status": "available",
+      "description": "Pull a public web page or RSS feed into business context — no login needed",
+      "items_synced": 0
+    },
     {
       "id": "google_calendar",
       "name": "Google Calendar",
@@ -1128,7 +1136,7 @@
       "id": "act-7",
       "ts": "2026-09-19T01:00:00Z",
       "kind": "connector_synced",
-      "text": "Gmail synced — 212 emails, 3 new PO attachments"
+      "text": "Google Drive synced — 3 files (supplier rate cards) added to business context"
     },
     {
       "id": "act-8",

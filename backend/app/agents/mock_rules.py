@@ -32,7 +32,13 @@ def _weight_arg(text: str) -> dict:
 
 def _order_args(text: str) -> dict:
     nums = _NUM_RE.findall(text.replace(",", ""))
-    return {"order_amount": float(nums[0])} if nums else {"order_amount": 50000}
+    if not nums:
+        return {"order_amount": 50000}
+    amt = float(nums[0])
+    # "2 lakh order" / "₹1.5L" — the first number isn't the amount
+    if re.search(r"lakh|\bl\b", text, re.I):
+        amt *= 100000
+    return {"order_amount": amt}
 
 
 # ---- per-tool behaviors (keywords → args). Reply comes from the tool's own `reply` field. ----
@@ -150,43 +156,130 @@ ORCHESTRATOR_RULES: list[MockRule] = [
     ),
 ]
 
+
+def orchestrator_rules(specs: list[dict]) -> list[MockRule]:
+    """Base routing rules + one per non-builtin spec (factory hires / seeded
+    specialists) so the offline router can reach agents the static table doesn't
+    know. Hired specs sit right after the create-intent rule — a specialist who
+    already exists answers before Nirmata considers hiring a new one."""
+    dynamic: list[MockRule] = []
+    for s in specs:
+        sid = s.get("id", "")
+        if sid in ("vasool", "sourcer", "khata", "nirmata") or not sid:
+            continue
+        kws = [w for w in re.split(r"[^a-z]+", (s.get("name") or "").lower()) if len(w) > 3]
+        for t in s.get("tools", []):
+            kws += TOOL_BEHAVIORS.get(t, {}).get("keywords", [])
+        kws = list(dict.fromkeys(kws))
+        if kws:
+            dynamic.append(MockRule(keywords=kws, tool=sid, args=lambda t: {"input": t}))
+    return ORCHESTRATOR_RULES[:1] + dynamic + ORCHESTRATOR_RULES[1:]
+
 # ---- Nirmata interview (2-turn) ----
 
+_PREVIEWS = ("preview_spec", "preview_team")
+
+
+def _last_preview(messages: Messages) -> str | None:
+    """Name of the most recent preview tool call in the transcript, if any."""
+    for m in reversed(messages):
+        for c in m.get("content", []):
+            tu = c.get("toolUse")
+            if tu and tu.get("name") in _PREVIEWS:
+                return tu["name"]
+    return None
+
+
 def _already_previewed(messages: Messages) -> bool:
-    return any(
-        "toolUse" in c and c["toolUse"]["name"] == "preview_spec"
-        for m in messages for c in m.get("content", [])
-    )
+    return _last_preview(messages) is not None
 
 
 def _not_yet_previewed(messages: Messages) -> bool:
     return not _already_previewed(messages)
 
 
+def _team_previewed(messages: Messages) -> bool:
+    return _last_preview(messages) == "preview_team"
+
+
+def _spec_previewed(messages: Messages) -> bool:
+    return _last_preview(messages) == "preview_spec"
+
+
+def _preview_team_args(text: str) -> dict:
+    """Roles drafted from the owner's own words — data-driven (roles.py), and
+    several problems in one message preview several hires. Logistics is the
+    factory's default when nothing specific matches."""
+    from .roles import match_roles
+    return {"role_ids": match_roles(text) or ["logistics"]}
+
+
+def _preview_args(text: str) -> dict:
+    """Single-spec view of the best-matching role (legacy preview_spec shape)."""
+    from .roles import get_role
+    r = get_role(_preview_team_args(text)["role_ids"][0])
+    return {"name": r.name, "goal": r.goal, "tools": r.default_tools, "hindi_tagline": r.hindi_tagline}
+
+
+def _create_args_from_preview(messages: Messages) -> dict:
+    """create_agent receives exactly the spec the owner approved in the preview —
+    the confirm turn reads the preview_spec toolUse back out of the transcript."""
+    for m in reversed(messages):
+        for c in m.get("content", []):
+            tu = c.get("toolUse")
+            if tu and tu.get("name") == "preview_spec":
+                i = tu.get("input", {})
+                return {"name": i.get("name", "Specialist Agent"),
+                        "goal": i.get("goal", ""),
+                        "tools": i.get("tools", []),
+                        "hindi_tagline": i.get("hindi_tagline", "")}
+    return _preview_args("")  # no preview on record → default specialist
+
+
+_create_args_from_preview._wants_messages = True
+
+
+def _hire_args_from_preview(messages: Messages) -> dict:
+    """hire_team hires exactly the roles the owner saw in preview_team."""
+    for m in reversed(messages):
+        for c in m.get("content", []):
+            tu = c.get("toolUse")
+            if tu and tu.get("name") == "preview_team":
+                return {"role_ids": tu.get("input", {}).get("role_ids", [])}
+    return {"role_ids": ["logistics"]}
+
+
+_hire_args_from_preview._wants_messages = True
+
+
 NIRMATA_RULES: list[MockRule] = [
-    # turn 2 — owner confirms → actually create
+    # turn 2 — owner confirms → actually create (spec = the preview they saw).
+    # Keywords stay pure affirmatives: a NEW request carrying "hire"/"agent"
+    # must re-preview below, not fire create on a stale pending spec.
     MockRule(
-        keywords=["yes", "haan", "ok", "sure", "create", "do it", "banao", "hire", "confirm", "go ahead"],
-        tool="create_agent",
-        args=lambda t: {
-            "name": "Logistics Agent",
-            "goal": "Find backup transport and book pickups when scheduled carriers fail",
-            "tools": ["list_carriers", "quote_pickup", "book_pickup", "send_reminder", "list_alerts"],
-            "hindi_tagline": "सामान पहुँचाने वाला",
-        },
-        when=_already_previewed,
+        keywords=["yes", "haan", "ok", "sure", "do it", "confirm", "go ahead",
+                  "sounds good", "looks good", "perfect", "theek hai"],
+        tool="hire_team",
+        args=_hire_args_from_preview,
+        when=_team_previewed,
     ),
-    # turn 1 — problem stated → draft the spec
+    MockRule(
+        keywords=["yes", "haan", "ok", "sure", "do it", "confirm", "go ahead",
+                  "sounds good", "looks good", "perfect", "theek hai"],
+        tool="create_agent",
+        args=_create_args_from_preview,
+        when=_spec_previewed,
+    ),
+    # turn 1 — problem stated → draft the spec. Always eligible: a fresh request
+    # re-previews even while an older preview is still pending.
     MockRule(
         keywords=["transporter", "ditch", "didn't show", "nahi aaya", "no show", "stranded",
-                  "agent", "build", "create", "hire", "logistics", "delivery", "pickup", "truck"],
-        tool="preview_spec",
-        args=lambda t: {
-            "name": "Logistics Agent",
-            "goal": "Find backup transport and book pickups when scheduled carriers fail",
-            "tools": ["list_carriers", "quote_pickup", "book_pickup", "send_reminder", "list_alerts"],
-        },
-        when=_not_yet_previewed,
+                  "agent", "build", "create", "hire", "logistics", "delivery", "pickup", "truck",
+                  "sell online", "online", "storefront", "website", "marketplace", "gst",
+                  "compliance", "filing", "supplier", "collections", "specialist", "problem",
+                  "customer support", "reporting", "report agent", "team"],
+        tool="preview_team",
+        args=_preview_team_args,
     ),
     MockRule(
         keywords=["tools", "what can", "available", "list tools"],
@@ -194,3 +287,15 @@ NIRMATA_RULES: list[MockRule] = [
         args=lambda t: {},
     ),
 ]
+
+
+def rules_for_mcp(tool_names: list[str]) -> list[MockRule]:
+    """Offline routing for live MCP tools: naming the tool (its prefixed name,
+    or its words) calls it. Real Nova picks MCP tools from their descriptions."""
+    out = []
+    for name in tool_names:
+        if not name:
+            continue
+        words = name.split("_", 2)[-1].replace("_", " ") if name.startswith("mcp_") else name
+        out.append(MockRule(keywords=[name, f"mcp {words}"], tool=name, args=lambda t: {}))
+    return out

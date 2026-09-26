@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api } from '../api.js'
+import { api, setTenant } from '../api.js'
 import { session } from '../lib/auth.js'
 import { MFACode } from '../components/rui/MFACode.jsx'
 import { Blobs } from '../components/Logo.jsx'
@@ -19,6 +19,7 @@ export default function Login() {
     try {
       const r = await api.login({ provider, provider_id, name, business })
       session.set(r)
+      setTenant(r.tenant_id)   // route all subsequent API calls to this tenant
       location.hash = r.onboarded ? '#/app' : '#/onboarding'
     } catch (e) {
       setErr('Couldn\'t reach the backend — it may be cold-starting; retry in a few seconds.')
@@ -26,7 +27,7 @@ export default function Login() {
   }
 
   const google = () => setMode('email-verify')
-  const guest = () => finish('guest', null, 'Ramesh Gupta', 'Ramesh Auto Components')
+  const guest = () => finish('guest', null, 'Ramesh Gupta', 'Ramesh Hardware & Electricals')
 
   return (
     <div className="min-h-screen bg-[#fbfbfd] font-sans flex flex-col">
@@ -94,7 +95,7 @@ export default function Login() {
             <button onClick={() => setMode('phone')} className="text-[12px] text-slate-400 hover:text-ink flex items-center gap-1 mb-6"><ArrowLeft size={12} /> Back</button>
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">Enter the code</h1>
             <p className="text-[12px] text-slate-500 mt-1.5 mb-7">Sent to +91 {phone} — any 6 digits work in this build.</p>
-            <form onSubmit={e => { e.preventDefault(); if (otp.length === 6) finish('phone', `+91${phone}`, 'Ramesh Gupta', 'Ramesh Auto Components') }}
+            <form onSubmit={e => { e.preventDefault(); if (otp.length === 6) finish('phone', `+91${phone}`, '', '') }}
               className="space-y-5">
               <MFACode value={otp} onChange={setOtp} />
               <button disabled={otp.length !== 6 || busy}
@@ -109,15 +110,15 @@ export default function Login() {
             <button onClick={() => setMode('pick')} className="text-[12px] text-slate-400 hover:text-ink flex items-center gap-1 mb-6"><ArrowLeft size={12} /> Back</button>
             <div className="w-11 h-11 rounded-2xl bg-accent/10 text-accent grid place-items-center mb-4"><MailCheck size={18} /></div>
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">Verify your email</h1>
-            <p className="text-[12px] text-slate-500 mt-1.5 mb-7">We sent a 6-digit code to <span className="font-medium text-ink">ramesh@rameshauto.in</span></p>
-            <form onSubmit={e => { e.preventDefault(); if (emailCode.length === 6) finish('google', 'ramesh@rameshauto.in', 'Ramesh Gupta', 'Ramesh Auto Components') }}
+            <p className="text-[12px] text-slate-500 mt-1.5 mb-7">We sent a 6-digit code to <span className="font-medium text-ink">ramesh@rameshhardware.in</span></p>
+            <form onSubmit={e => { e.preventDefault(); if (emailCode.length === 6) finish('google', 'ramesh@rameshhardware.in', 'Ramesh Gupta', 'Ramesh Hardware & Electricals') }}
               className="space-y-5">
               <MFACode value={emailCode} onChange={setEmailCode} />
               <button disabled={emailCode.length !== 6 || busy}
                 className="w-full rounded-xl bg-ink text-white py-3 text-[13px] font-medium hover:bg-ink/85 transition disabled:opacity-40 flex items-center justify-center gap-2">
                 {busy ? <Loader2 size={14} className="animate-spin" /> : 'Verify & sign in'}
               </button>
-              <button type="button" onClick={() => finish('google', 'ramesh@rameshauto.in', 'Ramesh Gupta', 'Ramesh Auto Components')}
+              <button type="button" onClick={() => finish('google', 'ramesh@rameshhardware.in', 'Ramesh Gupta', 'Ramesh Hardware & Electricals')}
                 className="w-full text-[11px] text-slate-400 hover:text-ink transition">Skip verification for now</button>
             </form>
             {err && <p className="text-[11px] text-rose-500 text-center mt-3">{err}</p>}

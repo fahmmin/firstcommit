@@ -7,7 +7,9 @@ import { Can } from '../components/rui/Can.jsx'
 import { AccessRings } from '../components/rui/Circles.jsx'
 import { useRole, role, ROLES } from '../lib/role.js'
 import { a11y } from '../lib/a11y.js'
+import { toast } from '../lib/toast.js'
 import { AppShell } from '../components/AppShell.jsx'
+import { McpServers, ConnectAiTools } from '../components/McpSettings.jsx'
 import {
   Building2, SlidersHorizontal, PlugZap, Braces, Server,
   CheckCircle2, Plus, Trash2, Brain, FileSpreadsheet, Upload, Loader2, Store, ShieldCheck,
@@ -26,8 +28,6 @@ export default function Settings() {
   const [settings, setSettings] = useState(null)
   const [connectors, setConnectors] = useState([])
   const [memories, setMemories] = useState([])
-  const [mcpName, setMcpName] = useState('')
-  const [mcpUrl, setMcpUrl] = useState('')
   const [saved, setSaved] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
@@ -40,8 +40,10 @@ export default function Settings() {
   const mcps = settings?.mcp_servers || []
   const disabledTools = settings?.prefs?.disabled_tools || []
 
+  const [agentList, setAgentList] = useState([])
   const load = () => {
     api.settings().then(setSettings).catch(() => {})
+    api.agents().then(setAgentList).catch(() => {})
     api.connectors().then(setConnectors).catch(() => {})
     api.memories().then(setMemories).catch(() => setMemories([]))
   }
@@ -50,18 +52,22 @@ export default function Settings() {
   const flash = () => { setSaved(true); setTimeout(() => setSaved(false), 1500) }
 
   const patch = async (body) => {
-    const r = await api.updateSettings(body)
-    if (r.status === 'saved') { flash(); load() }
+    try {
+      const r = await api.updateSettings(body)
+      if (r.status === 'saved') { flash(); load() }
+    } catch { load() }  // 403 → api toasts the server's reason; re-sync the form
   }
 
   const toggleConnector = async (c) => {
     setSyncing(true)
-    if (c.status === 'connected') await api.disconnectConnector(c.id)
-    else {
-      const r = await api.connectConnector(c.id)
-      if (r?.note) setConnNote(r.note)          // e.g. "share files to <sa-email>"
-      if (r?.status === 'connected') await api.syncConnector?.(c.id).catch(() => {})
-    }
+    try {
+      if (c.status === 'connected') await api.disconnectConnector(c.id)
+      else {
+        const r = await api.connectConnector(c.id)
+        if (r?.note) setConnNote(r.note)          // e.g. "share files to <sa-email>"
+        if (r?.status === 'connected') await api.syncConnector?.(c.id).catch(() => {})
+      }
+    } catch (e) { setConnNote(`Couldn't reach the backend — ${e.message}`) }
     load(); setSyncing(false)
   }
 
@@ -78,12 +84,6 @@ export default function Settings() {
     patch({ prefs: { disabled_tools: next } })
   }
 
-  const setMcps = (next) => patch({ mcp_servers: next })
-  const addMcp = () => {
-    if (!mcpName.trim() || !mcpUrl.trim()) return
-    setMcps([...mcps, { id: `mcp-${Date.now()}`, name: mcpName.trim(), url: mcpUrl.trim(), status: 'configured' }])
-    setMcpName(''); setMcpUrl('')
-  }
 
   const doImport = async (f) => {
     if (!f) return
@@ -211,12 +211,14 @@ export default function Settings() {
               </button>
             </Field>
             <Field label="Approval mode">
+              <Can perm="settings" reason="Only the owner changes approval mode">
               <select defaultValue={settings?.prefs?.approval_mode}
                 onChange={e => patch({ prefs: { approval_mode: e.target.value } })}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] focus:outline-none focus:border-ink bg-white">
                 <option value="manual">Manual — approve everything</option>
                 <option value="auto_low_risk">Auto — low-risk only</option>
               </select>
+              </Can>
             </Field>
             <Field label="Language">
               <select defaultValue={settings?.prefs?.language}
@@ -347,14 +349,16 @@ export default function Settings() {
 
         {/* role / access — RBAC demo surface */}
         <section>
-          <SectionHead icon={ShieldCheck} title="Access role" sub={<span className="text-[10px] text-slate-400">What this login can do — drives button permissions across the app</span>} />
+          <SectionHead icon={ShieldCheck} title="Access role" sub={<span className="text-[10px] text-slate-400">Enforced by the server on every request — signed, workspace-bound session</span>} />
           <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-center gap-6">
             <AccessRings allowed={currentRole === 'owner'} size={84} />
             <div className="flex-1">
               <div className="flex gap-2">
                 {Object.entries(ROLES).map(([k, r]) => (
-                  <button key={k} onClick={() => role.set(k)}
-                    className={`rounded-xl border px-4 py-2.5 text-left transition
+                  <button key={k} disabled={!role.canBecome(k)}
+                    title={role.canBecome(k) ? `View the workspace as ${r.label}` : `A ${role.base()} session can't become ${r.label}`}
+                    onClick={() => role.set(k).then(() => toast.push(`Now viewing as ${r.label}`)).catch(() => {})}
+                    className={`rounded-xl border px-4 py-2.5 text-left transition disabled:opacity-40 disabled:cursor-not-allowed
                       ${currentRole === k ? 'border-ink bg-ink text-white' : 'border-slate-200 hover:border-slate-300'}`}>
                     <div className="text-[12px] font-semibold">{r.label}</div>
                     <div className={`text-[9px] mt-0.5 ${currentRole === k ? 'text-white/60' : 'text-slate-400'}`}>{r.desc}</div>
@@ -362,43 +366,28 @@ export default function Settings() {
                 ))}
               </div>
               <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
-                Viewer sees everything but can't act; Manager can approve drafts and hire agents; Owner controls connectors, MCP and skills.
+                Viewer reads and chats; Manager also approves drafts and hires agents; Owner controls settings, connectors, data and MCP.
+                Owners can switch down to preview a role and back — the server refuses anything above your session's ceiling.
               </p>
+              <InviteTeammate />
             </div>
           </div>
         </section>
 
-        {/* mcp servers */}
+        {/* mcp servers — agents consume external MCP tools (A3) */}
         <section>
-          <SectionHead icon={Server} title="MCP servers" sub={<span className="text-[9px] font-bold text-magenta bg-magenta/10 rounded px-1.5 py-0.5">BETA</span>}
+          <SectionHead icon={Server} title="MCP servers"
             right={<a href="#/marketplace" className="text-[11px] text-accent hover:text-ink flex items-center gap-1 transition"><Store size={11} /> Browse marketplace</a>} />
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <p className="text-[12px] text-slate-500 leading-relaxed">
-              Plug in external MCP endpoints — agents can call their tools after owner approval.
-            </p>
-            {mcps.map(m => (
-              <div key={m.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-2.5">
-                <Server size={13} className="text-slate-400" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-medium text-ink">{m.name}</div>
-                  <div className="text-[10px] text-slate-400 truncate">{m.url}</div>
-                </div>
-                <span className="text-[9px] font-medium text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">{m.status}</span>
-                <button onClick={() => setMcps(mcps.filter(x => x.id !== m.id))} className="text-slate-300 hover:text-rose-500 transition"><Trash2 size={13} /></button>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <input value={mcpName} onChange={e => setMcpName(e.target.value)} placeholder="Server name (e.g. tally-mcp)"
-                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[12px] focus:outline-none focus:border-ink" />
-              <input value={mcpUrl} onChange={e => setMcpUrl(e.target.value)} placeholder="https://…/sse"
-                className="flex-[1.5] rounded-lg border border-slate-200 px-3 py-2 text-[12px] focus:outline-none focus:border-ink" />
-              <Can perm="mcp" reason="Adding MCP servers needs Owner">
-                <button onClick={addMcp}
-                  className="rounded-lg bg-ink text-white px-4 text-[12px] font-medium flex items-center gap-1 hover:bg-ink/85 transition">
-                  <Plus size={12} /> Add
-                </button>
-              </Can>
-            </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <McpServers servers={mcps} agents={agentList} onSaved={load} />
+          </div>
+        </section>
+
+        {/* Sahayak as an MCP server (A3) */}
+        <section>
+          <SectionHead icon={PlugZap} title="Connect your AI tools to Sahayak" />
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <ConnectAiTools />
           </div>
         </section>
         </div>
@@ -438,3 +427,32 @@ const Toggle = ({ on, onClick }) => (
     <span className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
   </button>
 )
+
+// Owner mints a teammate link — its role is baked into the signed token, so an
+// invited manager/viewer can never escalate (POST /auth/invite).
+function InviteTeammate() {
+  const [link, setLink] = useState('')
+  const [pick, setPick] = useState('manager')
+  const make = async () => {
+    try {
+      const r = await api.invite(pick)
+      setLink(`${location.origin}${location.pathname}#/join/${r.token}`)
+    } catch { /* 403 toasted by api */ }
+  }
+  return (
+    <Can perm="settings" reason="Only the owner can invite teammates">
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <select value={pick} onChange={e => setPick(e.target.value)}
+          className="rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] bg-white">
+          <option value="manager">Manager</option><option value="viewer">Viewer</option>
+        </select>
+        <button onClick={make} className="rounded-lg bg-ink text-white text-[11px] px-3 py-1.5">Create invite link</button>
+        {link && (
+          <button onClick={() => { navigator.clipboard?.writeText(link); toast.push('Invite link copied') }}
+            className="max-w-[260px] truncate rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-mono text-slate-500 hover:text-ink"
+            title={link}>{link}</button>
+        )}
+      </div>
+    </Can>
+  )
+}

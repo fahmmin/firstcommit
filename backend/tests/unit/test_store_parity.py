@@ -20,7 +20,7 @@ class TestStoreParity:
 
     _ALL_COLLECTIONS = ("specs", "invoices", "suppliers", "carriers", "alerts", "payables",
                         "tasks", "notifications", "connectors", "settings", "activity",
-                        "memories", "artifacts", "documents")
+                        "memories", "artifacts", "documents", "listings", "approvals")
 
     def _store(self, impl, tmp_path):
         if impl == "local":
@@ -139,3 +139,41 @@ class TestStoreParity:
         assert s.delete_document(self.T, "doc-1") is True
         assert s.delete_document(self.T, "doc-1") is False
         assert s.list_documents(self.T) == []
+
+    def test_approval_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_approval(self.T, {"id": "apr-1", "tool": "create_invoice", "status": "pending",
+                                "title": "Add invoice", "args": {"amount": 100}})
+        assert s.get_approval(self.T, "apr-1")["status"] == "pending"
+        s.update_approval(self.T, "apr-1", status="executed")
+        assert s.get_approval(self.T, "apr-1")["status"] == "executed"
+        assert len(s.list_approvals(self.T)) == 1
+
+    def test_update_unknown_id_returns_none_no_ghost(self, impl, tmp_path):
+        # DynamoDB UpdateExpression would upsert a ghost row on a missing id;
+        # both stores must return None and create nothing (drives correct 404s).
+        s = self._store(impl, tmp_path)
+        assert s.update_task(self.T, "ghost", status="done") is None
+        assert s.get_task(self.T, "ghost") is None
+        assert s.update_approval(self.T, "ghost", status="denied") is None
+        assert s.update_invoice(self.T, "ghost", status="paid") is None
+
+    def test_reset_clears_collections_absent_from_seed(self, impl, tmp_path):
+        # demo/reset must wipe the approvals ledger too (not just seeded colls)
+        s = self._store(impl, tmp_path)
+        s.put_approval(self.T, {"id": "apr-x", "tool": "create_invoice", "status": "pending"})
+        s.reset(self.T, {"invoices": []})
+        assert s.list_approvals(self.T) == []
+
+    def test_grants_persist_via_settings(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_settings(self.T, {"prefs": {"approval_grants": ["sync_catalog"]}})
+        assert s.get_settings(self.T)["prefs"]["approval_grants"] == ["sync_catalog"]
+
+    def test_spec_role_id_roundtrip(self, impl, tmp_path):
+        s = self._store(impl, tmp_path)
+        s.put_spec(self.T, {"id": "a9", "name": "C", "goal": "g", "tools": ["list_alerts"],
+                            "role_id": "compliance",
+                            "guardrails": {"allowed_tools": ["list_alerts"], "extra_tools": ["recall_context"]}})
+        got = s.get_spec(self.T, "a9")
+        assert got["role_id"] == "compliance" and got["guardrails"]["extra_tools"] == ["recall_context"]

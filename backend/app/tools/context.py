@@ -20,39 +20,57 @@ def build_memory_suffix(tenant_id: str) -> str:
     mems = deps.store.list_memories(tenant_id)
     if mems:
         lines = "\n".join(f"- {m['text']}" for m in mems)
-        suffix += ("\n\nWhat the owner told you about their business "
-                   "(honor these in every answer):\n" + lines)
+        suffix += ("\n\nWhat the owner told you about their business — authoritative facts "
+                   "that are NOT in the ledger, so your tools won't return them. Honor them in "
+                   "every answer, and when the owner asks about something they cover (a named "
+                   "buyer, supplier, slow payer, rule), answer from these directly — even if "
+                   "your tools show nothing for it, these notes are still true (or call "
+                   "recall_context):\n" + lines)
     from .documents import build_context_suffix
     suffix += build_context_suffix(tenant_id)
     return suffix
+
+
+_PAYMENT_WORDS = ("slow payer", "pays late", "late payer", "cash-only", "cash only", "credit",
+                  "defaulter", "pays", "payment", "udhaar", "follow up")
+
+
+def payment_notes(tenant_id: str) -> list[str]:
+    """Owner notes about how customers pay — attached to money-tool results so a
+    model can't answer 'no slow payers' from an empty ledger while the owner has
+    told us otherwise (real models otherwise trust the tool over the prompt)."""
+    if deps.store is None:
+        return []
+    return [m["text"] for m in deps.store.list_memories(tenant_id)
+            if any(w in m["text"].lower() for w in _PAYMENT_WORDS)][:5]
 
 
 def memory_tools(tenant_id: str) -> list:
 
     @tool
     def recall_context(query: str = "") -> dict:
-        """Recall what the owner has taught you about their business. Optionally
-        filter by a keyword (e.g. a buyer or supplier name)."""
-        import re
+        """Recall what the owner taught you + retrieve relevant business documents.
+        Uses hybrid search (keyword + embeddings) and returns grounded citations."""
+        from .retrieval import keyword_score, search_documents, tokens
         mems = deps.store.list_memories(tenant_id)
-        docs = deps.store.list_documents(tenant_id)
-        doc_items = [{"text": f"{d.get('filename','')}: {d.get('summary','')}"} for d in docs]
-        stop = {"what", "does", "about", "remember", "recall", "know", "tell", "have",
-                "your", "the", "you", "told", "context", "note", "notes"}
-        if query:
-            words = [w for w in re.findall(r"[a-z0-9]+", query.lower())
-                     if len(w) > 3 and w not in stop]
-            def _match(items):
-                return [i for i in items if any(w in i["text"].lower() for w in words)]
-            mem_hits, doc_hits = _match(mems), _match(doc_items)
-            matched = mem_hits + doc_hits or mems
+        # memories: keyword-rank against the query (fall back to all when query is broad)
+        q_toks = tokens(query)
+        if q_toks:
+            scored = [(keyword_score(q_toks, m["text"]), m) for m in mems]
+            mem_hits = [m for s, m in sorted(scored, key=lambda x: x[0], reverse=True) if s > 0][:5]
+            mem_lines = [m["text"] for m in mem_hits] or [m["text"] for m in mems[:3]]
         else:
-            matched = mems + doc_items
-        lines = [m["text"] for m in matched]
-        return {
-            "memories": lines,
-            "reply": ("Here's what you've told me: " + " | ".join(lines))
-                     if lines else "You haven't taught me anything specific yet.",
-        }
+            mem_lines = [m["text"] for m in mems]
+        # documents: real hybrid retrieval → cited snippets
+        doc_hits = search_documents(tenant_id, query, k=4) if query else []
+        citations = [{"filename": h["filename"], "snippet": h["snippet"],
+                      "score": h.get("rerank_score", h["score"])} for h in doc_hits]
+        parts = []
+        if mem_lines:
+            parts.append("What you've told me: " + " | ".join(mem_lines))
+        for c in citations:
+            parts.append(f"From {c['filename']}: {c['snippet']}")
+        reply = "\n".join(parts) if parts else "You haven't taught me anything specific yet."
+        return {"memories": mem_lines, "citations": citations, "reply": reply}
 
     return [recall_context]

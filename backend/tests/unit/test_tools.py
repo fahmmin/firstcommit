@@ -60,7 +60,9 @@ def test_scheduler_promotes_due_alert(tenant):
     deps.store.put_alert(tenant, {
         "id": "a-later", "kind": "reminder", "title": "future",
         "status": "scheduled", "fires_at": "2999-01-01T00:00:00Z"})
-    assert run_once(tenant) == 1
+    # >=1 (not ==1): the seeded tenant may have other now-past scheduled alerts;
+    # what matters is our due one promotes and our future one does not.
+    assert run_once(tenant) >= 1
     statuses = {a["id"]: a["status"] for a in deps.store.list_alerts(tenant)}
     assert statuses["a-due"] == "pending_approval"
     assert statuses["a-later"] == "scheduled"
@@ -74,3 +76,29 @@ def test_aging_math(tenant):
     total = sum(report["buckets"].values())
     expected = sum(r["amount"] for r in deps.store.list_invoices(tenant, status="overdue"))
     assert total == expected
+
+
+def test_clean_reply_keeps_response_drops_thinking():
+    from app.main import _clean_reply
+    raw = "<thinking>plan</thinking>\n\n<response>SafeRoad at ₹3.9/kg</response>\n"
+    assert _clean_reply(raw) == "SafeRoad at ₹3.9/kg"
+    assert _clean_reply("plain answer") == "plain answer"
+    assert _clean_reply("<thinking>a</thinking>b<thinking>c</thinking>") == "b"
+
+
+def test_list_overdue_aggregates_by_buyer(tenant):
+    from app.tools.invoices import invoice_tools
+    t = next(x for x in invoice_tools(tenant) if x.tool_name == "list_overdue")
+    out = t()
+    top = out["by_buyer"][0]
+    assert top["total"] == max(b["total"] for b in out["by_buyer"])
+    assert f"Most owed by: {top['buyer']}" in out["reply"]
+    assert sum(b["total"] for b in out["by_buyer"]) == out["total"]
+
+
+def test_money_tool_carries_owner_payment_notes(tenant):
+    from app import deps
+    from app.tools.invoices import invoice_tools
+    deps.store.put_memory(tenant, {"id": "m-slow", "text": "Joshi Builders is a slow payer", "source": "owner"})
+    out = next(x for x in invoice_tools(tenant) if x.tool_name == "list_overdue")()
+    assert "Joshi Builders is a slow payer" in out["owner_notes"] and "Joshi" in out["reply"]

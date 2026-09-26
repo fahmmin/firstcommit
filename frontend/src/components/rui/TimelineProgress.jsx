@@ -1,58 +1,33 @@
 // ReverseUI "timeline-progress" recreation — a vertical stack of dark pills
 // connected by a growing rail; each pill carries a check circle when done and
 // a live spinner on the active step. Shown while an agent reply is cooking.
-// Steps are keyword-routed from the user's message (which tool / MCP / skill).
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Brain, Database, Wrench, Quote, Sparkles, Check, Loader2, Globe, ListChecks, BookOpen } from 'lucide-react'
+import { Brain, Database, Wrench, Sparkles, Check, Loader2, Globe, BookOpen } from 'lucide-react'
 
-const TOOL_ROUTES = [
-  [/invoice|overdue|payment|reminder|vasool|bhej/i, { tool: 'list_overdue', via: 'tally-mcp', sources: 'invoices · reminders' }],
-  [/supplier|buy|order|price|stock|moq|source/i, { tool: 'search_catalog', via: 'sheets-mcp', sources: 'suppliers · catalog' }],
-  [/transport|deliver|track|shipment|carrier|logistic|pickup/i, { tool: 'list_carriers', via: 'india-logistics-mcp', sources: 'carriers · bookings' }],
-  [/cash|flow|term|gap|90.?day/i, { tool: 'term_gap_analysis', via: 'khata-engine', sources: 'receivables · payables' }],
-  [/hire|agent|nirmata|build|create/i, { tool: 'create_agent', via: 'agent-factory', sources: 'registry · tool map' }],
-  [/search|find|where/i, { tool: 'workspace_search', via: 'enterprise-search', sources: 'all collections' }],
-]
-const DEFAULT_ROUTE = { tool: 'read_ledger', via: 'tally-mcp', sources: 'invoices · memory' }
-
-// scope: { skills: [..], mcps: [..] } from the exclusion tabs — the trace
-// honestly names the selected surface instead of the default route.
-// mode: chat | web | deep — changes which steps appear (web adds a Perplexity
-// search hop; deep expands to a multi-query research plan).
+// This is a PENDING indicator shown while /chat is in flight — it can't know
+// which tools will run, so it never names specific tools, providers, models or
+// source counts. The real trace (tools used, sources, tokens) renders on the
+// reply itself (SourceChips + usage) once the backend answers.
+// scope: { agents: [..], tools: [..] } — only what the USER picked is named.
+// mode: chat | web | deep — web/deep add the web-search hop.
 export function TimelineProgress({ text, scope, mode = 'chat' }) {
-  const route = useMemo(() => {
-    const r = TOOL_ROUTES.find(([re]) => re.test(text || ''))?.[1] || DEFAULT_ROUTE
-    const mcp = scope?.mcps?.[0]
-    const skill = scope?.skills?.[0]
-    return {
-      ...r,
-      via: mcp ? mcp : r.via,
-      sources: skill ? `${skill} · ${r.sources}` : r.sources,
-    }
-  }, [text, scope])
-
   const steps = useMemo(() => {
-    if (mode === 'deep') return [
-      { icon: Brain, label: 'Gathering business memory', sub: 'owner notes' },
-      { icon: ListChecks, label: 'Planning research', sub: 'Perplexity Sonar' },
-      { icon: Globe, label: 'Running 6 web queries', sub: 'marketplaces · GST rules' },
-      { icon: BookOpen, label: 'Reading 12 sources', sub: 'citations ranked' },
-      { icon: Wrench, label: `Calling ${route.tool}`, sub: `via ${route.via}` },
-      { icon: Sparkles, label: 'Synthesizing report', sub: 'Nova Pro' },
+    const agent = scope?.agents?.[0]
+    const tool = scope?.tools?.[0]
+    const s = [
+      { icon: Brain, label: 'Reading business memory', sub: 'your notes + documents' },
+      { icon: Database, label: agent ? `Asking ${agent}` : 'Routing to the right agent', sub: tool ? `limited to ${tool.replace(/_/g, ' ')}` : 'orchestrator' },
     ]
-    const base = [
-      { icon: Brain, label: 'Gathering business memory', sub: 'owner notes' },
-      { icon: Database, label: 'Fetching sources', sub: route.sources },
-      { icon: Wrench, label: `Calling ${route.tool}`, sub: `via ${route.via}` },
-    ]
-    if (mode === 'web') base.push({ icon: Globe, label: 'Searching the web', sub: 'Perplexity' })
-    base.push(
-      { icon: Quote, label: 'Reading citations', sub: mode === 'web' ? 'docs · web' : 'docs · tables' },
-      { icon: Sparkles, label: 'Cooking response', sub: 'Nova Pro' },
+    if (mode === 'web' || mode === 'deep')
+      s.push({ icon: Globe, label: 'Searching the web', sub: mode === 'deep' ? 'broader multi-source pass' : 'live results' })
+    if (mode === 'deep') s.push({ icon: BookOpen, label: 'Reading sources', sub: 'ranking what matters' })
+    s.push(
+      { icon: Wrench, label: 'Using tools on your data', sub: 'reads run now · actions wait for approval' },
+      { icon: Sparkles, label: 'Writing the answer', sub: 'with citations' },
     )
-    return base
-  }, [route, mode])
+    return s
+  }, [scope, mode])
 
   const [shown, setShown] = useState(0)
   useEffect(() => {
@@ -64,7 +39,7 @@ export function TimelineProgress({ text, scope, mode = 'chat' }) {
   return (
     <div className="w-fit max-w-full">
       <div className="text-[9px] font-semibold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-        <Loader2 size={9} className="animate-spin" /> {steps.length} tasks running
+        <Loader2 size={9} className="animate-spin" /> Working…
       </div>
       <div className="relative pl-1">
         {/* the rail — grows as steps land */}

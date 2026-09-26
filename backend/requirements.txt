@@ -1,4 +1,5 @@
 strands-agents==1.56.0
+mcp>=2.1,<2.2   # A3 — MCP client+server (also a strands dep; pinned since we import it directly)
 fastapi
 python-dotenv
 uvicorn[standard]

@@ -1,7 +1,7 @@
 {
   "$comment": "SINGLE SOURCE OF TRUTH — full API surface + frontend flow. Fahmin builds ALL UI against these shapes (never waits on Ayush). Ayush implements until every response matches (contract tests + sim must stay green). Shapes marked [EXISTS] already work; [TODO] are Ayush's build list. To change a shape: BOTH agree, edit here first, then code.",
   "base_url": "http://localhost:8000",
-  "auth": "Demo login only — POST /auth/login returns a token; send as Authorization: Bearer or ignore it. NO real auth (post-hackathon).",
+  "auth": "Real signed sessions — POST /auth/login returns an HMAC token bound to {tenant_id, role, base_role}. Send it as Authorization: Bearer on EVERY call (media URLs may use ?access_token=). Server rejects missing/forged/expired tokens (401), another tenant's tenant_id (403) and routes the role can't use (403). Roles: owner [*], manager [approve, hire, chat, artifacts], viewer [chat]. Public: /health, /auth/login, /public/*.",
 
   "frontend_flow": {
     "$comment": "Every page, the route, and which endpoints feed it. Ayush: this is your endpoint build list.",
@@ -25,15 +25,31 @@
   },
 
   "endpoints": {
-    "POST /auth/login [TODO]": {
-      "$comment": "provider adapters live client-side (Google chooser / phone+OTP); this endpoint just resolves the tenant + token. Keep name/business optional when provider_id present.",
-      "request": { "provider": "google|phone|guest", "provider_id": "ramesh@gmail.com", "name": "Ramesh Gupta", "business": "Ramesh Auto Components" },
+    "POST /auth/login [EXISTS]": {
+      "$comment": "provider adapters live client-side (Google chooser / phone+OTP); this endpoint resolves the tenant and issues a signed session token (backend/app/auth.py).",
+      "request": { "provider": "google|phone|guest", "provider_id": "ramesh@gmail.com", "name": "Ramesh Gupta", "business": "Ramesh Hardware & Electricals" },
       "response": {
-        "token": "demo-tok-ramesh",
+        "token": "<signed HMAC token>",
+        "role": "owner",
+        "base_role": "owner",
         "tenant_id": "ramesh_auto",
-        "user": { "name": "Ramesh Gupta", "business": "Ramesh Auto Components", "city": "Faridabad", "line": "auto components" },
+        "user": { "name": "Ramesh Gupta", "business": "Ramesh Hardware & Electricals", "city": "Faridabad", "line": "hardware" },
         "onboarded": true
       }
+    },
+    "GET /auth/me [EXISTS]": {
+      "$comment": "who this token is",
+      "response": { "tenant_id": "ramesh_auto", "role": "owner", "base_role": "owner", "perms": ["*"], "exp": 1790000000 }
+    },
+    "POST /auth/role [EXISTS]": {
+      "$comment": "'View as' — re-issues the token; 403 above base_role",
+      "request": { "role": "viewer" },
+      "response": { "token": "<signed>", "role": "viewer", "base_role": "owner" }
+    },
+    "POST /auth/invite [EXISTS]": {
+      "$comment": "owner-only teammate link; base_role = role so it can't escalate. Frontend route #/join/<token>",
+      "request": { "role": "manager" },
+      "response": { "token": "<signed>", "role": "manager", "tenant_id": "ramesh_auto", "expires_in_days": 30 }
     },
 
     "GET /dashboard/summary [TODO]": {
@@ -59,7 +75,8 @@
         "agent_name": "vasool",
         "agent_tagline": "पैसा वसूलने वाला",
         "actions": [{ "type": "invoices_listed", "data": {} }],
-        "trace": ["sahayak", "vasool"]
+        "trace": ["sahayak", "vasool"],
+        "usage": { "tools": ["vasool"], "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0, "latency_ms": 12 }
       }
     },
 
@@ -279,8 +296,12 @@
       }
     },
     "GET /logs?tenant_id= [TODO]": {
-      "$comment": "Unified activity/audit log — dashboard activity feed + agent actions.",
+      "$comment": "Unified activity/audit log — dashboard activity feed + agent actions + agent_run telemetry.",
       "response": [{ "id": "act-1", "ts": "2026-09-19T02:10:00Z", "kind": "agent_created", "text": "Nirmata hired 'Logistics Agent'" }]
+    },
+    "GET /metrics?tenant_id= [TODO]": {
+      "$comment": "D2 observability — aggregate agent-run telemetry (tokens, est cost, latency, tool histogram). Each POST /chat also returns a per-run `usage` block.",
+      "response": { "runs": 12, "total_tokens": 48213, "est_cost_usd": 0.0412, "avg_latency_ms": 1830, "by_tool": { "vasool": 5, "sourcer": 2 }, "recent": [] }
     },
     "GET /templates?tenant_id= [TODO]": {
       "$comment": "Prompt/agent template catalog. category ∈ money|procurement|logistics|new_agent|presence. runs_on names the agent; new_agent/presence carry an agent_spec that /templates/{id}/install feeds to the factory.",
@@ -323,11 +344,52 @@
       }
     },
 
+    "GET /approvals?tenant_id=&status= [EXISTS]": {
+      "$comment": "A1 durable action-approval ledger. Side-effecting agent tools (create_invoice, create_artifact, schedule_alert, publish_listing, sync_catalog, non-read-only MCP tools) queue here until the owner decides. Reads auto-run and never appear. Drafted reminders/bookings are approval-by-draft (alerts with status=pending_approval), not ledger rows. Decided rows add decided_at; executed rows add result_ref {kind,id,label,share_path?}; failed rows add error.",
+      "response": [{ "id": "apr-1", "tool": "create_invoice", "title": "Add invoice for Kapil Auto (₹12,400)", "summary": "Invoice ₹12,400 to Kapil Auto, due 2026-10-19", "agent": "vasool", "risk": "ask", "status": "pending|executed|denied|failed", "args": {}, "created_at": "2026-09-26T04:00:00Z" }]
+    },
+    "POST /approvals/{id}/approve [EXISTS]": {
+      "$comment": "Owner/manager approves → the queued action executes now. No registered executor → status=failed (never a fake 'executed').",
+      "response": { "id": "apr-1", "status": "executed", "result": {}, "result_ref": { "kind": "invoice", "id": "inv-x", "label": "INV-2302" } }
+    },
+    "POST /approvals/{id}/deny [EXISTS]": { "$comment": "only pending rows — 409 otherwise", "response": { "id": "apr-1", "status": "denied" } },
+    "POST /approvals/grant [EXISTS]": {
+      "$comment": "Auto-approve a gated tool (persisted in settings.prefs.approval_grants). 400 for tools that don't need approval.",
+      "request": { "tenant_id": "ramesh_auto", "tool": "create_invoice", "on": true },
+      "response": { "tool": "create_invoice", "granted": true, "grants": ["create_invoice"] }
+    },
+    "GET /approvals/grants [EXISTS]": { "response": { "grants": ["sync_catalog"], "gated_tools": ["create_artifact", "create_invoice", "publish_listing", "schedule_alert", "sync_catalog"] } },
+    "POST /alerts/{id}/dismiss [EXISTS]": { "$comment": "reject a drafted reminder/booking — persisted, never sent; 409 if already sent", "response": { "id": "alert-1", "status": "dismissed" } },
+
+    "GET /roles [EXISTS]": {
+      "$comment": "A2 role registry (backend/app/agents/roles.py) — the data-driven catalogue the factory hires from. allowed_tools is the ceiling, tool_limit the cap, extras = always-on groups (artifact/memory/web_search) granted + Cedar-gated per role.",
+      "response": [{ "id": "compliance", "name": "Compliance Agent", "hindi_tagline": "कानून का ख्याल", "category": "compliance", "icon": "shield", "description": "Watches GST/TDS deadlines", "goal": "Track GST/TDS filing deadlines", "default_tools": ["list_alerts", "schedule_alert"], "allowed_tools": ["list_alerts", "schedule_alert", "aging_report"], "tool_limit": 4, "max_action": "draft_only", "extras": ["artifact", "memory"], "intent_keywords": ["gst"] }]
+    },
+    "POST /agents/batch [EXISTS]": {
+      "$comment": "Hire several role-based agents in one call (single routing rebuild). POST /agents and /agents/preview also accept role_id.",
+      "request": { "tenant_id": "ramesh_auto", "roles": [{ "role_id": "compliance", "tools": ["list_alerts"] }, { "role_id": "digital_presence" }] },
+      "response": { "hired": [{ "id": "agent-ab12cd", "name": "Compliance Agent", "role_id": "compliance", "tools": ["list_alerts"], "refused_tools": [] }], "errors": [{ "role_id": "ghost", "error": "unknown role" }] }
+    },
+
+    "POST /integrations/mcp/{id}/test [EXISTS]": {
+      "$comment": "A3 — real MCP handshake with an owner-added server (settings.mcp_servers[]): connect → tools/list; persists status/tools/last_checked and logs mcp_connected|mcp_error. mcp_servers rows: {id,name,url,transport:'streamable-http'|'sse',auth_token(write-only → '••••' + has_token),enabled,agents:'all'|[agent_id|'sahayak'],trusted,status:'untested'|'connected'|'error',last_checked,tools:[{name,read_only,description}],error?}. PATCH /settings validates URLs (https, or http on localhost) → 422.",
+      "response": { "id": "mcp-1", "status": "connected", "tools": [{ "name": "list_overdue_invoices", "read_only": true, "description": "…" }], "last_checked": "2026-09-26T10:00:00Z" }
+    },
+    "POST /integrations/mcp/token [EXISTS]": {
+      "$comment": "owner-only: token for EXTERNAL MCP clients to use Sahayak at <backend>/mcp (streamable HTTP, stateless, JSON). scope=mcp — rejected by the app API. Read tools need any token; write tools need manager+ and queue in Approvals.",
+      "response": { "token": "<signed, scope=mcp>", "endpoint_path": "/mcp", "expires_in_days": 90, "tools": ["aging_report", "create_invoice", "list_overdue_invoices"] }
+    },
+    "GET /marketplace [EXISTS]": {
+      "$comment": "curated MCP catalogue — no install counts, no URLs we can't vouch for (the owner supplies the endpoint); installed = this workspace's servers with live status",
+      "response": { "mcp": [{ "id": "custom", "name": "Any MCP server", "icon": "mcp", "category": "custom", "desc": "…", "url_hint": "https://…/mcp" }], "installed": [], "sahayak_mcp_tools": ["list_overdue_invoices"] }
+    },
+
     "POST /scheduler/run [EXISTS]": { "response": { "moved": 1 } },
     "GET /sent [EXISTS]": { "response": [{ "id": "msg-1", "to": "accounts@x.in", "subject": "...", "via": "console", "sent_at": "..." }] },
     "POST /demo/reset [EXISTS]": { "response": { "status": "reseeded", "tenants": ["ramesh_auto"] } },
-    "GET /health [EXISTS]": { "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock" } }
+    "POST /context/reembed [EXISTS]": { "$comment": "B2 — owner: rebuild document vectors with the current EMBED_PROVIDER (search ignores vectors from other models)", "response": { "model": "amazon.titan-embed-text-v2:0", "reembedded": 10, "skipped": 0 } },
+    "GET /health [EXISTS]": { "$comment": "B2 — reports the real provider seam config (providers.py); provider_error/embed_error present when misconfigured", "response": { "status": "ok", "use_aws": false, "model": "mock|bedrock|anthropic|openai|ollama|litellm", "provider": "bedrock", "orchestrator_model": "apac.amazon.nova-pro-v1:0", "worker_model": "apac.amazon.nova-lite-v1:0", "embed_provider": "titan|openai|ollama|none", "embed_model": "amazon.titan-embed-text-v2:0" } }
   },
 
-  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched", "onboarding_completed"]
+  "action_types": ["invoices_listed", "invoice_created", "reminder_drafted", "agent_created", "alert_scheduled", "carriers_listed", "suppliers_listed", "cashflow_report", "task_completed", "connector_synced", "artifact_created", "memory_added", "excel_imported", "context_added", "template_installed", "web_searched", "onboarding_completed", "action_queued", "action_approved", "mcp_called", "catalog_synced", "listings_published", "seo_audit"]
 }

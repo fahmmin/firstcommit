@@ -42,14 +42,14 @@ ROLE_NAME = os.getenv("LAMBDA_ROLE_NAME", "sahayak-lambda-role")
 RULE_NAME = "sahayak-scheduler"
 RUNTIME_DEPS = [
     "strands-agents==1.56.0", "fastapi", "mangum", "python-dotenv", "python-multipart",
-    "boto3", "pydantic", "openpyxl", "cedarpy", "fpdf2",
+    "boto3", "pydantic", "openpyxl", "cedarpy", "fpdf2", "mcp>=2.1,<2.2",
     "google-api-python-client", "google-auth",  # gcp.py — google_* connectors
 ]
 # forwarded to the Lambda env verbatim — never AWS keys/profile (role supplies
 # creds) and never AWS_REGION (Lambda reserves + sets it itself)
 ENV_FORWARD = ("USE_AWS", "ORCHESTRATOR_MODEL", "WORKER_MODEL",
                "EMBED_MODEL", "SES_SENDER", "S3_BUCKET", "DEFAULT_TENANT",
-               "DEMO_GATE_TOKEN", "TAVILY_API_KEY", "TOKEN_STORE",
+               "DEMO_GATE_TOKEN", "AUTH_SECRET", "TAVILY_API_KEY", "TOKEN_STORE",
                "GOOGLE_SERVICE_ACCOUNT_JSON")
 LAMBDA_POLICY = {
     "Version": "2012-10-17",
@@ -131,7 +131,12 @@ def _win32_stub_wheels() -> Path:
     return stubs
 
 
-def package() -> Path:
+# B2 — optional provider SDKs (MODEL_PROVIDER=anthropic|openai|…); off by default
+# to keep the zip small. `--with-providers` bundles them.
+PROVIDER_DEPS = ["strands-agents[anthropic,openai,ollama,litellm]==1.56.0"]
+
+
+def package(with_providers: bool = False) -> Path:
     if PKG.exists():
         shutil.rmtree(PKG)
     PKG.mkdir(parents=True)
@@ -140,7 +145,8 @@ def package() -> Path:
         sys.executable, "-m", "pip", "install", "--quiet", "--upgrade",
         "--target", str(PKG), "--platform", "manylinux2014_x86_64",
         "--python-version", "3.11", "--only-binary=:all:",
-        "--find-links", str(_win32_stub_wheels()), *RUNTIME_DEPS], check=True)
+        "--find-links", str(_win32_stub_wheels()), *RUNTIME_DEPS,
+        *(PROVIDER_DEPS if with_providers else [])], check=True)
     # guard: fail loudly if dep resolution ever drifts strands below the
     # version with Agent.as_tool (the silent-1.1.0 failure mode above)
     agent_py = PKG / "strands" / "agent" / "agent.py"
@@ -204,6 +210,12 @@ def deploy_lambda(role_arn: str, zip_path: Path) -> str | None:
         import secrets
         env["DEMO_GATE_TOKEN"] = secrets.token_urlsafe(9)
         print(f"[gate] generated DEMO_GATE_TOKEN={env['DEMO_GATE_TOKEN']}  ← save this, it is the passcode")
+    if not env.get("AUTH_SECRET"):
+        # signs RBAC tokens (app/auth.py) — keep it stable across deploys by
+        # putting it in .env, or every redeploy signs everyone out
+        import secrets
+        env["AUTH_SECRET"] = secrets.token_urlsafe(32)
+        print("[auth] generated AUTH_SECRET — add AUTH_SECRET=<value from Lambda env> to .env to keep sessions across deploys")
     if not env.get("DEFAULT_TENANT"):
         env["DEFAULT_TENANT"] = "ramesh_auto"
 
@@ -377,12 +389,14 @@ def main() -> int:
                          "tunnel while lambda:CreateFunctionUrlConfig is ungranted")
     ap.add_argument("--skip-backend", action="store_true", help="frontend deploy only")
     ap.add_argument("--skip-frontend", action="store_true")
+    ap.add_argument("--with-providers", action="store_true",
+                    help="bundle optional model-provider SDKs (MODEL_PROVIDER≠bedrock)")
     args = ap.parse_args()
 
     fn_arn = None
     api_url = args.api_url
     if not args.skip_backend:
-        zip_path = step("package", package)
+        zip_path = step("package", lambda: package(with_providers=args.with_providers))
         if args.package_only:
             return 0 if zip_path else 1
         if zip_path:

@@ -1,0 +1,6 @@
+# B2 — OPTIONAL model-provider SDKs for MODEL_PROVIDER=anthropic|openai|ollama|litellm.
+# Not needed for the default Bedrock (USE_AWS=1) or offline mock (USE_AWS=0) paths,
+# and kept out of the Lambda zip by default (deploy_aws.py --with-providers adds it).
+# Embeddings / auto-tag / invoice vision for these providers use plain REST (httpx)
+# and need no SDK — only the chat agents do.
+strands-agents[anthropic,openai,ollama,litellm]==1.56.0

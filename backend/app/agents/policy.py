@@ -20,7 +20,12 @@ def build_policy_text(spec) -> str:
     guardrails = getattr(spec, "guardrails", None) or (
         spec.get("guardrails") if isinstance(spec, dict) else {}) or {}
     tools = getattr(spec, "tools", None) if not isinstance(spec, dict) else spec.get("tools")
-    allowed = guardrails.get("allowed_tools") or tools or []
+    allowed = list(guardrails.get("allowed_tools") or tools or [])
+    # always-on extras (artifact/memory/web_search) are authorized per agent too;
+    # specs from before A2 carry no list → they keep all extras (back-compat)
+    from .specs import ALL_EXTRA_TOOL_NAMES
+    extra = guardrails.get("extra_tools")
+    allowed += list(ALL_EXTRA_TOOL_NAMES if extra is None else extra)
     agent_id = (getattr(spec, "id", None) if not isinstance(spec, dict) else spec.get("id")) or ""
     lines = [
         f'permit(principal == Agent::"{agent_id}", {_ACTION}, resource == Tool::"{t}");'
@@ -53,5 +58,8 @@ def tool_allowed(spec, tool_name: str) -> bool:
         guardrails = getattr(spec, "guardrails", None) or (
             spec.get("guardrails") if isinstance(spec, dict) else {}) or {}
         tools = getattr(spec, "tools", None) if not isinstance(spec, dict) else spec.get("tools")
-        allowed = guardrails.get("allowed_tools") or tools or []
+        from .specs import ALL_EXTRA_TOOL_NAMES
+        extra = guardrails.get("extra_tools")
+        allowed = list(guardrails.get("allowed_tools") or tools or []) + \
+            list(ALL_EXTRA_TOOL_NAMES if extra is None else extra)
         return tool_name in allowed

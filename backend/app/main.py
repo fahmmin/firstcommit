@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import uuid
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -24,7 +25,7 @@ class UTF8JSONResponse(JSONResponse):
         return json.dumps(content, ensure_ascii=False, allow_nan=False,
                           separators=(",", ":"), default=str).encode("utf-8")
 
-from . import deps, gcp
+from . import auth, deps, gcp
 from .agents import registry as reg
 from .agents.specs import ALL_TOOL_NAMES, TOOL_REGISTRY, AgentSpec
 from .notifier import get_notifier
@@ -33,7 +34,7 @@ from .store import DATA_DIR, get_store
 from .tools.artifacts import TEMPLATES, create_artifact_impl
 from .reports import REPORT_TYPES, build_report
 from .tools.comms import send_alert_impl
-from .tools.documents import cosine, embed_text, ingest_document_impl
+from .tools.documents import ingest_document_impl
 from .tools.importer import import_excel_impl
 from .tools.invoices import create_invoice_impl, draft_reminder_impl, parse_invoice_file
 
@@ -42,11 +43,40 @@ _PKG_ROOT = Path("/tmp") if ON_LAMBDA else Path(__file__).resolve().parent.paren
 UPLOAD_DIR = _PKG_ROOT / "uploads"          # Lambda FS is read-only outside /tmp
 SEED_PATH = Path(__file__).resolve().parent / "seed" / "seed.json"
 
-app = FastAPI(title="Sahayak AI", default_response_class=UTF8JSONResponse)
+@asynccontextmanager
+async def _lifespan(_app):
+    # idempotent: Mangum runs the lifespan on every Lambda invocation, and tests
+    # install their own isolated store first — never replace a live one
+    if deps.store is None:
+        deps.init_deps(get_store(), get_notifier())
+    if not deps.store.list_invoices("ramesh_auto"):
+        _load_seed("ramesh_auto")
+    # local-only daemon — on Lambda, EventBridge invokes the handler directly;
+    # a background thread inside a frozen execution environment would race it.
+    if not ON_LAMBDA:
+        scheduler_start()
+    yield
+
+
+app = FastAPI(title="Sahayak AI", default_response_class=UTF8JSONResponse, lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+# real auth + RBAC: signed tenant-bound tokens, route permissions via Cedar (auth.py)
+app.add_middleware(auth.AuthMiddleware)
+
+
+class _MCPApp:
+    """ASGI shim so /mcp (exact) and /mcp/… both reach Sahayak's MCP server."""
+    async def __call__(self, scope, receive, send):
+        from .mcp.server import mcp_asgi
+        await mcp_asgi(scope, receive, send)
+
+
+from starlette.routing import Mount, Route  # noqa: E402
+app.router.routes.append(Route("/mcp", endpoint=_MCPApp(), methods=["GET", "POST", "DELETE"]))
+app.router.routes.append(Mount("/mcp", app=_MCPApp()))
 
 
 @app.middleware("http")
@@ -54,23 +84,18 @@ async def _demo_gate(request, call_next):
     """Demo gate — project rule says auth stays demo-only, so instead of real
     auth we gate the API behind a shared passcode (DEMO_GATE_TOKEN). Judges get
     the URL with ?gate=TOKEN baked in; crawlers and link-followers get a 401.
-    Exempt: health + public artifact shares (recipients have no passcode)."""
+    Exempt: health + public artifact shares (recipients have no passcode) and
+    /mcp (external MCP clients authenticate with their own workspace token)."""
     token = os.getenv("DEMO_GATE_TOKEN", "")
-    if (token and request.method != "OPTIONS"
-            and not request.url.path.startswith(("/health", "/public/artifacts"))):
+    path = request.url.path
+    exempt = (path.startswith(("/health", "/public/artifacts"))
+              or path == "/mcp" or path.startswith("/mcp/"))
+    if token and request.method != "OPTIONS" and not exempt:
         if (request.headers.get("x-demo-token") != token
                 and request.query_params.get("gate") != token):
             return JSONResponse({"detail": "demo passcode required"}, status_code=401,
                                 headers={"Access-Control-Allow-Origin": "*"})
     return await call_next(request)
-
-
-@app.on_event("startup")
-def _startup():
-    deps.init_deps(get_store(), get_notifier())
-    if not deps.store.list_invoices("ramesh_auto"):
-        _load_seed("ramesh_auto")
-    scheduler_start()
 
 
 def _load_seed(tenant_id: str):
@@ -83,34 +108,70 @@ class ChatReq(BaseModel):
     text: str
     agent_id: str | None = None
     mode: str = "chat"   # chat | web | deep — web/deep enable the web_search tool
+    scope: list[str] | None = None  # owner's capability pick — restrict this reply's tools
 
 
 class SpecReq(BaseModel):
     tenant_id: str = "ramesh_auto"
-    name: str
-    goal: str
-    tools: list[str]
+    name: str = ""
+    goal: str = ""
+    tools: list[str] = []
     hindi_tagline: str = ""
+    role_id: str | None = None   # A2 — hire from the role registry (roles.py)
+
+
+class BatchHireReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    roles: list[dict]            # [{role_id, name?, tools?}]
 
 
 @app.get("/health")
 def health():
-    model = "bedrock" if os.getenv("USE_AWS", "0") == "1" else "mock"
-    return {"status": "ok", "use_aws": os.getenv("USE_AWS", "0") == "1", "model": model}
+    """Liveness + what's really configured (B2 provider seam), not a hardcoded label."""
+    from .providers import status
+    st = status()
+    return {"status": "ok", "use_aws": os.getenv("USE_AWS", "0") == "1",
+            "model": st.get("provider"), **st}
+
+
+def _clean_reply(raw: str) -> str:
+    """Nova wraps output as <thinking>…</thinking><response>…</response>: drop the
+    reasoning, KEEP the answer. (The old regex deleted <response> blocks too, so a
+    well-formed answer could come back as an empty reply.)"""
+    out = re.sub(r"<thinking>.*?</thinking>", "", raw, flags=re.DOTALL)
+    out = re.sub(r"</?response>", "", out)
+    return out.strip() or raw.strip()
+
+
+_TRANSIENT = ("APIConnectionError", "APITimeoutError", "RateLimitError", "ConnectError",
+              "ReadTimeout", "ThrottlingException", "ServiceUnavailable", "InternalServerError")
 
 
 def _invoke(agent, text: str):
-    """Nova occasionally emits an invalid ToolUse stream — one retry absorbs it."""
+    """One retry absorbs Nova's occasional invalid ToolUse stream and transient
+    provider/network errors; a provider that stays down becomes a clean 503."""
     try:
         return agent(text)
     except Exception as e:
-        if "ToolUse" in str(e) or "modelStreamError" in type(e).__name__:
-            return agent(text)
+        name = type(e).__name__
+        if "ToolUse" in str(e) or "modelStreamError" in name or name in _TRANSIENT:
+            import time as _t
+            _t.sleep(1.5)
+            try:
+                return agent(text)
+            except Exception as e2:
+                if type(e2).__name__ in _TRANSIENT:
+                    raise HTTPException(503, f"model provider unreachable ({type(e2).__name__}) — try again")
+                raise
         raise
 
 
 @app.post("/chat")
 def chat(req: ChatReq):
+    from .tracing import budget, budget_exceeded, spent
+    if budget_exceeded():
+        raise HTTPException(402, f"Model budget reached (${spent():.4f} of ${budget():.2f}) — "
+                                 "raise MODEL_BUDGET_USD or reset spend to continue")
     registry = reg.get_registry(req.tenant_id)
     text = req.text
     if req.mode in ("web", "deep"):
@@ -118,31 +179,61 @@ def chat(req: ChatReq):
                 f"web_search tool{' with deep=True' if req.mode == 'deep' else ''}] " + text)
     actions: list[dict] = []
     token = deps.current_actions.set(actions)
+    text_token = deps.current_user_text.set(req.text)
+    from .tracing import record_run, run_metrics, timer
+    _t = timer().__enter__()
+    from .mcp.client import mcp_tools_for
     try:
+        if req.agent_id and not registry.get_spec(req.agent_id):
+            raise HTTPException(404, f"unknown agent {req.agent_id}")
+        # A3 — the owner's MCP servers assigned to this agent, open for THIS request only
+        with mcp_tools_for(req.tenant_id, req.agent_id) as mcp_tools:
+            if req.agent_id:
+                agent = registry.get_agent(req.agent_id, only_tools=req.scope, extra_tools=mcp_tools)
+                result = _invoke(agent, text)
+            else:
+                agent = registry.orchestrator(only=req.scope, extra_tools=mcp_tools)
+                result = _invoke(agent, text)
+                # grounding guard: the front desk must route, not answer from memory.
+                # A reply with zero tool calls gets one nudge to use a specialist.
+                used = list(result.metrics.tool_metrics.keys()) if result.metrics else []
+                if not used and len(req.text.split()) > 3:
+                    result = _invoke(agent, "[Route this to the right specialist tool — do not "
+                                            "reuse figures from earlier replies.] " + text)
         if req.agent_id:
-            agent = registry.get_agent(req.agent_id)
-            if not agent:
-                raise HTTPException(404, f"unknown agent {req.agent_id}")
-            result = _invoke(agent, text)
             agent_name = req.agent_id
             registry.bump_stats(req.agent_id)
         else:
-            agent = registry.orchestrator()
-            result = _invoke(agent, text)
+            # credit the specialist that actually ran — last invoked tool that
+            # maps to a spec or nirmata (utility tools like web_search must not
+            # steal the byline, and nirmata isn't a stored spec)
             tool_names = list(result.metrics.tool_metrics.keys()) if result.metrics else []
-            agent_name = tool_names[-1] if tool_names else "sahayak"
+            agent_name = next((n for n in reversed(tool_names)
+                               if n == "nirmata" or registry.get_spec(n)), "sahayak")
+            if agent_name != "sahayak":
+                registry.bump_stats(agent_name)
     finally:
         deps.current_actions.reset(token)
+        deps.current_user_text.reset(text_token)
 
+    _t.__exit__()
     spec = registry.get_spec(agent_name) or {}
     trace = ["sahayak"] + ([agent_name] if agent_name != "sahayak" else [])
-    reply = re.sub(r"</?(thinking|response)>.*?</(thinking|response)>|</?(thinking|response)>", "", str(result), flags=re.DOTALL).strip()
+    reply = _clean_reply(str(result))
+    from .providers import model_id
+    model = model_id("orchestrator" if agent_name in ("sahayak", "nirmata") else "worker")
+    usage = run_metrics(result, _t.ms, model)
+    record_run(req.tenant_id, agent_name, usage)
+    from .tracing import _save, spent
+    if usage.get("cost_usd"):
+        _save(spent() + usage["cost_usd"])   # counts toward MODEL_BUDGET_USD
     return {
         "reply": reply,
         "agent_name": agent_name,
         "agent_tagline": spec.get("hindi_tagline", ""),
         "actions": actions,
         "trace": trace,
+        "usage": usage,
     }
 
 
@@ -151,8 +242,29 @@ def agents(tenant_id: str = "ramesh_auto"):
     return reg.get_registry(tenant_id).specs()
 
 
+@app.get("/roles")
+def roles():
+    """A2 — the data-driven catalogue of hireable roles (tools, limits, guardrails)."""
+    from .agents.roles import catalog
+    return catalog()
+
+
 @app.post("/agents/preview")
 def preview_agent(req: SpecReq):
+    if req.role_id:
+        from .agents.roles import ROLE_REGISTRY
+        role = ROLE_REGISTRY.get(req.role_id)
+        if not role:
+            raise HTTPException(404, "unknown role")
+        tools, refused = role.resolve_tools(req.tools or None)
+        return {
+            "valid": bool(tools),
+            "spec": {"name": req.name or role.name, "goal": req.goal or role.goal, "tools": tools,
+                     "hindi_tagline": req.hindi_tagline or role.hindi_tagline, "role_id": role.id,
+                     "guardrails": {"allowed_tools": tools, "max_action": role.max_action}},
+            "warnings": [f"refused (outside role or over its {role.tool_limit}-tool limit): {refused}"]
+                        if refused else [],
+        }
     tools = [t for t in req.tools if t in ALL_TOOL_NAMES]
     warnings = [f"dropped unknown tools: {sorted(set(req.tools) - set(tools))}"] if len(tools) != len(req.tools) else []
     if not tools:
@@ -168,10 +280,38 @@ def preview_agent(req: SpecReq):
 
 @app.post("/agents")
 def create_agent(req: SpecReq):
+    if req.role_id:
+        try:
+            spec = reg.get_registry(req.tenant_id).create_spec(
+                name=req.name, goal=req.goal, tools=req.tools or None,
+                hindi_tagline=req.hindi_tagline, role_id=req.role_id)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"], "spec": spec}
+    if not req.name or not req.goal:
+        raise HTTPException(422, "name and goal are required (or pass role_id)")
+    valid = [t for t in req.tools if t in ALL_TOOL_NAMES]
+    if not valid:
+        raise HTTPException(400, f"no valid tools — allowed: {sorted(ALL_TOOL_NAMES)}")
     spec = reg.get_registry(req.tenant_id).create_spec(
-        name=req.name, goal=req.goal, tools=req.tools, hindi_tagline=req.hindi_tagline
+        name=req.name, goal=req.goal, tools=valid, hindi_tagline=req.hindi_tagline
     )
     return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"], "spec": spec}
+
+
+@app.post("/agents/batch")
+def hire_batch(req: BatchHireReq):
+    """Hire several role-based agents at once (one routing rebuild). Partial
+    success is normal: each item lands in `hired` or `errors`."""
+    if not req.roles:
+        raise HTTPException(400, "roles is empty")
+    res = reg.get_registry(req.tenant_id).hire_roles(req.roles)
+    for spec in res["hired"]:
+        deps.record_action("agent_created", {"spec": spec})
+    return {"hired": [{"id": s["id"], "name": s["name"], "role_id": s.get("role_id"),
+                       "tools": s["tools"], "refused_tools": s.get("refused_tools", [])}
+                      for s in res["hired"]],
+            "errors": res["errors"]}
 
 
 @app.post("/upload")
@@ -235,6 +375,23 @@ def approve_alert(alert_id: str, tenant_id: str = "ramesh_auto"):
     return {"id": alert_id, "status": "sent", "via": result.get("message", {}).get("via", "console")}
 
 
+@app.post("/alerts/{alert_id}/dismiss")
+def dismiss_alert(alert_id: str, tenant_id: str = "ramesh_auto"):
+    """Owner rejects a drafted reminder/booking — persisted, never sent."""
+    a = next((x for x in deps.store.list_alerts(tenant_id) if x["id"] == alert_id), None)
+    if not a:
+        raise HTTPException(404, "no such alert")
+    if a.get("status") == "sent":
+        raise HTTPException(409, "already sent")
+    deps.store.update_alert(tenant_id, alert_id, status="dismissed",
+                            dismissed_at=datetime.now(timezone.utc).isoformat())
+    for n in deps.store.list_notifications(tenant_id):
+        if n.get("ref_id") == alert_id and n.get("status") == "unread":
+            deps.store.update_notification(tenant_id, n["id"], status="read")
+    deps.log_activity(tenant_id, "draft_dismissed", f"Dismissed: {a['title']}")
+    return {"id": alert_id, "status": "dismissed"}
+
+
 @app.get("/cashflow")
 def cashflow(tenant_id: str = "ramesh_auto"):
     receivables = [
@@ -289,7 +446,7 @@ def demo_reset(tenant_id: str = "ramesh_auto"):
     return {"status": "reseeded", "tenants": [tenant_id]}
 
 
-# ================= [TODO] surface — contract.json-tagged endpoints =================
+# ================= demo surface — auth, dashboard, notifications, tasks =================
 
 
 class LoginReq(BaseModel):
@@ -299,19 +456,98 @@ class LoginReq(BaseModel):
     provider_id: str | None = None
 
 
+def _tenant_slug(req: "LoginReq") -> str:
+    """Guests land on the seeded showcase; real logins get their own tenant."""
+    if req.provider == "guest":
+        return "ramesh_auto"
+    # an account whose email matches a workspace owner's email resolves to THAT
+    # workspace (the demo persona's Google login lands on the seeded showcase)
+    pid = (req.provider_id or "").strip().lower()
+    if pid:
+        owner = ((deps.store.get_settings("ramesh_auto") or {}).get("prefs") or {}).get("notify_email", "")
+        if pid == owner.strip().lower():
+            return "ramesh_auto"
+    raw = req.provider_id or req.name or "user"
+    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")[:24] or "user"
+    return "ramesh_auto" if slug in ("ramesh_auto", "ramesh") else slug
+
+
+def _ensure_tenant(tenant_id: str, name: str = "", business: str = "") -> bool:
+    """Create a minimal settings row for a brand-new tenant. Returns True if created."""
+    if deps.store.get_settings(tenant_id):
+        return False
+    deps.store.put_settings(tenant_id, {
+        "business": {"name": business, "owner": name}, "prefs": {}, "onboarded": False,
+        "mcp_servers": [],
+    })
+    return True
+
+
 @app.post("/auth/login")
 def login(req: LoginReq):
-    """Demo login — provider adapters are client-side; this resolves tenant + token."""
-    s = deps.store.get_settings("ramesh_auto") or {}
+    """Demo login — provider adapters are client-side; this resolves tenant + token.
+    Real multi-tenant: the session carries tenant_id; new tenants start empty → onboarding."""
+    tenant_id = _tenant_slug(req)
+    _ensure_tenant(tenant_id, name=req.name, business=req.business)
+    s = deps.store.get_settings(tenant_id) or {}
     biz = s.get("business", {})
-    slug = re.sub(r"[^a-z0-9]+", "", (req.provider_id or req.name).lower())[:12] or "user"
+    # onboarded if explicitly flagged OR the tenant already has ledger data (the showcase)
+    onboarded = bool(s.get("onboarded")) or bool(deps.store.list_invoices(tenant_id))
+    # the person who signs in to a workspace owns it (base=owner); prefs.role is
+    # the view they last chose. Teammates get non-escalatable tokens via /auth/invite.
+    pref = (s.get("prefs") or {}).get("role")
+    role = pref if pref in auth.ROLE_PERMS else "owner"
     return {
-        "token": f"demo-tok-{slug}",
-        "tenant_id": "ramesh_auto",
-        "user": {"name": req.name, "business": req.business,
+        "token": auth.issue(tenant_id, role=role, base="owner"),
+        "role": role, "base_role": "owner",
+        "tenant_id": tenant_id,
+        "user": {"name": req.name, "business": req.business or biz.get("name", ""),
                  "city": biz.get("city", ""), "line": biz.get("line", "")},
-        "onboarded": bool(s.get("onboarded", True)),
+        "onboarded": onboarded,
     }
+
+
+class RoleReq(BaseModel):
+    role: str
+
+
+def _principal() -> dict:
+    c = auth.current_principal.get()
+    if not c:
+        raise HTTPException(401, "sign in required")
+    return c
+
+
+@app.get("/auth/me")
+def auth_me():
+    """Who this token is: tenant, active role, highest role it may assume, perms."""
+    c = _principal()
+    perms = auth.ROLE_PERMS[c["role"]]
+    return {"tenant_id": c["tid"], "role": c["role"], "base_role": c["base"],
+            "perms": perms, "exp": c["exp"]}
+
+
+@app.post("/auth/role")
+def auth_switch_role(req: RoleReq):
+    """'View as' — re-issue the token with another role, never above `base`."""
+    c = _principal()
+    if not auth.can_switch(c, req.role):
+        raise HTTPException(403, f"a {c['base']} session can't become {req.role}")
+    deps.log_activity(c["tid"], "role_switched", f"Session now viewing as {req.role}")
+    return {"token": auth.issue(c["tid"], role=req.role, base=c["base"]),
+            "role": req.role, "base_role": c["base"]}
+
+
+@app.post("/auth/invite")
+def auth_invite(req: RoleReq):
+    """Owner mints a teammate token whose ceiling IS the role — a manager/viewer
+    invited here can never escalate (the base is baked into the signature)."""
+    c = _principal()
+    if req.role not in auth.ROLE_PERMS:
+        raise HTTPException(400, "unknown role")
+    tok = auth.issue(c["tid"], role=req.role, base=req.role, ttl=30 * 24 * 3600)
+    deps.log_activity(c["tid"], "invite_created", f"Invite link created for a {req.role}")
+    return {"token": tok, "role": req.role, "tenant_id": c["tid"], "expires_in_days": 30}
 
 
 @app.get("/dashboard/summary")
@@ -325,6 +561,7 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
     specs = reg.get_registry(tenant_id).specs()
     pending = deps.store.list_alerts(tenant_id, status="pending_approval")
     bookings = [a for a in pending if a.get("kind") == "booking"]
+    ledger = [a for a in deps.store.list_approvals(tenant_id) if a.get("status") == "pending"]
 
     # "N things need you" — the morning-brief card
     brief: list[dict] = []
@@ -335,7 +572,12 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
     if pending:
         brief.append({"icon": "bell", "kind": "approval",
                       "title": f"{len(pending)} action{'s' if len(pending) != 1 else ''} waiting for your approval",
-                      "detail": "drafted overnight — nothing sent yet", "ref": "#/notifications"})
+                      "detail": "drafted overnight — nothing sent yet", "ref": "#/approvals?tab=drafts"})
+    if ledger:
+        brief.append({"icon": "shield", "kind": "agent_action",
+                      "title": f"{len(ledger)} agent action{'s' if len(ledger) != 1 else ''} awaiting approval",
+                      "detail": ledger[0].get("summary") or ledger[0].get("title", ""),
+                      "ref": "#/approvals"})
     if bookings:
         brief.append({"icon": "truck", "kind": "shipment",
                       "title": "Shipments on the move",
@@ -351,7 +593,8 @@ def dashboard_summary(tenant_id: str = "ramesh_auto"):
         },
         "capital_locked_long_terms": sum(i["amount"] for i in open_inv if i.get("terms_days", 30) >= 60),
         "payables_due_30d": sum(p["amount"] for p in payables if p.get("due", "9999") <= horizon),
-        "pending_approvals": len(pending),
+        "pending_approvals": len(pending) + len(ledger),
+        "pending_breakdown": {"drafts": len(pending), "agent_actions": len(ledger)},
         "agents": {"total": len(specs),
                    "ai_hired": sum(1 for s in specs if s.get("created_by") == "factory")},
         "alerts_unread": sum(1 for n in deps.store.list_notifications(tenant_id)
@@ -440,21 +683,32 @@ def run_task(task_id: str, tenant_id: str = "ramesh_auto"):
     agent = registry.orchestrator() if agent_id == "sahayak" else registry.get_agent(agent_id)
     if not agent:
         raise HTTPException(404, f"unknown agent {agent_id}")
+    from .providers import model_id
+    from .tracing import _save, budget, budget_exceeded, record_run, run_metrics, spent, timer
+    if budget_exceeded():
+        raise HTTPException(402, f"Model budget reached (${spent():.4f} of ${budget():.2f})")
     actions: list[dict] = []
     token = deps.current_actions.set(actions)
+    _t = timer().__enter__()
     try:
         prompt = f"Task for you: {t['title']}."
         if t.get("details"):
             prompt += f" Details: {t['details']}."
         result = _invoke(agent, prompt)
-        reply = re.sub(r"</?(thinking|response)>.*?</(thinking|response)>|</?(thinking|response)>", "", str(result), flags=re.DOTALL).strip()
+        reply = _clean_reply(str(result))
     finally:
         deps.current_actions.reset(token)
+    _t.__exit__()
+    # task runs are model calls too — traced + counted toward MODEL_BUDGET_USD
+    usage = run_metrics(result, _t.ms, model_id("orchestrator" if agent_id == "sahayak" else "worker"))
+    record_run(tenant_id, agent_id, usage)
+    if usage.get("cost_usd"):
+        _save(spent() + usage["cost_usd"])
     deps.store.update_task(tenant_id, task_id, status="done", result=reply)
     registry.bump_stats(agent_id)
     deps.log_activity(tenant_id, "task_completed", f"{agent_id} finished '{t['title']}'")
     return {"task_id": task_id, "status": "done", "agent_name": agent_id,
-            "result": reply, "actions": actions}
+            "result": reply, "actions": actions, "usage": usage}
 
 
 @app.get("/agents/{agent_id}")
@@ -542,6 +796,7 @@ _CONNECTOR_STUBS = {"whatsapp", "gmail", "airtable", "slack", "tally",
                     "indiamart", "shopify"}  # no real OAuth yet — coming soon
 _GOOGLE_CONNECTORS = {"google_drive", "google_sheets", "google_docs",
                       "google_calendar"}  # real via GCP service account (gcp.py)
+_INGEST_CONNECTORS = {"web"}  # keyless real ingest — owner gives a URL/feed (webingest.py)
 
 
 def _connector(tenant_id: str, conn_id: str) -> dict:
@@ -582,17 +837,46 @@ def _sync_google_files(tenant_id: str, conn_id: str) -> int:
     return synced
 
 
+def _connector_catalog() -> list[dict]:
+    """The honest connector catalog (seed.json) — fresh status per tenant."""
+    seed = json.loads(SEED_PATH.read_text())
+    out = []
+    for c in seed.get("connectors", []):
+        row = {k: v for k, v in c.items() if k not in ("connected_at", "last_sync", "url", "last_events")}
+        row["status"] = "coming_soon" if c["id"] in _CONNECTOR_STUBS else "available"
+        row["items_synced"] = 0
+        out.append(row)
+    return out
+
+
 @app.get("/connectors")
 def connectors(tenant_id: str = "ramesh_auto"):
-    return deps.store.list_connectors(tenant_id)
+    """Every connector with its REAL status. Tenants created after seeding get
+    the catalog backfilled here, so the UI never needs client-side filler rows."""
+    rows = deps.store.list_connectors(tenant_id)
+    have = {c["id"] for c in rows}
+    missing = [c for c in _connector_catalog() if c["id"] not in have]
+    for c in missing:
+        deps.store.put_connector(tenant_id, c)
+    return rows + missing if missing else rows
 
 
 @app.post("/connectors/{conn_id}/connect")
-def connect_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
+def connect_connector(conn_id: str, tenant_id: str = "ramesh_auto", url: str | None = None):
     c = _connector(tenant_id, conn_id)
     if conn_id in _CONNECTOR_STUBS:
         return {"id": conn_id, "status": "coming_soon",
                 "note": f"{c['name']} integration ships post-demo"}
+    if conn_id in _INGEST_CONNECTORS:  # keyless web/RSS — needs a URL to pull
+        if not url:
+            return {"id": conn_id, "status": "needs_url",
+                    "note": "Pass ?url= a public web page or RSS feed to connect."}
+        now = datetime.now(timezone.utc).isoformat()
+        deps.store.update_connector(tenant_id, conn_id, status="connected",
+                                    connected_at=now, last_sync=now, url=url)
+        deps.log_activity(tenant_id, "connector_synced", f"{c['name']} connected → {url}")
+        return {"id": conn_id, "status": "connected", "connected_at": now, "url": url,
+                "note": "Sync now pulls this URL into business context."}
     if conn_id in _GOOGLE_CONNECTORS:
         if not gcp.available():
             return {"id": conn_id, "status": "unconfigured",
@@ -633,6 +917,9 @@ def sync_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
         count = _sync_google_files(tenant_id, conn_id)
     elif conn_id == "google_calendar":
         count = len(calendar_events(tenant_id))
+    elif conn_id in _INGEST_CONNECTORS and c.get("url"):
+        from .tools.webingest import fetch_and_ingest
+        count = fetch_and_ingest(tenant_id, c["url"])
     else:
         count = c.get("items_synced", 0)
     now = datetime.now(timezone.utc).isoformat()
@@ -645,12 +932,16 @@ def sync_connector(conn_id: str, tenant_id: str = "ramesh_auto"):
 def settings(tenant_id: str = "ramesh_auto"):
     s = deps.store.get_settings(tenant_id)
     if not s:
-        raise HTTPException(404, "no settings seeded")
+        # brand-new tenant (pre-onboarding) → honest empty skeleton, not a 404
+        return {"business": {}, "onboarded": False,
+                "prefs": {"disabled_tools": []}, "mcp_servers": []}
+    from .mcp.client import public_view
     return {
         "business": s.get("business", {}),
         "onboarded": s.get("onboarded", True),
         "prefs": {"disabled_tools": [], **s.get("prefs", {})},
-        "mcp_servers": s.get("mcp_servers", []),
+        # MCP auth tokens are write-only — masked on the way out
+        "mcp_servers": [public_view(m) for m in s.get("mcp_servers", [])],
     }
 
 
@@ -660,7 +951,7 @@ class SettingsPatch(BaseModel):
     prefs: dict | None = None
     onboarded: bool | None = None
     mcp_servers: list | None = None
-    role: str | None = None   # RBAC pick (owner|accountant|manager|worker) → prefs.role
+    role: str | None = None   # workspace's default view role (owner|manager|viewer) → prefs.role
 
 
 @app.patch("/settings")
@@ -673,14 +964,78 @@ def patch_settings(req: SettingsPatch):
         "business": {**cur.get("business", {}), **(req.business or {})},
         "prefs": prefs,
     }
-    for k in ("onboarded", "mcp_servers"):
-        v = getattr(req, k)
-        if v is not None:
-            nxt[k] = v
-        elif k in cur:
-            nxt[k] = cur[k]
+    if req.onboarded is not None:
+        nxt["onboarded"] = req.onboarded
+    elif "onboarded" in cur:
+        nxt["onboarded"] = cur["onboarded"]
+    if req.mcp_servers is not None:
+        # validate + normalize; a masked token (••••) keeps the stored secret
+        from .mcp.client import normalize, validate_url
+        prev = {m.get("id"): m for m in cur.get("mcp_servers", [])}
+        rows = []
+        for m in req.mcp_servers:
+            if not isinstance(m, dict):
+                raise HTTPException(422, "each MCP server must be an object")
+            err = validate_url(m.get("url", ""))
+            if err:
+                raise HTTPException(422, f"{m.get('name') or 'MCP server'}: {err}")
+            rows.append(normalize(m, prev.get(m.get("id"))))
+        nxt["mcp_servers"] = rows
+    elif "mcp_servers" in cur:
+        nxt["mcp_servers"] = cur["mcp_servers"]
     deps.store.put_settings(req.tenant_id, nxt)
     return {"status": "saved"}
+
+
+# ================= A3 — MCP (client management + Sahayak's own MCP server) =================
+
+
+@app.post("/context/reembed")
+def context_reembed(tenant_id: str = "ramesh_auto"):
+    """B2 — after switching EMBED_PROVIDER, rebuild every document's vectors with
+    the current model (old vectors are ignored by search, never mis-compared)."""
+    from .tools.retrieval import reembed_documents
+    res = reembed_documents(tenant_id)
+    deps.log_activity(tenant_id, "context_reembedded",
+                      f"Re-embedded {res['reembedded']} documents with {res['model'] or 'no model'}")
+    return res
+
+
+@app.post("/integrations/mcp/{server_id}/test")
+def mcp_test(server_id: str, tenant_id: str = "ramesh_auto"):
+    """Real handshake with an owner-added MCP server: connect → tools/list →
+    persist status + tool list (+ an mcp_connected/mcp_error log row)."""
+    from .mcp.client import test_server
+    res = test_server(tenant_id, server_id)
+    if res.get("status") == "not_found":
+        raise HTTPException(404, "no such MCP server")
+    return res
+
+
+@app.post("/integrations/mcp/token")
+def mcp_token(tenant_id: str = "ramesh_auto"):
+    """Owner mints a workspace token for external MCP clients (Claude, Cursor…).
+    Scope 'mcp' — valid on /mcp only, never on the app API."""
+    c = auth.current_principal.get() or {"tid": tenant_id, "role": "owner"}
+    tok = auth.issue(c["tid"], role="owner", base="owner", ttl=90 * 24 * 3600, scope="mcp")
+    deps.log_activity(c["tid"], "mcp_token_created", "MCP access token created for an external AI client")
+    return {"token": tok, "endpoint_path": "/mcp", "expires_in_days": 90,
+            "tools": sorted(t.name for t in _mcp_tool_list())}
+
+
+def _mcp_tool_list():
+    from .mcp.server import mcp_server
+    return mcp_server._tool_manager.list_tools()
+
+
+@app.get("/marketplace")
+def marketplace(tenant_id: str = "ramesh_auto"):
+    """Curated MCP catalogue (no install counts, no invented URLs — the owner
+    supplies each server's URL) + live status of what this workspace added."""
+    from .marketplace import MCP_CATALOG
+    from .mcp.client import public_view, servers
+    return {"mcp": MCP_CATALOG, "installed": [public_view(m) for m in servers(tenant_id)],
+            "sahayak_mcp_tools": sorted(t.name for t in _mcp_tool_list())}
 
 
 # ================= Round 2 — import / memories / artifacts / search =================
@@ -884,7 +1239,7 @@ def context(tenant_id: str = "ramesh_auto"):
     rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
     out = []
     for d in rows:
-        row = {k: v for k, v in d.items() if k not in ("embedding", "text_excerpt")}
+        row = {k: v for k, v in d.items() if k not in ("embedding", "text_excerpt", "chunks")}
         # bytes are fetchable if stored under a key/path — or via the legacy
         # context/{tenant}/{filename} seed layout when running on AWS
         row["has_file"] = bool(d.get("s3_key") or d.get("file_path")) or \
@@ -975,7 +1330,9 @@ def context_preview(doc_id: str, tenant_id: str = "ramesh_auto"):
            "summary": doc.get("summary"), "tags": doc.get("tags") or [],
            "has_file": bool(doc.get("s3_key") or doc.get("file_path"))}
     if _use_aws() and not out["has_file"]:
-        out["has_file"] = True  # legacy seed files resolve by filename fallback
+        # legacy seed files resolve by filename fallback — but a text note has
+        # no bytes anywhere, so it must not claim has_file (same rule as /context)
+        out["has_file"] = doc.get("kind") != "note"
     if doc.get("kind") == "spreadsheet":
         data = _doc_bytes(tenant_id, doc)
         if data is not None:
@@ -1043,7 +1400,6 @@ class OnboardingReq(BaseModel):
 @app.post("/onboarding")
 def onboarding(req: OnboardingReq):
     """Rich first-run wizard — one call: profile + prefs + memories + agent setup."""
-    from .agents.specs import ALL_TOOL_NAMES
     from .templates_catalog import get_template
     tid = req.tenant_id
 
@@ -1074,7 +1430,7 @@ def onboarding(req: OnboardingReq):
     # 3. pains → agents (auto-hire the magic, or suggest)
     registry = reg.get_registry(tid)
     existing_names = {s.get("name", "").lower() for s in registry.specs()}
-    agents_installed, suggested, seen = [], [], set()
+    agents_installed, suggested, seen, to_hire = [], [], set(), []
     for pain in req.pains:
         entry = _PAIN_MAP.get(pain)
         if not entry or entry[0] in seen:
@@ -1083,14 +1439,16 @@ def onboarding(req: OnboardingReq):
         seen.add(tmpl_id)
         t = get_template(tmpl_id) or {}
         spec_def = t.get("agent_spec")
-        valid = [x for x in (spec_def or {}).get("tools", []) if x in ALL_TOOL_NAMES]
-        if req.auto_hire and spec_def and valid and spec_def["name"].lower() not in existing_names:
-            spec = registry.create_spec(name=spec_def["name"], goal=spec_def["goal"],
-                                        tools=valid, hindi_tagline=spec_def.get("hindi_tagline", ""))
-            agents_installed.append({"id": spec["id"], "name": spec["name"]})
+        if req.auto_hire and spec_def and t.get("role_id") and spec_def["name"].lower() not in existing_names:
+            to_hire.append({"role_id": t["role_id"], "name": spec_def["name"],
+                            "goal": spec_def.get("goal", ""), "tools": spec_def.get("tools")})
         else:
             suggested.append({"template_id": tmpl_id, "title": t.get("title", tmpl_id),
-                              "reason": reason})
+                              "role_id": t.get("role_id"), "reason": reason})
+    if to_hire:  # one batch → one routing rebuild (A2 hire_roles)
+        res = registry.hire_roles(to_hire)
+        agents_installed = [{"id": s["id"], "name": s["name"], "role_id": s.get("role_id")}
+                            for s in res["hired"]]
 
     next_steps = []
     # too_many_excels is a pain with no specialist agent → it's a next-step (import ledger)
@@ -1125,7 +1483,7 @@ def install_template(template_id: str, req: TemplateInstallReq):
     if spec_def and valid_tools:
         spec = reg.get_registry(req.tenant_id).create_spec(
             name=spec_def["name"], goal=spec_def["goal"], tools=valid_tools,
-            hindi_tagline=spec_def.get("hindi_tagline", ""))
+            hindi_tagline=spec_def.get("hindi_tagline", ""), role_id=t.get("role_id"))
         deps.record_action("template_installed", {"template": template_id, "agent_id": spec["id"]})
         return {"id": spec["id"], "status": spec["status"], "created_by": spec["created_by"]}
     # no ready toolset (e.g. digital presence) → the owner runs it and Nirmata hires live
@@ -1165,9 +1523,112 @@ def people(tenant_id: str = "ramesh_auto"):
 
 
 @app.get("/logs")
-def logs(tenant_id: str = "ramesh_auto", limit: int = 50):
-    """Unified activity/audit log (dashboard feed + agent actions)."""
-    return deps.store.list_activity(tenant_id, limit=limit)
+def logs(tenant_id: str = "ramesh_auto", limit: int = 50, since: str | None = None):
+    """Unified activity/audit log (dashboard feed + agent actions), newest first.
+    `since` (ISO ts) returns only newer rows — the Logs page polls with it."""
+    rows = deps.store.list_activity(tenant_id, limit=limit)
+    if since:
+        rows = [r for r in rows if r.get("ts", "") > since]
+    return rows
+
+
+@app.get("/metrics")
+def metrics(tenant_id: str = "ramesh_auto"):
+    """D2 observability — aggregate agent-run telemetry (tokens, est cost, latency, tools)."""
+    from collections import Counter
+    runs = [a for a in deps.store.list_activity(tenant_id, limit=1000)
+            if a.get("kind") == "agent_run"]
+    tool_hist: Counter = Counter()
+    for r in runs:
+        tool_hist.update(r.get("tools", []))
+    lat = [r.get("latency_ms", 0) for r in runs]
+    return {
+        "runs": len(runs),
+        "total_tokens": sum(r.get("total_tokens", 0) for r in runs),
+        "est_cost_usd": round(sum(r.get("cost_usd", 0) for r in runs), 4),
+        "avg_latency_ms": int(sum(lat) / len(lat)) if lat else 0,
+        "by_tool": dict(tool_hist.most_common()),
+        "recent": runs[:15],
+        "spend": _spend_view(),
+    }
+
+
+def _spend_view() -> dict:
+    from .tracing import budget, spent
+    b = budget()
+    return {"spent_usd": round(spent(), 6), "budget_usd": b,
+            "remaining_usd": round(b - spent(), 6) if b is not None else None}
+
+
+@app.post("/metrics/spend/reset")
+def spend_reset():
+    """Owner: zero the model-spend counter used by MODEL_BUDGET_USD."""
+    from .tracing import reset_spend
+    reset_spend()
+    return _spend_view()
+
+
+# ================= A1 — action approval ledger =================
+
+
+@app.get("/approvals")
+def approvals_list(tenant_id: str = "ramesh_auto", status: str | None = None):
+    """Durable ledger of agent actions awaiting / past owner approval."""
+    rows = deps.store.list_approvals(tenant_id)
+    if status:
+        rows = [r for r in rows if r.get("status") == status]
+    rows.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+    return rows
+
+
+@app.post("/approvals/{approval_id}/approve")
+def approvals_approve(approval_id: str, tenant_id: str = "ramesh_auto"):
+    """Owner taps approve → the queued action actually executes now."""
+    from .agents.approvals import execute_action
+    res = execute_action(tenant_id, approval_id)
+    if res.get("status") == "not_found":
+        raise HTTPException(404, "no such approval")
+    return {"id": approval_id, **res}
+
+
+@app.post("/approvals/{approval_id}/deny")
+def approvals_deny(approval_id: str, tenant_id: str = "ramesh_auto"):
+    cur = deps.store.get_approval(tenant_id, approval_id)
+    if not cur:
+        raise HTTPException(404, "no such approval")
+    if cur.get("status") != "pending":  # an executed action can't be retro-"denied"
+        raise HTTPException(409, f"already {cur.get('status')}")
+    deps.store.update_approval(tenant_id, approval_id, status="denied",
+                               decided_at=datetime.now(timezone.utc).isoformat(),
+                               via="owner_denied")
+    deps.log_activity(tenant_id, "action_denied", f"Denied: {cur.get('title', cur['tool'])}")
+    for n in deps.store.list_notifications(tenant_id):
+        if n.get("ref_id") == approval_id and n.get("status") == "unread":
+            deps.store.update_notification(tenant_id, n["id"], status="read")
+    return {"id": approval_id, "status": "denied"}
+
+
+class GrantReq(BaseModel):
+    tenant_id: str = "ramesh_auto"
+    tool: str
+    on: bool = True
+
+
+@app.post("/approvals/grant")
+def approvals_grant(req: GrantReq):
+    """Session-grant: auto-approve this tool for the rest of the session (fights fatigue)."""
+    from .agents.approvals import TOOL_RISK, grant_session, list_grants, revoke_session
+    if req.tool not in TOOL_RISK and not req.tool.startswith("mcp:"):
+        raise HTTPException(400, f"{req.tool} doesn't need approval")
+    (grant_session if req.on else revoke_session)(req.tenant_id, req.tool)
+    return {"tool": req.tool, "granted": req.on, "grants": list_grants(req.tenant_id)}
+
+
+@app.get("/approvals/grants")
+def approvals_grants(tenant_id: str = "ramesh_auto"):
+    """Tools currently auto-approved + every tool that asks (for the toggles)."""
+    from .agents.approvals import TOOL_RISK, list_grants
+    return {"grants": list_grants(tenant_id), "gated_tools": sorted(TOOL_RISK)}
 
 
 @app.get("/search")
@@ -1209,22 +1670,16 @@ def search(q: str = "", tenant_id: str = "ramesh_auto"):
         if hit(m.get("text")):
             results["memories"].append({"id": m["id"], "title": m.get("text", ""),
                 "meta": m.get("source", "owner"), "ref": "#/settings"})
-    # documents — content search over the business-context brain (tags/summary/excerpt),
-    # ranked by Titan-embedding cosine similarity when embeddings are present.
-    docs = deps.store.list_documents(tenant_id)
-    qvec = embed_text(q) if any(d.get("embedding") for d in docs) else None
-    doc_hits = []
-    for d in docs:
-        substr = hit(d.get("filename"), d.get("summary"), d.get("text_excerpt"),
-                     " ".join(d.get("tags", [])))
-        score = cosine(qvec, d["embedding"]) if qvec and d.get("embedding") else 0.0
-        if substr or score >= 0.35:
-            doc_hits.append((score, {"id": d["id"], "title": d.get("filename", ""),
-                "meta": f"{', '.join(d.get('tags', []))} · {d.get('summary', '')}"[:80],
-                "ref": "#/context"}))
-    doc_hits.sort(key=lambda x: x[0], reverse=True)
-    results["documents"] = [h for _, h in doc_hits]
-    return {"q": q, "results": results}
+    # documents — B1 hybrid retrieval (keyword + vector) → rerank → cited chunks.
+    from .tools.retrieval import retrieval_mode, search_documents
+    for r in search_documents(tenant_id, q, k=8):
+        results["documents"].append({
+            "id": r["doc_id"], "title": r["filename"],
+            "meta": f"{', '.join(r.get('tags', []))} · {r.get('summary', '')}"[:80],
+            "snippet": r["snippet"], "score": r.get("rerank_score", r["score"]),
+            "ref": "#/context",
+        })
+    return {"q": q, "results": results, "retrieval": retrieval_mode(tenant_id)}
 
 
 handler = None

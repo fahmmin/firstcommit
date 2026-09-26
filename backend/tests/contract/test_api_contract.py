@@ -121,6 +121,35 @@ def test_login(client):
     assert _keys(r.json()) >= _keys(_ep("POST /auth/login")["response"])
 
 
+def test_login_multitenant_isolation(client):
+    # guest → seeded showcase, already onboarded
+    g = client.post("/auth/login", json={"provider": "guest", "name": "Ramesh Gupta"}).json()
+    assert g["tenant_id"] == "ramesh_auto" and g["onboarded"] is True
+    # real login → own tenant, empty, not onboarded → routes to onboarding
+    n = client.post("/auth/login", json={"provider": "google",
+                    "provider_id": "neha@newco.in", "name": "Neha", "business": "NewCo"}).json()
+    assert n["tenant_id"] != "ramesh_auto" and n["onboarded"] is False
+    tid = n["tenant_id"]
+    # new tenant: /settings returns a skeleton (not 404), and no ledger data (isolation)
+    s = client.get("/settings", params={"tenant_id": tid})
+    assert s.status_code == 200 and s.json()["onboarded"] is False
+    assert client.get("/invoices", params={"tenant_id": tid}).json() == []
+    # showcase tenant still has its data
+    assert len(client.get("/invoices", params={"tenant_id": "ramesh_auto"}).json()) > 0
+
+
+def test_login_owner_email_resolves_to_its_workspace(client):
+    """The workspace owner's own Google account lands on their (seeded) workspace,
+    not a fresh empty tenant; a phone signup is a new tenant."""
+    owner = client.get("/settings", params={"tenant_id": "ramesh_auto"}).json()["prefs"]["notify_email"]
+    g = client.post("/auth/login", json={"provider": "google", "provider_id": owner.upper(),
+                                         "name": "Ramesh Gupta"}).json()
+    assert g["tenant_id"] == "ramesh_auto" and g["onboarded"] is True
+    p = client.post("/auth/login", json={"provider": "phone", "provider_id": "+919000011111",
+                                         "name": "", "business": ""}).json()
+    assert p["tenant_id"] not in ("ramesh_auto", "") and p["onboarded"] is False
+
+
 def test_dashboard_summary(client):
     r = client.get("/dashboard/summary", params={"tenant_id": "ramesh_auto"})
     assert r.status_code == 200
@@ -169,6 +198,18 @@ def test_calendar_events(client):
     assert isinstance(rows, list) and len(rows) >= 1
     assert _keys(rows[0]) >= _keys(_ep("GET /calendar/events?from=&to=")["response"][0])
     assert {e["kind"] for e in rows} >= {"invoice_due", "alert", "task"}
+
+
+def test_web_connector_flow(client):
+    """C1: keyless web connector — needs a URL, then connects with it (no OAuth)."""
+    nurl = client.post("/connectors/web/connect", params={"tenant_id": "ramesh_auto"})
+    assert nurl.status_code == 200 and nurl.json()["status"] == "needs_url"
+    ok = client.post("/connectors/web/connect",
+                     params={"tenant_id": "ramesh_auto", "url": "https://example.com/feed"})
+    assert ok.status_code == 200 and ok.json()["status"] == "connected"
+    assert ok.json()["url"] == "https://example.com/feed"
+    web = next(c for c in client.get("/connectors").json() if c["id"] == "web")
+    assert web["status"] == "connected" and web.get("url") == "https://example.com/feed"
 
 
 def test_connectors_flow(client, monkeypatch):
@@ -309,6 +350,67 @@ def test_search_grouped(client):
     assert _keys(body["results"]) >= _keys(_ep("GET /search?q=&tenant_id=")["response"]["results"])
     assert len(body["results"]["invoices"]) >= 1  # Sharma Motors invoices
     assert client.get("/search", params={"q": ""}).json()["results"]["invoices"] == []
+
+
+def test_search_documents_hybrid_citations(client):
+    """B1: dropping a doc → hybrid /search returns it with a cited snippet + score."""
+    client.post("/context/upload", data={"tenant_id": "ramesh_auto",
+        "text": "Zephyr Exports requires an eway bill and HSN codes on every shipment invoice."})
+    body = client.get("/search", params={"q": "eway bill HSN for Zephyr", "tenant_id": "ramesh_auto"}).json()
+    assert body.get("retrieval") in ("hybrid", "keyword")  # honest mode flag
+    docs = body["results"]["documents"]
+    hit = next((d for d in docs if "zephyr" in (d.get("snippet", "") + d.get("title", "")).lower()), None)
+    assert hit, "uploaded doc should be retrieved"
+    assert hit["snippet"] and "score" in hit           # cited chunk + score
+
+
+def test_recall_context_cites_documents(client):
+    client.post("/context/upload", data={"tenant_id": "ramesh_auto",
+        "text": "Falcon Traders is cash-only — the credit limit is strictly zero."})
+    r = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                   "text": "what do you know about Falcon Traders?"})
+    assert r.status_code == 200 and "falcon" in r.json()["reply"].lower()
+
+
+# ---------- A1: per-action approval engine ----------
+
+def test_agent_action_queues_for_approval(client):
+    """An agent 'create invoice' is queued (not executed) → owner approves → it runs."""
+    from app.agents import approvals as appr
+    appr.revoke_session("ramesh_auto", "create_invoice")
+    before = len(client.get("/invoices").json())
+    chat = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                      "text": "bill banao for Test Traders"}).json()
+    # queued, not executed
+    assert "approval" in chat["reply"].lower()
+    assert len(client.get("/invoices").json()) == before
+    pend = [a for a in client.get("/approvals", params={"status": "pending"}).json()
+            if a["tool"] == "create_invoice"]
+    assert pend, "expected a pending approval"
+    assert _keys(pend[0]) >= _keys(_ep("GET /approvals?tenant_id=&status=")["response"][0])
+    # approve → executes
+    ap = client.post(f"/approvals/{pend[0]['id']}/approve", params={"tenant_id": "ramesh_auto"})
+    assert ap.status_code == 200 and ap.json()["status"] == "executed"
+    assert len(client.get("/invoices").json()) == before + 1
+
+
+def test_approval_deny_and_session_grant(client):
+    from app.agents import approvals as appr
+    appr.revoke_session("ramesh_auto", "create_invoice")
+    q = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                   "text": "bill banao for Deny Co"}).json()
+    pend = [a for a in client.get("/approvals", params={"status": "pending"}).json()
+            if a["tool"] == "create_invoice"][0]
+    d = client.post(f"/approvals/{pend['id']}/deny", params={"tenant_id": "ramesh_auto"})
+    assert d.status_code == 200 and d.json()["status"] == "denied"
+    # session-grant → next agent create runs immediately (no queue)
+    client.post("/approvals/grant", json={"tenant_id": "ramesh_auto", "tool": "create_invoice", "on": True})
+    before = len(client.get("/invoices").json())
+    r = client.post("/chat", json={"tenant_id": "ramesh_auto", "agent_id": "vasool",
+                                   "text": "bill banao for Granted Co"}).json()
+    assert "approval" not in r["reply"].lower()
+    assert len(client.get("/invoices").json()) == before + 1
+    appr.revoke_session("ramesh_auto", "create_invoice")
 
 
 # ---------- Phase A: people / logs / brief ----------
@@ -490,3 +592,14 @@ def test_chat_web_mode_ok(client):
     r = client.post("/chat", json={"tenant_id": "ramesh_auto",
                                    "text": "latest steel price", "mode": "web"})
     assert r.status_code == 200 and r.json()["reply"]
+
+
+def test_auth_shapes(client):
+    r = client.post("/auth/login", json={"provider": "guest"})
+    assert _keys(r.json()) >= _keys(_ep("POST /auth/login")["response"])
+    h = {"Authorization": f"Bearer {r.json()['token']}"}
+    assert _keys(client.get("/auth/me", headers=h).json()) >= _keys(_ep("GET /auth/me")["response"])
+    sw = client.post("/auth/role", json={"role": "manager"}, headers=h).json()
+    assert _keys(sw) >= _keys(_ep("POST /auth/role")["response"])
+    inv = client.post("/auth/invite", json={"role": "viewer"}, headers=h).json()
+    assert _keys(inv) >= _keys(_ep("POST /auth/invite")["response"])

@@ -22,17 +22,10 @@ const KIND_TINT = {
   task: 'bg-slate-100 border-slate-300 text-slate-600',
 }
 
-const DEMO_EVENTS = [
-  { id: 'e1', title: 'INV-0031 due — Sharma Motors ₹56.4K', kind: 'invoice', start: '09:30', end: '10:00' },
-  { id: 'e2', title: 'Reminder wave — 3 buyers', kind: 'reminder', start: '10:30', end: '11:00' },
-  { id: 'e3', title: 'ORD-1042 pickup window', kind: 'logistics', start: '13:00', end: '14:30' },
-  { id: 'e4', title: 'Khata — weekly cash-flow review', kind: 'agent', start: '16:00', end: '16:30' },
-  { id: 'e5', title: 'Steel rods PO — Balaji confirm', kind: 'task', start: '17:30', end: '18:00' },
-]
-
 const toMin = (t) => { const [h, m] = (t || '09:00').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
 // backend events carry {date: 'YYYY-MM-DD', kind: invoice_due|alert|task} —
-// map kind → display kind, keep `day` for per-day filtering, derive HH:MM slots
+// map kind → display kind, keep `day` for per-day filtering. Date-only events
+// have no time, so stagger them through the morning instead of stacking at 09:00.
 const normEvent = (ev, i) => {
   const kind = KIND_MAP[ev.kind] || ev.kind || 'task'
   const iso = ev.start?.includes?.('T') ? ev.start : (ev.at || ev.date || '').includes('T') ? (ev.at || ev.date) : null
@@ -42,10 +35,11 @@ const normEvent = (ev, i) => {
     const e2 = new Date(d.getTime() + (ev.duration_min || 30) * 60000)
     return { ...ev, id: ev.id || `ev-${i}`, kind, day: ev.date?.slice(0, 10), start, end: fmt(e2.getHours() * 60 + e2.getMinutes()) }
   }
+  const slot = ev.start || ev.time || fmt(9 * 60 + (i % 8) * 45)
   return {
     ...ev, id: ev.id || `ev-${i}`, kind, day: ev.date || ev.day,
-    start: ev.start || ev.time || '09:00',
-    end: ev.end || fmt(toMin(ev.start || ev.time || '09:00') + 30),
+    start: slot,
+    end: ev.end || fmt(toMin(slot) + 30),
   }
 }
 const fmt = (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
@@ -69,8 +63,8 @@ export default function Calendar() {
 
   useEffect(() => {
     api.calendarEvents?.()
-      .then(ev => setEvents((ev?.length ? ev : DEMO_EVENTS).map(normEvent)))
-      .catch(() => setEvents(DEMO_EVENTS.map(normEvent)))
+      .then(ev => setEvents((ev || []).map(normEvent)))
+      .catch(() => setEvents([]))
   }, [])
 
   const hours = useMemo(() => Array.from({ length: END_H - START_H + 1 }, (_, i) => START_H + i), [])
@@ -169,6 +163,12 @@ export default function Calendar() {
                 </div>
               )
             })}
+            {/* honest empty state — no fabricated stand-ins */}
+            {!dayEvents.length && !draft && (
+              <div className="absolute left-16 right-4 top-4 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-[10px] text-slate-400 pointer-events-none">
+                Nothing scheduled — invoice due-dates, reminder fires and task deadlines land here.
+              </div>
+            )}
             {/* draft block */}
             {draft && (
               <div className="absolute left-16 right-4 rounded-lg border-2 border-dashed border-accent bg-accent/10 z-10 pointer-events-none"

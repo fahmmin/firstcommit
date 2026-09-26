@@ -46,69 +46,81 @@ def _catalog_lines(tenant_id: str) -> list[dict]:
     return lines
 
 
+def sync_catalog_impl(tenant_id: str) -> dict:
+    lines = _catalog_lines(tenant_id)
+    existing = {l.get("title", "").lower(): l for l in deps.store.list_listings(tenant_id)}
+    created, updated = 0, 0
+    for ln in lines:
+        key = ln["title"].lower()
+        if key in existing:
+            deps.store.update_listing(tenant_id, existing[key]["id"],
+                                      price=ln["price"], source_supplier=ln["source_supplier"])
+            updated += 1
+        else:
+            deps.store.put_listing(tenant_id, {
+                "id": f"lst-{uuid.uuid4().hex[:6]}", "status": "draft",
+                "marketplaces": [], "desc": "", "seo_score": 0,
+                "created_at": datetime.now(timezone.utc).isoformat(), **ln})
+            created += 1
+    deps.record_action("catalog_synced", {"created": created, "updated": updated})
+    total = len(deps.store.list_listings(tenant_id))
+    return {"created": created, "updated": updated, "total": total,
+            "reply": f"Catalog synced — {created} new product lines, {updated} refreshed "
+                     f"({total} total draft listings, priced at {int((MARKUP-1)*100)}% over best supplier rate). "
+                     "Say 'publish' to push them to your connected marketplaces."}
+
+
+def publish_listing_impl(tenant_id: str, title: str = "", marketplaces: str = "") -> dict:
+    rows = deps.store.list_listings(tenant_id)
+    if title and title.lower() != "all":
+        rows = [r for r in rows if title.lower() in r.get("title", "").lower()]
+    if not rows:
+        return {"reply": "No matching listings. Run sync_catalog first."}
+    conn = _connected_marketplaces(tenant_id)
+    want = [m.strip() for m in marketplaces.split(",") if m.strip()] or list(MARKETPLACES)
+    pushed, blocked = [], []
+    for r in rows:
+        ok = [m for m in want if conn.get(m) == "connected"]
+        no = [m for m in want if conn.get(m) != "connected"]
+        if ok:
+            live = sorted(set(r.get("marketplaces", [])) | set(ok))
+            deps.store.update_listing(tenant_id, r["id"], status="live", marketplaces=live,
+                                      published_at=datetime.now(timezone.utc).isoformat())
+            pushed.append((r["title"], ok))
+        if no:
+            blocked.append((r["title"], no))
+    deps.record_action("listings_published", {"count": len(pushed)})
+    reply = ""
+    if pushed:
+        reply += "Published:\n" + "\n".join(f"• {t} → {', '.join(ms)}" for t, ms in pushed)
+    if blocked:
+        reply += ("\nCouldn't publish — channel integration isn't live yet "
+                  "(marked coming soon in Settings):\n"
+                  + "\n".join(f"• {t} → {', '.join(ms)}" for t, ms in blocked))
+    return {"published": len(pushed), "blocked": [b[0] for b in blocked], "reply": reply}
+
+
 def presence_tools(tenant_id: str) -> list:
 
     @tool
     def sync_catalog() -> dict:
         """Build/refresh the sellable product catalog from supplier data.
-        Creates draft listings (idempotent by title) — run publish_listing next."""
-        lines = _catalog_lines(tenant_id)
-        existing = {l.get("title", "").lower(): l for l in deps.store.list_listings(tenant_id)}
-        created, updated = 0, 0
-        for ln in lines:
-            key = ln["title"].lower()
-            if key in existing:
-                deps.store.update_listing(tenant_id, existing[key]["id"],
-                                          price=ln["price"], source_supplier=ln["source_supplier"])
-                updated += 1
-            else:
-                deps.store.put_listing(tenant_id, {
-                    "id": f"lst-{uuid.uuid4().hex[:6]}", "status": "draft",
-                    "marketplaces": [], "desc": "", "seo_score": 0,
-                    "created_at": datetime.now(timezone.utc).isoformat(), **ln})
-                created += 1
-        deps.record_action("catalog_synced", {"created": created, "updated": updated})
-        total = len(deps.store.list_listings(tenant_id))
-        return {"created": created, "updated": updated, "total": total,
-                "reply": f"Catalog synced — {created} new product lines, {updated} refreshed "
-                         f"({total} total draft listings, priced at {int((MARKUP-1)*100)}% over best supplier rate). "
-                         "Say 'publish' to push them to your connected marketplaces."}
+        Creates draft listings (idempotent by title) — run publish_listing next.
+        Writes listings → queued for owner approval unless granted this session."""
+        from ..agents.approvals import gate
+        q = gate(tenant_id, "sync_catalog", {}, "Refresh product catalog from supplier rates")
+        return q or sync_catalog_impl(tenant_id)
 
     @tool
     def publish_listing(title: str = "", marketplaces: str = "") -> dict:
         """Publish a listing to marketplaces. title = listing name (or 'all' for every
         draft). marketplaces = comma list (facebook_marketplace, indiamart, shopify,
-        instagram) — blank means all connected channels."""
-        rows = deps.store.list_listings(tenant_id)
-        if title and title.lower() != "all":
-            rows = [r for r in rows if title.lower() in r.get("title", "").lower()]
-        if not rows:
-            return {"reply": "No matching listings. Run sync_catalog first."}
-        conn = _connected_marketplaces(tenant_id)
-        want = [m.strip() for m in marketplaces.split(",") if m.strip()] or list(MARKETPLACES)
-        pushed, blocked = [], []
-        for r in rows:
-            ok = [m for m in want if conn.get(m) == "connected"]
-            no = [m for m in want if conn.get(m) != "connected"]
-            if ok:
-                live = sorted(set(r.get("marketplaces", [])) | set(ok))
-                urls = {**r.get("urls", {}),
-                        **{m: f"https://{_slug(m)}.example.in/{_slug(r['title'])}-{r['id'][-4:]}" for m in ok}}
-                deps.store.update_listing(tenant_id, r["id"], status="live",
-                                          marketplaces=live, urls=urls,
-                                          published_at=datetime.now(timezone.utc).isoformat())
-                pushed.append((r["title"], ok))
-            if no:
-                blocked.append((r["title"], no))
-        deps.record_action("listings_published", {"count": len(pushed)})
-        reply = ""
-        if pushed:
-            reply += "Published:\n" + "\n".join(f"• {t} → {', '.join(ms)}" for t, ms in pushed)
-        if blocked:
-            reply += ("\nCouldn't publish — channel integration isn't live yet "
-                      "(marked coming soon in Settings):\n"
-                      + "\n".join(f"• {t} → {', '.join(ms)}" for t, ms in blocked))
-        return {"published": len(pushed), "blocked": [b[0] for b in blocked], "reply": reply}
+        instagram) — blank means all connected channels. Queued for owner approval."""
+        from ..agents.approvals import gate
+        args = {"title": title, "marketplaces": marketplaces}
+        q = gate(tenant_id, "publish_listing", args,
+                 f"Publish {title or 'all listings'} to {marketplaces or 'connected marketplaces'}")
+        return q or publish_listing_impl(tenant_id, title, marketplaces)
 
     @tool
     def seo_audit() -> dict:

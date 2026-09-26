@@ -35,12 +35,17 @@ def _days_overdue(due: str) -> int:
 
 
 def parse_invoice_file(file_path: str) -> dict:
-    """Vision-parse an invoice photo/PDF into structured fields."""
-    if os.getenv("USE_AWS", "0") == "1":
+    """Vision-parse an invoice photo/PDF into structured fields (MODEL_PROVIDER)."""
+    from ..providers import chat_provider, vision_available
+    try:
+        use_model = chat_provider() != "mock" and vision_available()
+    except Exception:
+        use_model = False
+    if use_model:
         try:
-            return _parse_via_bedrock(file_path)
-        except Exception as e:  # Bedrock hiccup must never kill the demo
-            print(f"[invoices] bedrock parse failed ({type(e).__name__}): {e} — using fixture")
+            return _parse_via_model(file_path)
+        except Exception as e:  # a model hiccup must never kill the demo
+            print(f"[invoices] vision parse failed ({type(e).__name__}): {e} — using fixture")
             return dict(PARSE_FIXTURE)
     return dict(PARSE_FIXTURE)
 
@@ -54,34 +59,18 @@ def _sniff_image_format(b: bytes) -> str | None:
     return None
 
 
-def _parse_via_bedrock(file_path: str) -> dict:
-    import boto3
-    session = boto3.Session(
-        profile_name=os.getenv("AWS_PROFILE") or None,
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-    )
-    client = session.client("bedrock-runtime")
+def _parse_via_model(file_path: str) -> dict:
+    from ..providers import complete_vision
     with open(file_path, "rb") as f:
         img_bytes = f.read()
     fmt = _sniff_image_format(img_bytes)
     if fmt is None:
         raise ValueError("not a real image (no jpeg/png/webp/gif magic bytes)")
-    resp = client.converse(
-        modelId=os.getenv("WORKER_MODEL", "apac.amazon.nova-lite-v1:0"),
-        messages=[{
-            "role": "user",
-            "content": [
-                {"image": {"format": fmt, "source": {"bytes": img_bytes}}},
-                {"text": (
-                    "Extract this invoice as strict JSON with keys: invoice_no, buyer, "
-                    "amount (number, INR), gst (number), issue_date (YYYY-MM-DD), "
-                    "due_date (YYYY-MM-DD), items (short string), confidence (0-1), "
-                    "low_confidence_fields (list of field names). JSON only."
-                )},
-            ],
-        }],
-    )
-    text = resp["output"]["message"]["content"][0]["text"]
+    text = complete_vision(img_bytes, fmt, (
+        "Extract this invoice as strict JSON with keys: invoice_no, buyer, "
+        "amount (number, INR), gst (number), issue_date (YYYY-MM-DD), "
+        "due_date (YYYY-MM-DD), items (short string), confidence (0-1), "
+        "low_confidence_fields (list of field names). JSON only."))
     start, end = text.find("{"), text.rfind("}")
     data = json.loads(text[start:end + 1])
     data.setdefault("low_confidence_fields", [])
@@ -89,11 +78,20 @@ def _parse_via_bedrock(file_path: str) -> dict:
 
 
 def draft_reminder_impl(tenant_id: str, invoice_id: str = "", buyer: str = "") -> dict:
-    """Shared reminder logic — used by the draft_reminder tool AND the API."""
+    """Shared reminder logic — used by the draft_reminder tool AND the API.
+    An explicit invoice_id that doesn't resolve is an error — never fall back
+    to a different customer's invoice (a typo must not email the wrong buyer)."""
     inv = None
     if invoice_id:
         inv = deps.store.get_invoice(tenant_id, invoice_id)
-    if not inv:
+        if not inv:  # callers often pass the visible number (INV-1026), not the row id
+            inv = next((i for i in deps.store.list_invoices(tenant_id)
+                        if i.get("invoice_no", "").lower() == invoice_id.lower()), None)
+        if not inv:
+            return {"reply": f"No invoice '{invoice_id}' in the ledger — "
+                             "ask me to list overdue invoices and pick from those.",
+                    "error": True}
+    else:
         overdue = deps.store.list_invoices(tenant_id, status="overdue")
         if buyer:
             overdue = [o for o in overdue if buyer.lower() in o["buyer"].lower()]
@@ -151,18 +149,33 @@ def invoice_tools(tenant_id: str) -> list:
 
     @tool
     def list_overdue() -> dict:
-        """List all overdue invoices: buyer, invoice number, amount, days overdue."""
+        """List all overdue invoices (buyer, invoice number, amount, days overdue) plus
+        per-buyer totals — use `by_buyer` for "who owes the most"; `oldest` is the
+        longest-unpaid invoice, which is NOT the same thing."""
         rows = deps.store.list_invoices(tenant_id, status="overdue")
         rows.sort(key=lambda r: r.get("days_overdue", 0), reverse=True)
         total = sum(r.get("amount", 0) for r in rows)
+        # aggregate in code — models reliably mix up "oldest" and "largest"
+        agg: dict[str, dict] = {}
+        for r in rows:
+            b = agg.setdefault(r["buyer"], {"buyer": r["buyer"], "total": 0, "invoices": 0, "oldest_days": 0})
+            b["total"] += r.get("amount", 0)
+            b["invoices"] += 1
+            b["oldest_days"] = max(b["oldest_days"], r.get("days_overdue", 0))
+        by_buyer = sorted(agg.values(), key=lambda b: b["total"], reverse=True)
         deps.record_action("invoices_listed", {"count": len(rows), "total": total})
-        return {
-            "overdue": rows,
-            "count": len(rows),
-            "total": total,
-            "reply": f"You have {len(rows)} overdue invoices totalling ₹{total:,}. "
-                     + (f"Oldest: {rows[0]['invoice_no']} from {rows[0]['buyer']} — {rows[0]['days_overdue']} days overdue." if rows else ""),
-        }
+        reply = f"You have {len(rows)} overdue invoices totalling ₹{total:,}."
+        if rows:
+            top = by_buyer[0]
+            reply += (f" Most owed by: {top['buyer']} — ₹{top['total']:,} across {top['invoices']} "
+                      f"invoice{'s' if top['invoices'] > 1 else ''}. Oldest: {rows[0]['invoice_no']} "
+                      f"from {rows[0]['buyer']} — {rows[0]['days_overdue']} days overdue.")
+        from .context import payment_notes
+        notes = payment_notes(tenant_id)
+        if notes:
+            reply += " Owner's notes on payers: " + " | ".join(notes)
+        return {"overdue": rows, "count": len(rows), "total": total,
+                "by_buyer": by_buyer, "owner_notes": notes, "reply": reply}
 
     @tool
     def aging_report() -> dict:
@@ -177,27 +190,31 @@ def invoice_tools(tenant_id: str) -> list:
             elif d <= 90: buckets["61-90"] += amt
             else: buckets["90+"] += amt
             detail.append({"buyer": r["buyer"], "amount": amt, "days_overdue": d})
+        by_buyer: dict[str, float] = {}
+        for x in detail:
+            by_buyer[x["buyer"]] = by_buyer.get(x["buyer"], 0) + x["amount"]
+        ranked = [{"buyer": b, "overdue_total": t} for b, t in sorted(by_buyer.items(), key=lambda kv: -kv[1])]
         deps.record_action("invoices_listed", {"buckets": buckets})
-        return {"buckets": buckets, "detail": detail,
-                "reply": "Aging: " + ", ".join(f"{k}d: ₹{int(v):,}" for k, v in buckets.items())}
+        return {"buckets": buckets, "detail": detail, "overdue_by_buyer": ranked,
+                "reply": "Aging: " + ", ".join(f"{k}d: ₹{int(v):,}" for k, v in buckets.items())
+                         + (". Overdue by customer: " + ", ".join(f"{x['buyer']} ₹{int(x['overdue_total']):,}"
+                                                                   for x in ranked) if ranked else "")}
 
     @tool
     def create_invoice(buyer: str, amount: float, due_date: str, items: str = "", invoice_no: str = "") -> dict:
         """Create an invoice row in the ledger."""
+        from ..agents.approvals import gate
+        args = {"buyer": buyer, "amount": amount, "due_date": due_date,
+                "items": items, "invoice_no": invoice_no}
+        q = gate(tenant_id, "create_invoice", args, f"Add invoice for {buyer} (₹{amount:,.0f})")
+        if q:  # queued for owner approval (or denied) — don't write yet
+            return q
         inv = create_invoice_impl(tenant_id, buyer, amount, due_date, items, invoice_no)
         return {"invoice": inv, "reply": f"Invoice {inv['invoice_no']} for {buyer} (₹{amount:,}) added to the ledger."}
 
     @tool
     def draft_reminder(invoice_id: str = "", buyer: str = "") -> dict:
         """Draft a payment reminder for an overdue invoice. DRAFT ONLY — owner approves before sending."""
-        inv = None
-        if invoice_id:
-            inv = deps.store.get_invoice(tenant_id, invoice_id)
-        if not inv:
-            overdue = deps.store.list_invoices(tenant_id, status="overdue")
-            if buyer:
-                overdue = [o for o in overdue if buyer.lower() in o["buyer"].lower()]
-            inv = max(overdue, key=lambda r: r.get("days_overdue", 0), default=None)
         return draft_reminder_impl(tenant_id, invoice_id, buyer)
 
     return [list_overdue, aging_report, create_invoice, draft_reminder]

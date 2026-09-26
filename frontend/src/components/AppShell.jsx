@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
-import { api, TENANT } from '../api.js'
+import { api, TENANT, offline } from '../api.js'
 import { AgentAvatar } from '../lib/avatar.jsx'
 import { session } from '../lib/auth.js'
 import { groupAgents } from '../lib/agentGroups.js'
 import {
   PlugZap, LayoutTemplate, RotateCcw, Activity, Settings2, FileText, LogOut,
-  Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search, FileBarChart,
+  Store, Brain, CalendarDays, ScrollText, Users, ListTodo, Search, FileBarChart, ShieldCheck,
 } from 'lucide-react'
 import { SpinPlus } from './anim/index.jsx'
 import { Blobs } from './Logo.jsx'
 
 const NAV = [
+  ['#/approvals', 'Approvals', ShieldCheck],
   ['#/templates', 'Templates', LayoutTemplate],
   ['#/calendar', 'Calendar', CalendarDays],
   ['#/tasks', 'Tasks', ListTodo],
@@ -31,11 +32,18 @@ const NAV = [
 // deep-link into #/app (open_agent prefill) so the sidebar always works.
 export function AppShell({ children, agents: agentsProp, activeAgent, onAgentClick, onNewChat, onReset }) {
   const [agents, setAgents] = useState(agentsProp || [])
-  useEffect(() => { if (!agentsProp) api.agents().then(setAgents).catch(() => {}) }, [agentsProp])
+  useEffect(() => {
+    if (agentsProp) return
+    const load = () => api.agents().then(setAgents).catch(() => {})
+    load()
+    window.addEventListener('sahayak:agents-changed', load)   // fired after a hire
+    return () => window.removeEventListener('sahayak:agents-changed', load)
+  }, [agentsProp])
   useEffect(() => { if (agentsProp) setAgents(agentsProp) }, [agentsProp])
 
-  const hash = location.hash
+  const hash = location.hash.split('?')[0]
   const isActive = (href) => hash === href || hash.startsWith(href + '/')
+  const pendingCount = usePendingCount()
 
   const clickAgent = (a) => {
     if (onAgentClick) return onAgentClick(a)
@@ -54,6 +62,7 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
   }
 
   const groups = groupAgents(agents)
+  const isOffline = useOffline()
 
   return (
     <div className="h-screen flex bg-white font-sans">
@@ -97,6 +106,8 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
                 className={`w-full text-[12.5px] rounded-lg px-2 py-[5px] transition flex items-center gap-2
                   ${isActive(href) ? 'bg-slate-900 text-white font-medium' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <I size={12} className="shrink-0" /> {label}
+                {href === '#/approvals' && pendingCount > 0 &&
+                  <span className="ml-auto text-[9px] font-bold rounded-full bg-amber-100 text-amber-700 px-1.5">{pendingCount}</span>}
               </a>
             ))}
           </div>
@@ -114,6 +125,45 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
         </div>
       </aside>
       {children}
+      {isOffline === 'offline' && (
+        <div role="status" title="The backend didn't answer — lists show sample rows until it does. Nothing you see here is your data."
+          className="fixed top-3 right-4 z-[80] flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[11px] font-medium text-amber-700 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Offline — sample data
+        </div>
+      )}
+      {isOffline === 'recovered' && (
+        <button onClick={() => location.reload()} title="The backend is reachable again — reload to replace any sample rows with your real data"
+          className="fixed top-3 right-4 z-[80] flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Back online — refresh
+        </button>
+      )}
     </div>
   )
+}
+
+// pending agent actions + drafts — the same numbers the Approvals page shows
+function usePendingCount() {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const load = () => api.dashboard().then(d => alive && setN(d?.pending_approvals || 0)).catch(() => {})
+    load()
+    const t = setInterval(() => { if (!document.hidden) load() }, 30000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
+  return n
+}
+
+// true while the last read fell back to sample data (see api.js withSample)
+function useOffline() {
+  const [v, setV] = useState(offline.get())
+  useEffect(() => offline.subscribe(setV), [])
+  // while offline, probe the (public) health check so recovery is noticed even
+  // on pages that don't poll — req() flips the flag to 'recovered' on success
+  useEffect(() => {
+    if (v !== 'offline') return
+    const t = setInterval(() => api.health().catch(() => {}), 5000)
+    return () => clearInterval(t)
+  }, [v])
+  return v
 }

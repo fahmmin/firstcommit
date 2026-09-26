@@ -21,6 +21,7 @@ import { a11y } from '../lib/a11y.js'
 import { toast } from '../lib/toast.js'
 import { CommandPalette } from '../components/CommandPalette.jsx'
 import { ApprovalsDrawer, ApprovalBell } from '../components/ApprovalsDrawer.jsx'
+import { ApprovalCard } from '../components/ApprovalCard.jsx'
 import { Digest } from '../components/Digest.jsx'
 import { SetupChecklist } from '../components/SetupChecklist.jsx'
 import { SpinPlus, TypingDots } from '../components/anim/index.jsx'
@@ -44,6 +45,8 @@ export default function Workspace() {
   ])
   const [agents, setAgents] = useState([])
   const [alerts, setAlerts] = useState([])
+  const [pendingActions, setPendingActions] = useState([])   // approvals ledger, status=pending
+  const [health, setHealth] = useState(null)                 // real provider/model config (B2)
   const [connectors, setConnectors] = useState([])
   const [settings, setSettings] = useState(null)
   const [context, setContext] = useState(null)
@@ -56,7 +59,7 @@ export default function Workspace() {
   const [voice, setVoice] = useState(false)
   // exclusion tabs — which capability surface the next message should use
   const [scopeTab, setScopeTab] = useState('all')
-  const [scope, setScope] = useState({ skills: [], mcps: [] })
+  const [scope, setScope] = useState({ agents: [], tools: [] })
   const [mode, setMode] = useState('chat')           // chat | web | deep
   const [files, setFiles] = useState([])             // composer attachments
   const attachRef = useRef(null)
@@ -95,15 +98,15 @@ export default function Workspace() {
     setActiveMsg(best)
   }
 
-  // fall back to seeded surfaces so the scope tabs are explorable before installs
-  const installedSkills = settings?.prefs?.installed_skills?.length
-    ? settings.prefs.installed_skills : ['gst-reconcile', 'hindi-voice-notes', 'upi-payment-links']
-  const mcpServers = settings?.mcp_servers?.length
-    ? settings.mcp_servers : [{ id: 'd-tally', name: 'tally-mcp' }, { id: 'd-wa', name: 'whatsapp-mcp' }, { id: 'd-log', name: 'india-logistics-mcp' }]
+  // capability scope — real inventory only: agents Sahayak can route to, or the
+  // active specialist's tools. Selections are sent to /chat as `scope`, so the
+  // next reply genuinely runs with only the picked capabilities.
+  const scopeAgents = activeAgent ? [] : agents
+  const scopeTools = activeAgent?.tools || []
   const scopeTabs = [
     { id: 'all', label: 'Everything' },
-    { id: 'skills', label: 'Skills', icon: <Braces size={10} />, count: installedSkills.length },
-    { id: 'mcp', label: 'MCP', icon: <Server size={10} />, count: mcpServers.length },
+    ...(scopeAgents.length ? [{ id: 'agents', label: 'Agents', icon: <Server size={10} />, count: scopeAgents.length }] : []),
+    ...(scopeTools.length ? [{ id: 'tools', label: 'Tools', icon: <Braces size={10} />, count: scopeTools.length }] : []),
   ]
   const toggleScopeItem = (kind, id) => setScope(s => ({
     ...s,
@@ -119,14 +122,24 @@ export default function Workspace() {
   const active = agents.find(a => a.id === activeAgent)
 
   const refresh = async () => {
-    const [ag, al, cn, st, mm] = await Promise.all([
+    const [ag, al, cn, st, mm, pa] = await Promise.all([
       api.agents(), api.alerts(), api.connectors().catch(() => []), api.settings().catch(() => null),
-      api.memories().catch(() => []),
+      api.memories().catch(() => []), api.approvals('pending').catch(() => []),
     ])
-    setAgents(ag); setAlerts(al); setConnectors(cn); setSettings(st); setMemList(mm)
+    setAgents(ag); setAlerts(al); setConnectors(cn); setSettings(st); setMemList(mm); setPendingActions(pa)
   }
+  // keep the bell honest — poll the queues while the tab is visible
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.hidden) return
+      api.alerts().then(setAlerts).catch(() => {})
+      api.approvals('pending').then(setPendingActions).catch(() => {})
+    }, 15000)
+    return () => clearInterval(t)
+  }, [])
   useEffect(() => {
     refresh().catch(console.error)
+    api.health().then(setHealth).catch(() => {})
     const pre = localStorage.getItem('prefill_prompt')
     if (pre) { localStorage.removeItem('prefill_prompt'); setInput(pre); setTimeout(() => inputRef.current?.focus(), 50) }
     const oa = localStorage.getItem('open_agent')
@@ -162,19 +175,26 @@ export default function Workspace() {
               text: `Scanned **${f.name}** → ${inv.invoice_no || 'invoice'} · ${inv.buyer || 'buyer'} · ₹${Number(inv.amount || 0).toLocaleString('en-IN')} — added to your ledger.`,
             }])
           } catch {
-            setMessages(m => [...m, { role: 'agent', agent: 'sahayak', text: `Received ${f.name} — indexing it into business context.` }])
+            setMessages(m => [...m, { role: 'agent', agent: 'system', text: `Couldn't process ${f.name} — the upload failed. Try again, or drop it on Business context.` }])
           }
         }
       }
-      const r = await api.chat(msg || 'What did you just receive?', activeAgent, sentMode)
+      // picked capabilities → real scope on the request (empty pick = no limit)
+      const scopePick = activeAgent ? scope.tools : scope.agents
+      const r = await api.chat(msg || 'What did you just receive?', activeAgent, sentMode,
+        scopePick.length ? scopePick : null)
       setMessages(m => [...m, {
         role: 'agent', agent: r.agent_name, tagline: r.agent_tagline,
-        text: r.reply, trace: r.trace, actions: r.actions, mode: sentMode,
+        text: r.reply, trace: r.trace, actions: r.actions, usage: r.usage, mode: sentMode,
       }])
-      if (r.actions?.some(a => a.type === 'agent_created' || a.type === 'reminder_drafted')) refresh()
+      if (r.actions?.some(a => ['agent_created', 'reminder_drafted', 'action_queued'].includes(a.type))) refresh()
       if (r.agent_name === 'nirmata') setActiveAgent(null)
     } catch (e) {
-      setMessages(m => [...m, { role: 'agent', agent: 'system', text: `Error: ${e.message} — the backend may be cold-starting; try again in a few seconds.` }])
+      const unreachable = /Failed to fetch|NetworkError|Load failed|fetch/i.test(e.message)
+      setMessages(m => [...m, { role: 'agent', agent: 'system',
+        text: unreachable
+          ? 'Backend unreachable — it may be cold-starting; try again in a few seconds.'
+          : `Error: ${e.message}` }])
     } finally {
       setBusy(false)
     }
@@ -203,7 +223,8 @@ export default function Workspace() {
               {active ? (active.description || active.goal) : 'Orchestrator — routes your request to the right specialist, or hires a new one.'}
             </div>
             <div className="text-[10px] text-slate-400 mt-1">
-              {active?.stats?.runs != null ? `${active.stats.runs} tasks run` : 'Ramesh Auto Components · Faridabad'}
+              {active?.stats?.runs != null ? `${active.stats.runs} tasks run`
+                : [settings?.business?.name, settings?.business?.city].filter(Boolean).join(' · ') || 'Your business'}
             </div>
           </div>
           <div className="ml-auto self-center flex items-center gap-1.5">
@@ -212,7 +233,7 @@ export default function Workspace() {
               <Search size={11} className="text-slate-400 shrink-0" />
               <input name="q" placeholder="Search workspace…" className="w-full text-[11px] focus:outline-none bg-transparent" />
             </form>
-            <ApprovalBell alerts={alerts} onClick={() => setApprovals(true)} />
+            <ApprovalBell alerts={alerts} actions={pendingActions} onClick={() => setApprovals(true)} />
             <button onClick={() => setPalette(true)} title="Command palette (⌘K)"
               className="w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:text-ink hover:bg-slate-100 transition">
               <Command size={13} />
@@ -264,7 +285,7 @@ export default function Workspace() {
                           <span key={k} className="flex items-center gap-0.5">
                             {k > 0 && <ChevronRight size={8} className="text-slate-300" />}
                             <span className="px-1 py-px rounded bg-slate-100"
-                              style={k === m.trace.length - 1 ? { color } : {}}>{t}</span>
+                              style={k === m.trace.length - 1 ? { color } : {}}>{agents.find(a => a.id === t)?.name || t}</span>
                           </span>
                         ))}
                       </span>
@@ -279,13 +300,9 @@ export default function Workspace() {
                   </div>
                 )}
                 <LinkifiedText text={m.text} />
-                {m.role === 'agent' && m.mode === 'deep' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-[9px] font-medium text-slate-400">
-                    <BrandIcon id="perplexity" size={10} /> Deep research · 12 sources cited · powered by Perplexity
-                  </div>
-                )}
+                {m.role === 'agent' && <WebSources actions={m.actions} deep={m.mode === 'deep'} />}
                 {m.role === 'agent' && extractUrls(m.text)[0] && <LinkPreviewCard url={extractUrls(m.text)[0]} />}
-                {m.role === 'agent' && m.agent && m.agent !== 'system' && <SourceChips trace={m.trace} actions={m.actions} />}
+                {m.role === 'agent' && m.agent && m.agent !== 'system' && <SourceChips actions={m.actions} usage={m.usage} />}
                 {m.role === 'agent' && m.agent !== 'system' && (
                   <button onClick={() => speak(m.text, i)} title={speaking === i ? 'Stop' : 'Read aloud'}
                     className="mt-1.5 flex items-center gap-1 text-[9px] font-medium text-slate-400 hover:text-ink transition">
@@ -297,6 +314,13 @@ export default function Workspace() {
                     ✨ New agent joined your team — check the sidebar
                   </div>
                 )}
+                {m.actions?.filter(a => a.type === 'action_queued').map(a => (
+                  <div key={a.data?.approval_id} className="mt-2 animate-popIn">
+                    <ApprovalCard compact onChanged={refresh}
+                      item={{ id: a.data?.approval_id, tool: a.data?.tool, title: a.data?.title,
+                              summary: a.data?.summary, status: 'pending', created_at: new Date().toISOString() }} />
+                  </div>
+                ))}
                 {m.actions?.filter(a => a.type === 'artifact_created').map((a, j) => (
                   <a key={j} href={`#${a.data?.share_path || '/app'}`}
                     className="mt-2 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-accent hover:shadow-float hover:-translate-y-0.5 transition animate-popIn">
@@ -352,35 +376,35 @@ export default function Workspace() {
             </Liquid>
             {mode !== 'chat' && (
               <span className="flex items-center gap-1 text-[9px] text-slate-400">
-                powered by <BrandIcon id="perplexity" size={10} /> Perplexity
+                <Globe size={10} /> web search via Tavily
               </span>
             )}
             <ExclusionTabs tabs={scopeTabs} active={scopeTab} onChange={setScopeTab} />
-            {scopeTab === 'skills' && installedSkills.length > 0 && (
+            {scopeTab === 'agents' && scopeAgents.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
-                {installedSkills.map(s => (
-                  <button key={s} onClick={() => toggleScopeItem('skills', s)}
+                {scopeAgents.map(a => (
+                  <button key={a.id} onClick={() => toggleScopeItem('agents', a.id)}
                     className={`text-[10px] px-2 py-1 rounded-full border font-medium transition
-                      ${scope.skills.includes(s) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
-                    {s}
+                      ${scope.agents.includes(a.id) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
+                    {a.name}
                   </button>
                 ))}
               </div>
             )}
-            {scopeTab === 'mcp' && mcpServers.length > 0 && (
+            {scopeTab === 'tools' && scopeTools.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
-                {mcpServers.map(m => (
-                  <button key={m.id} onClick={() => toggleScopeItem('mcps', m.name)}
-                    className={`text-[10px] px-2 py-1 rounded-full border font-medium transition flex items-center gap-1
-                      ${scope.mcps.includes(m.name) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
-                    <Server size={9} />{m.name}
+                {scopeTools.map(t => (
+                  <button key={t} onClick={() => toggleScopeItem('tools', t)}
+                    className={`text-[10px] px-2 py-1 rounded-full border font-medium transition
+                      ${scope.tools.includes(t) ? 'bg-ink text-white border-ink' : 'border-slate-200 text-slate-500 hover:border-ink'}`}>
+                    {t.replace(/_/g, ' ')}
                   </button>
                 ))}
               </div>
             )}
-            {scopeTab !== 'all' && (scope.skills.length + scope.mcps.length) > 0 && (
+            {scopeTab !== 'all' && (scope.agents.length + scope.tools.length) > 0 && (
               <span className="text-[9px] text-slate-400">
-                next reply uses: {[...scope.skills, ...scope.mcps].join(', ')}
+                next reply uses only: {[...scope.agents, ...scope.tools].join(', ')}
               </span>
             )}
           </div>
@@ -409,7 +433,7 @@ export default function Workspace() {
           )}
           {messages.length === 1 && !busy && (
             <div className="mb-3">
-              <Digest onAction={(a) => a === 'approvals' ? setApprovals(true) : send(a)} />
+              <Digest owner={settings?.business?.owner} onAction={(a) => a === 'approvals' ? setApprovals(true) : send(a)} />
             </div>
           )}
           <div className="flex gap-2 flex-wrap mb-3 items-center">
@@ -484,8 +508,10 @@ export default function Workspace() {
             <section>
               <div className="text-[10px] font-semibold text-slate-500 mb-2">Agent Preferences</div>
               <div className="rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] text-slate-600 flex items-center justify-between">
-                <span className="flex items-center gap-1.5"><SparklesDot /> {activeAgent ? 'Nova Lite' : 'Nova Pro'}</span>
-                <span className="text-slate-300">▾</span>
+                <span className="flex items-center gap-1.5" title={`provider: ${health?.provider || '…'}`}>
+                  <SparklesDot /> {prettyModel(activeAgent ? health?.worker_model : health?.orchestrator_model)}
+                </span>
+                <span className="text-[9px] text-slate-300">{health?.provider || ''}</span>
               </div>
               <div className="rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] text-slate-400 mt-1.5 min-h-[44px]">
                 {active?.goal || 'Route messages, hire specialists when needed…'}
@@ -551,9 +577,47 @@ export default function Workspace() {
       <CommandPalette open={palette} onClose={() => setPalette(false)}
         onSelectAgent={id => setActiveAgent(id)} onSend={t => send(t)} />
       <ApprovalsDrawer open={approvals} onClose={() => setApprovals(false)}
-        alerts={alerts} onChanged={refresh} />
+        alerts={alerts} actions={pendingActions} onChanged={refresh} />
     </AppShell>
   )
 }
 
+// real model id (GET /health, providers.py) → a readable name
+function prettyModel(id) {
+  if (!id) return '…'
+  if (id === 'mock') return 'Offline mock model'
+  const m = id.match(/nova-(pro|lite|micro|premier)/)
+  if (m) return `Amazon Nova ${m[1][0].toUpperCase()}${m[1].slice(1)}`
+  return id
+}
+
 function SparklesDot() { return <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" /> }
+
+// Real web-research footer — counts and links come from the `web_searched`
+// actions the backend recorded this turn (tools/websearch.py). Nothing renders
+// if the agent didn't search; "not configured" is said plainly.
+function WebSources({ actions, deep }) {
+  const ws = (actions || []).filter(a => a.type === 'web_searched')
+  if (!ws.length) return null
+  if (ws.every(a => a.data?.configured === false))
+    return <div className="mt-2 text-[9px] font-medium text-slate-400">Web search isn't configured on this backend (TAVILY_API_KEY)</div>
+  const sources = ws.flatMap(a => a.data?.sources || [])
+  const uniq = [...new Map(sources.filter(s => s.url).map(s => [s.url, s])).values()]
+  return (
+    <div className="mt-2 text-[9px] font-medium text-slate-400">
+      <div className="flex items-center gap-1.5">
+        <Globe size={10} /> {deep ? 'Deep research' : 'Web search'} · {ws.length} {ws.length === 1 ? 'query' : 'queries'} · {uniq.length} {uniq.length === 1 ? 'source' : 'sources'} · via Tavily
+      </div>
+      {uniq.length > 0 && (
+        <div className="mt-1 flex gap-1 flex-wrap">
+          {uniq.slice(0, 8).map(s => (
+            <a key={s.url} href={s.url} target="_blank" rel="noreferrer"
+              className="max-w-[180px] truncate rounded bg-slate-100 px-1.5 py-0.5 text-slate-500 hover:text-ink" title={s.url}>
+              {s.title || new URL(s.url).hostname}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

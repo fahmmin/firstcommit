@@ -35,6 +35,12 @@ def main() -> int:
         # (so the sim also exercises the gate path end-to-end)
         if os.getenv("DEMO_GATE_TOKEN"):
             c.headers["x-demo-token"] = os.environ["DEMO_GATE_TOKEN"]
+        # 0. Sign in — every later call carries the signed, tenant-bound token
+        login = c.post("/auth/login", json={"provider": "guest"}).json()
+        c.headers["Authorization"] = f"Bearer {login['token']}"
+        check("signed login", "owner token for ramesh_auto",
+              f"{login['tenant_id']}/{login['base_role']}",
+              login["tenant_id"] == TENANT and login["base_role"] == "owner")
         c.post("/demo/reset", params={"tenant_id": TENANT})
 
         # 1. Onboarding — agents visible
@@ -81,6 +87,16 @@ def main() -> int:
         check("new agent answers", "carrier info", r3["reply"][:80],
               "₹" in r3["reply"] or "carrier" in r3["reply"].lower() or "kg" in r3["reply"].lower())
 
+        # 5b. A2 — one ask, several problems → the factory hires a TEAM from the role registry
+        before_ids = {a["id"] for a in c.get("/agents", params={"tenant_id": TENANT}).json()}
+        t1 = c.post("/chat", json={"tenant_id": TENANT,
+                                   "text": "hire a team: customer support for buyer queries and monthly reports for my accountant"}).json()
+        c.post("/chat", json={"tenant_id": TENANT, "text": "haan"})
+        team = [a for a in c.get("/agents", params={"tenant_id": TENANT}).json() if a["id"] not in before_ids]
+        roles_hired = sorted(a.get("role_id") or "" for a in team)
+        check("multi-role hire (A2)", "customer_support + reporting", ",".join(roles_hired),
+              {"customer_support", "reporting"} <= set(roles_hired) and "team" in t1["reply"].lower())
+
         # 6. Cash-flow gap advisor
         cf = c.get("/cashflow", params={"tenant_id": TENANT}).json()
         check("cashflow data", "receivables+payables", f"{len(cf['receivables'])}/{len(cf['payables'])}",
@@ -91,8 +107,9 @@ def main() -> int:
         check("scheduler ran", ">=0 moved", str(moved["moved"]), moved["moved"] >= 0)
 
         # 8. Tenant isolation
-        other = c.get("/invoices", params={"tenant_id": "other_tenant"}).json()
-        check("tenant isolation", "0 rows", str(len(other)), len(other) == 0)
+        # a Ramesh token can't even ask for another tenant's rows (server 403)
+        other = c.get("/invoices", params={"tenant_id": "other_tenant"})
+        check("tenant isolation", "403 cross-tenant", str(other.status_code), other.status_code == 403)
 
         # 9. Dashboard summary composes real numbers
         d = c.get("/dashboard/summary", params={"tenant_id": TENANT}).json()
@@ -184,6 +201,32 @@ def main() -> int:
               ">=5 categories + new agent", f"{len(cats)}/{inst.get('created_by')}",
               len(cats) >= 5 and inst.get("created_by") == "factory"
               and inst["id"] in after_agents and inst["id"] not in before_agents)
+
+        # 18a. A1 — agent side-effecting action is queued, not executed, until approved
+        from app.agents import approvals as _appr
+        _appr.revoke_session(TENANT, "create_invoice")
+        inv_before = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        qr = c.post("/chat", json={"tenant_id": TENANT, "agent_id": "vasool",
+                                   "text": "bill banao for Approval Test Co"}).json()
+        pend = [a for a in c.get("/approvals", params={"tenant_id": TENANT, "status": "pending"}).json()
+                if a["tool"] == "create_invoice"]
+        inv_mid = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        ap_ok = False
+        if pend:
+            ap = c.post(f"/approvals/{pend[0]['id']}/approve", params={"tenant_id": TENANT}).json()
+            ap_ok = ap.get("status") == "executed"
+        inv_after = len(c.get("/invoices", params={"tenant_id": TENANT}).json())
+        if not pend:
+            # real-Bedrock runs: the LLM may not choose create_invoice this turn.
+            # The engine itself is deterministically covered by unit+contract tests;
+            # here assert the gate at least didn't execute anything silently.
+            check("approval gate: not executed without a queue", "no silent write",
+                  f"queued=False delta={inv_after-inv_before}", inv_after == inv_before)
+        else:
+            check("approval gate: queue→approve→execute",
+                  "not-run-until-approved then +1",
+                  f"queued=True mid={inv_mid-inv_before} after={inv_after-inv_before}",
+                  inv_mid == inv_before and ap_ok and inv_after == inv_before + 1)
 
         # 18b. Round 4 fix — kanban drag persists via PATCH /tasks/{id} (col↔status)
         tk = c.post("/tasks", json={"tenant_id": TENANT, "title": "Kanban card",
