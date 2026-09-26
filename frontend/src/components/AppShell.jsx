@@ -125,11 +125,17 @@ export function AppShell({ children, agents: agentsProp, activeAgent, onAgentCli
         </div>
       </aside>
       {children}
-      {isOffline && (
+      {isOffline === 'offline' && (
         <div role="status" title="The backend didn't answer — lists show sample rows until it does. Nothing you see here is your data."
           className="fixed top-3 right-4 z-[80] flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[11px] font-medium text-amber-700 shadow-sm">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Offline — sample data
         </div>
+      )}
+      {isOffline === 'recovered' && (
+        <button onClick={() => location.reload()} title="The backend is reachable again — reload to replace any sample rows with your real data"
+          className="fixed top-3 right-4 z-[80] flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Back online — refresh
+        </button>
       )}
     </div>
   )
@@ -152,5 +158,12 @@ function usePendingCount() {
 function useOffline() {
   const [v, setV] = useState(offline.get())
   useEffect(() => offline.subscribe(setV), [])
+  // while offline, probe the (public) health check so recovery is noticed even
+  // on pages that don't poll — req() flips the flag to 'recovered' on success
+  useEffect(() => {
+    if (v !== 'offline') return
+    const t = setInterval(() => api.health().catch(() => {}), 5000)
+    return () => clearInterval(t)
+  }, [v])
   return v
 }

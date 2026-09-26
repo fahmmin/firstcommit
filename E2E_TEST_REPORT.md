@@ -77,3 +77,31 @@ Bugs found **and fixed** this round:
 8. Seed claimed "Gmail synced — 212 emails" though Gmail is `coming_soon`.
 
 Still open (needs you): B2 live run on a non-Bedrock provider (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` or local Ollama); identity providers are still demo adapters (sessions/roles are now real).
+
+## Round 3b — extensive end-to-end in Chrome (Claude in Chrome) + a real Claude MCP client — 2026-09-26
+**Chrome (local build, owner → viewer → manager), all PASS, zero console errors:**
+1. Unauthenticated `#/app` → redirected to login → guest login issues a signed owner token for `ramesh_auto`.
+2. Chat routing → Vasool "5 overdue ₹2,60,200 · oldest INV-1026" with only real source chips.
+3. Factory: "mera transporter nahi aaya" → preview → "haan" → Logistics Agent live in the sidebar → answers with 4 real Ludhiana carriers.
+4. Team hire in chat ("customer support … monthly reports") → both hired → Reporting Agent's aging matches the MCP numbers exactly.
+5. Approval gate from chat: inline card → Approve → invoices 16 → 17, ledger result `INV-72DF`; second queue → Deny → nothing written, denied=1.
+6. Message drafts: Approve & send → sent (console notifier offline), pending 5 → 4.
+7. View as Viewer: UI swaps to "Needs a manager or the owner", server **403** on approve + settings, chat 200.
+8. Owner invite link (Manager) → `#/join/<token>` → approve 200, settings 403, escalate to owner 403, mint invite 403.
+9. Forged token (manager→owner in the payload) → server 401 → back to sign-in.
+10. Marketplace Hire team (Compliance + Digital Presence) → 4 → 6 agents; Compliance correctly gets no `web_search` (role extras).
+11. All 14 pages render live data (no sample fallback); context upload → searchable; report generate + real PDF; task move persists; People 7/20/6.
+12. Settings MCP: mint token → add Sahayak's own `/mcp` → **Test: connected · 8 tools** (6 read-only, 2 write); token masked `••••`; agent MCP write → queued as `mcp:…:create_invoice`.
+13. Offline: stop backend → "Offline — sample data" pill on every page, Logs "paused", a write shows "Couldn't save the task — backend unreachable" (no fake card); restart → **"Back online — refresh"** → real data, no pill.
+
+**Real Claude (Claude Code CLI) as an MCP client** via a throwaway `--mcp-config` → `localhost:8000/mcp`:
+- Read: listed overdue invoices + aging from the live ledger.
+- Write: `create_invoice` for "Claude Test Traders" → **queued** (apr-…, agent `mcp-client`) → approved by the owner in Chrome → `INV-1A59` in the ledger.
+
+**Bugs this pass found and fixed:**
+1. **Frozen invoice aging** (Claude flagged it) — `days_overdue`/status were stored numbers, 6 days stale; invoices past due still showed "sent". Now derived at read time from `due_date` in both stores (`store.age_invoice`); tests pin `SAHAYAK_TODAY`.
+2. **MCP `aging_report` put not-yet-due invoices in "0–30"** (Claude flagged it) — now overdue-only buckets + `current_not_yet_due`.
+3. **Offline pill never cleared after recovery** — now a health probe flips it to "Back online — refresh" (never silently hides sample rows).
+4. Chat showed raw `**markdown**` and raw agent ids (`agent-e6d94b`) in the trace — bold renders, trace shows names.
+
+Test-tool note: some Claude-in-Chrome element-ref clicks missed on this page (viewport 1710px vs a 1512px screenshot frame) — verified to be the tool, not the app (a real click/DOM click logs in every time).

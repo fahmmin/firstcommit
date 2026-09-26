@@ -37,7 +37,7 @@ export function LinkifiedText({ text }) {
     <>
       {parts.map((p, i) => {
         const mm = /^https?:\/\/|^www\./.test(p) ? meta(p) : null
-        if (!mm) return p
+        if (!mm) return <Bold key={i} text={p} />
         return (
           <span key={i} className="relative group inline-block">
             <a href={mm.href} target="_blank" rel="noreferrer"
@@ -79,4 +79,10 @@ export function LinkPreviewCard({ url }) {
       <Globe size={12} className="text-slate-300 shrink-0" />
     </a>
   )
+}
+
+// agents answer in light markdown — render **bold** instead of showing asterisks
+function Bold({ text }) {
+  const bits = text.split(/\*\*(.+?)\*\*/g)
+  return bits.map((b, i) => (i % 2 ? <strong key={i} className="font-semibold text-ink">{b}</strong> : b))
 }

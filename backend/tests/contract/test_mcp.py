@@ -181,3 +181,23 @@ def test_marketplace_has_no_counts_or_invented_urls(client):
     m = client.get("/marketplace", params={"tenant_id": T}).json()
     assert m["mcp"] and all("installs" not in x and "url" not in x for x in m["mcp"])
     assert "list_overdue_invoices" in m["sahayak_mcp_tools"]
+
+
+def test_server_aging_separates_current_from_overdue(live_url):
+    import json as _j
+    with _mcp(live_url) as c:
+        status, text = _call(c, "aging_report")
+    data = _j.loads(text)
+    overdue = sum(i["amount"] for i in deps.store.list_invoices(T, status="overdue"))
+    assert data["overdue_total"] == overdue          # not-yet-due never lands in a bucket
+    assert data["current_not_yet_due"] > 0
+
+
+def test_invoice_aging_is_live_not_frozen(monkeypatch):
+    from app.store import age_invoice
+    row = {"status": "sent", "due_date": "2026-09-22", "days_overdue": 0}
+    monkeypatch.setenv("SAHAYAK_TODAY", "2026-09-26")
+    assert age_invoice(row)["status"] == "overdue" and age_invoice(row)["days_overdue"] == 4
+    monkeypatch.setenv("SAHAYAK_TODAY", "2026-09-20")
+    assert age_invoice(row)["status"] == "sent" and age_invoice(row)["days_overdue"] == 0
+    assert age_invoice({"status": "paid", "due_date": "2020-01-01"})["status"] == "paid"

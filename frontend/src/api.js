@@ -15,15 +15,18 @@ import { toast } from './lib/toast.js'
 
 // Offline flag — set whenever a read falls back to the sample store because the
 // backend was unreachable. The UI shows an "Offline — sample data" pill so sample
-// rows are never mistaken for the tenant's real data. A later success clears it.
+// rows are never mistaken for the tenant's real data. States:
+//   false → all good · 'offline' → sample rows may be on screen ·
+//   'recovered' → backend answers again, but the screen may still hold sample
+//   rows until it re-fetches (pill becomes "Back online — refresh").
 let _offline = false
 const _subs = new Set()
 const _setOffline = (v) => { if (v !== _offline) { _offline = v; _subs.forEach(f => f(v)) } }
-export const markOffline = () => _setOffline(true)
+export const markOffline = () => _setOffline('offline')
 export const offline = { get: () => _offline, subscribe: (f) => { _subs.add(f); return () => _subs.delete(f) } }
 // read with a labelled sample fallback (never used for writes — a failed write must fail)
 const withSample = (p, sample) => p.then(r => { _setOffline(false); return r })
-  .catch(() => { _setOffline(true); return typeof sample === 'function' ? sample() : sample })
+  .catch(() => { _setOffline('offline'); return typeof sample === 'function' ? sample() : sample })
 
 // demo gate — the deployed API sits behind DEMO_GATE_TOKEN (auth is demo-only
 // by project rule). Share the URL as .../?gate=PASSCODE#/app once and it sticks
@@ -58,6 +61,7 @@ async function req(path, opts = {}) {
   if (t && !headers.Authorization) headers.Authorization = `Bearer ${t}`
   headers['ngrok-skip-browser-warning'] = '1'  // harmless elsewhere; skips tunnel interstitial
   const r = await fetch(`${BASE}${path}`, { ...opts, headers })
+  if (_offline === 'offline' && r.status < 500) _setOffline('recovered')
   if (r.status === 401 && !path.startsWith('/public/')) {
     const detail = (await r.json().catch(() => ({})))?.detail || ''
     if (/passcode/.test(detail)) { location.hash = '#/gate'; throw new Error('demo passcode required') }

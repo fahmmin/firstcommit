@@ -8,7 +8,10 @@ import pytest
 import tempfile
 # never let a test (or a TestClient lifespan) touch the dev server's backend/data
 os.environ["SAHAYAK_DATA_DIR"] = tempfile.mkdtemp(prefix="sahayak-test-")
-os.environ.setdefault("USE_AWS", "0")  # USE_AWS=1 in env → parity suite also runs DynamoStore
+os.environ.setdefault("USE_AWS", "0")
+# invoice aging is live (store.age_invoice); pin "today" to the date the seed was
+# written for so every count in the suite is reproducible
+os.environ.setdefault("SAHAYAK_TODAY", "2026-09-20")  # USE_AWS=1 in env → parity suite also runs DynamoStore
 os.environ["DEMO_GATE_TOKEN"] = ""  # tests are ungated local dev — .env's real token must not leak in
 # google connectors must behave "unconfigured" in tests regardless of local .env
 os.environ.pop("GOOGLE_SERVICE_ACCOUNT_JSON", None)

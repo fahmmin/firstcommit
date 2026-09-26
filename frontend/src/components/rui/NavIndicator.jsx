@@ -18,7 +18,7 @@ export function NavIndicator({ items, activeIndex, onJump, className = '' }) {
             <span className={`pointer-events-none absolute right-5 whitespace-nowrap max-w-[200px] truncate rounded-lg border border-slate-200 bg-white shadow-float px-2.5 py-1.5 text-[10px] text-slate-600 transition-all
               ${hov ? 'opacity-100 -translate-x-1' : 'opacity-0 translate-x-1'}`}>
               <span className={`font-semibold ${it.role === 'user' ? 'text-ink' : 'text-accent'}`}>{it.role === 'user' ? 'You' : (it.agent || 'Agent')}</span>
-              {' · '}{it.text?.slice(0, 42)}{it.text?.length > 42 ? '…' : ''}
+              {' · '}{it.text?.replace(/\*\*/g, '').slice(0, 42)}{it.text?.length > 42 ? '…' : ''}
             </span>
             <button onClick={() => onJump(i)} aria-label={`Jump to message ${i + 1}`}
               className={`h-[3px] rounded-full transition-all duration-200

@@ -18,6 +18,33 @@ DATA_DIR = (Path(os.environ["SAHAYAK_DATA_DIR"]) if os.environ.get("SAHAYAK_DATA
             else Path(__file__).resolve().parent.parent / "data")
 
 
+def _today():
+    """Real date; SAHAYAK_TODAY pins it (tests/demos) so aging is reproducible."""
+    from datetime import date
+    pinned = os.environ.get("SAHAYAK_TODAY")
+    return date.fromisoformat(pinned) if pinned else date.today()
+
+
+def age_invoice(row: dict) -> dict:
+    """Invoice aging is derived at read time from due_date — never a frozen number.
+    An unpaid invoice past its due date IS overdue with the live day count; the
+    softer sent/due_soon labels are kept as stored."""
+    if row.get("status") not in ("sent", "due_soon", "overdue") or not row.get("due_date"):
+        return row
+    from datetime import date
+    try:
+        days = (_today() - date.fromisoformat(str(row["due_date"])[:10])).days
+    except ValueError:
+        return row
+    out = dict(row)
+    out["days_overdue"] = max(days, 0)
+    if days > 0:
+        out["status"] = "overdue"
+    elif row.get("status") == "overdue":  # due date moved into the future
+        out["status"] = "due_soon"
+    return out
+
+
 class Store(ABC):
     """All collections are tenant-scoped. Every method takes tenant_id first."""
 
@@ -225,7 +252,7 @@ class LocalStore(Store):
 
     # invoices
     def list_invoices(self, tenant_id, status=None):
-        rows = self._rows("invoices", tenant_id)
+        rows = [age_invoice(r) for r in self._rows("invoices", tenant_id)]
         return [r for r in rows if status is None or r.get("status") == status]
 
     def get_invoice(self, tenant_id, invoice_id):
@@ -494,11 +521,12 @@ class DynamoStore(Store):
         return self._put("specs", tenant_id, spec)
 
     def list_invoices(self, tenant_id, status=None):
-        rows = self._all("invoices", tenant_id)
+        rows = [age_invoice(r) for r in self._all("invoices", tenant_id)]
         return [r for r in rows if status is None or r.get("status") == status]
 
     def get_invoice(self, tenant_id, invoice_id):
-        return self._put_get("invoices", tenant_id, invoice_id)
+        row = self._put_get("invoices", tenant_id, invoice_id)
+        return age_invoice(row) if row else row
 
     def put_invoice(self, tenant_id, invoice):
         return self._put("invoices", tenant_id, invoice)

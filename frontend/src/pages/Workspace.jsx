@@ -285,7 +285,7 @@ export default function Workspace() {
                           <span key={k} className="flex items-center gap-0.5">
                             {k > 0 && <ChevronRight size={8} className="text-slate-300" />}
                             <span className="px-1 py-px rounded bg-slate-100"
-                              style={k === m.trace.length - 1 ? { color } : {}}>{t}</span>
+                              style={k === m.trace.length - 1 ? { color } : {}}>{agents.find(a => a.id === t)?.name || t}</span>
                           </span>
                         ))}
                       </span>

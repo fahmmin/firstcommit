@@ -70,15 +70,21 @@ def list_overdue_invoices() -> dict:
 
 @mcp_server.tool(annotations=READ)
 def aging_report() -> dict:
-    """Receivables aging buckets (0-30, 31-60, 61-90, 90+ days)."""
-    buckets = {"0-30": 0, "31-60": 0, "61-90": 0, "90+": 0}
+    """Receivables aging: overdue amounts by days past due (1-30, 31-60, 61-90,
+    90+) plus `current` = unpaid but not yet due. Days are live from due dates."""
+    buckets = {"1-30": 0, "31-60": 0, "61-90": 0, "90+": 0}
+    current = 0
     for r in deps.store.list_invoices(_tid()):
         if r.get("status") not in ("overdue", "due_soon", "sent"):
             continue
         d = r.get("days_overdue", 0)
-        key = "0-30" if d <= 30 else "31-60" if d <= 60 else "61-90" if d <= 90 else "90+"
+        if d <= 0:
+            current += r["amount"]
+            continue
+        key = "1-30" if d <= 30 else "31-60" if d <= 60 else "61-90" if d <= 90 else "90+"
         buckets[key] += r["amount"]
-    return {"buckets": buckets}
+    return {"overdue_buckets": buckets, "overdue_total": sum(buckets.values()),
+            "current_not_yet_due": current}
 
 
 @mcp_server.tool(annotations=READ)
