@@ -19,6 +19,7 @@ _PRICING = {
     "nova-premier": (2.50, 12.50), "nova-pro": (0.80, 3.20), "nova-lite": (0.06, 0.24),
     "nova-micro": (0.035, 0.14),
     "claude-opus": (15.0, 75.0), "claude-sonnet": (3.0, 15.0), "claude-haiku": (1.0, 5.0),
+    "gpt-5-nano": (0.05, 0.40), "gpt-5-mini": (0.25, 2.0), "gpt-5": (1.25, 10.0),
     "gpt-4.1-nano": (0.10, 0.40), "gpt-4.1-mini": (0.40, 1.60), "gpt-4.1": (2.0, 8.0),
     "gpt-4o-mini": (0.15, 0.60), "gpt-4o": (2.5, 10.0), "text-embedding-3-small": (0.02, 0.0),
     "llama": (0.0, 0.0), "mock": (0.0, 0.0),

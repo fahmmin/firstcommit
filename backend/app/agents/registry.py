@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from strands import Agent
+from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session.file_session_manager import FileSessionManager
 
 from .. import deps
@@ -34,6 +35,13 @@ def _session_manager(session_id: str):
             region_name=os.getenv("AWS_REGION", "us-east-1"),
         )
     return FileSessionManager(session_id=session_id, storage_dir=str(DATA_DIR / "sessions"))
+
+
+# real models (gpt-4o-mini, Nova Lite) add up long lists unreliably — every total
+# the owner sees must come from a tool, which aggregates in code
+_NUMBERS_RULE = ("Never add up, rank or average figures yourself — quote totals and rankings "
+                 "exactly as your tools return them (e.g. by_buyer / overdue_by_buyer). If a tool "
+                 "doesn't give the total you need, say so.")
 
 
 class AgentRegistry:
@@ -171,10 +179,12 @@ class AgentRegistry:
             name=spec.name,
             model=make_model(rules=mock_rules.rules_for_mcp([name_of(t) for t in mcp])
                              + mock_rules.rules_for_tools(spec.tools), role="worker"),
-            system_prompt=f"{spec.persona_prompt}\nYour goal: {spec.goal}"
+            system_prompt=f"{spec.persona_prompt}\nYour goal: {spec.goal}\n{_NUMBERS_RULE}"
                           + build_memory_suffix(self.tenant_id),
             tools=resolved + extra + mcp,
             session_manager=_session_manager(f"{self.tenant_id}-{spec.id}"),
+            conversation_manager=SlidingWindowConversationManager(
+                window_size=int(os.getenv("AGENT_WINDOW", "12"))),
             callback_handler=None,
         )
 
@@ -318,6 +328,21 @@ class AgentRegistry:
         )
         return self._agents["nirmata"]
 
+    def _nirmata_tool(self, description: str):
+        """Nirmata as the router's tool — but it always receives the OWNER'S OWN
+        words for this turn (deps.current_user_text), not the router's paraphrase.
+        Real models otherwise split multi-part asks or replay the original problem
+        instead of forwarding a 'haan', so hires silently failed."""
+        from strands import tool
+        registry = self
+
+        @tool(name="nirmata", description=description)
+        def nirmata(input: str) -> str:
+            """Hand the owner's request to the hiring agent."""
+            text = deps.current_user_text.get() or input
+            return str(registry.nirmata()(text))
+        return nirmata
+
     # ---- orchestrator ----
 
     def _build_orchestrator(self, only: set[str] | None = None, extra_tools: list | None = None) -> Agent:
@@ -346,17 +371,14 @@ class AgentRegistry:
                              + ("the logistics specialist above"
                                 if has_logistics else "nirmata (no logistics specialist exists yet — hire one)"))
         if only is None or "nirmata" in only:
-            subs.append(self.nirmata().as_tool(
-                name="nirmata",
+            subs.append(self._nirmata_tool(
                 description=(
                     "The HIRING agent (the factory). Call it whenever the owner describes a "
                     "problem NONE of your current specialists cover — e.g. transport/logistics/"
                     "delivery ('transporter nahi aaya', book a pickup), selling online / digital "
                     "presence, GST/compliance filing, HR, or any new kind of request — and also "
                     "when the owner confirms a hire ('haan'/'yes'/'create it'). Prefer nirmata "
-                    "over answering a problem yourself."),
-                preserve_context=True,
-            ))
+                    "over answering a problem yourself.")))
         if only is None or "web_search" in only:
             subs += web_search_tools(self.tenant_id)  # web/deep mode
         mcp = list(extra_tools or [])
@@ -378,7 +400,14 @@ class AgentRegistry:
                 "2. If no specialist above fits (transport/logistics/delivery, selling online, "
                 "compliance, HR, anything new) → call nirmata. When torn between answering "
                 "yourself and nirmata, ALWAYS choose nirmata.\n"
-                "3. After a hiring preview, an affirmative ('haan'/'yes'/'ok'/'create it') → nirmata.\n\n"
+                "3. After a hiring preview, an affirmative ('haan'/'yes'/'ok'/'create it') → nirmata.\n"
+                "4. Nirmata automatically receives the owner's own message, and it can hire "
+                "several specialists in one go — never split a request or answer part of it "
+                "yourself.\n"
+                "5. Report only what your tools returned. Never say something is 'being "
+                "processed' or 'in progress' unless a tool is running it right now.\n"
+                "6. If web_search says it isn't configured, tell the owner that plainly — do not "
+                "hire an agent to work around a disabled tool.\n\n"
                 "Routing examples:\n"
                 "- 'show my overdue invoices' / 'paisa kab aayega' → vasool\n"
                 "- 'cheapest steel supplier' / 'MOQ is too high' → sourcer\n"
@@ -391,6 +420,11 @@ class AgentRegistry:
             ),
             tools=subs,
             session_manager=_session_manager(f"{self.tenant_id}-orchestrator"),
+            # the router only needs recent turns (hiring context lives in Nirmata's own
+            # session). A long history tempts real models to answer business questions
+            # from stale earlier replies instead of calling a specialist — and costs tokens.
+            conversation_manager=SlidingWindowConversationManager(
+                window_size=int(os.getenv("ORCHESTRATOR_WINDOW", "8"))),
             callback_handler=None,
         )
 

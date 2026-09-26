@@ -22,6 +22,9 @@ notifier: Notifier | None = None
 
 # per-request accumulators, set by the /chat endpoint, appended by tools
 current_actions: contextvars.ContextVar[list | None] = contextvars.ContextVar("actions", default=None)
+# the owner's own words for this /chat turn — handed to Nirmata verbatim so a
+# routing model can never paraphrase, split, or replay a hiring request
+current_user_text: contextvars.ContextVar[str | None] = contextvars.ContextVar("user_text", default=None)
 
 
 def record_action(type_: str, data: dict) -> None:

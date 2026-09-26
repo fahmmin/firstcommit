@@ -109,6 +109,19 @@ def _need_sdk(p: str, exc: Exception):
         f"MODEL_PROVIDER={p} needs its SDK — pip install -r requirements-providers.txt ({exc})") from exc
 
 
+def is_reasoning_model(model: str) -> bool:
+    """gpt-5* / o-series reject temperature and bill hidden reasoning as output."""
+    m = (model or "").lower()
+    return m.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
+def openai_params(model: str) -> dict:
+    if is_reasoning_model(model):
+        # minimal reasoning keeps hidden "thinking" tokens (billed as output) low
+        return {"reasoning_effort": os.getenv("OPENAI_REASONING_EFFORT", "minimal")}
+    return {"temperature": 0}
+
+
 def _ollama_host() -> str:
     return os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 
@@ -136,7 +149,7 @@ def make_chat_model(role: str = "worker", rules=None, fallback: str | None = Non
             from strands.models.openai import OpenAIModel
         except ImportError as e:
             _need_sdk(p, e)
-        return OpenAIModel(client_args={"api_key": _key(p)}, model_id=mid, params={"temperature": 0})
+        return OpenAIModel(client_args={"api_key": _key(p)}, model_id=mid, params=openai_params(mid))
     if p == "ollama":
         try:
             from strands.models.ollama import OllamaModel
@@ -231,7 +244,7 @@ def complete_text(prompt: str, role: str = "worker") -> str | None:
             return "".join(b.get("text", "") for b in d.get("content", []))
         if p == "openai":
             d = _post("https://api.openai.com/v1/chat/completions",
-                      {"model": mid, "messages": [{"role": "user", "content": prompt}]},
+                      {"model": mid, "messages": [{"role": "user", "content": prompt}], **openai_params(mid)},
                       {"Authorization": f"Bearer {_key(p)}"})
             return d["choices"][0]["message"]["content"]
         if p == "ollama":

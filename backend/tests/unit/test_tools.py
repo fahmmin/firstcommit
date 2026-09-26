@@ -84,3 +84,21 @@ def test_clean_reply_keeps_response_drops_thinking():
     assert _clean_reply(raw) == "SafeRoad at ₹3.9/kg"
     assert _clean_reply("plain answer") == "plain answer"
     assert _clean_reply("<thinking>a</thinking>b<thinking>c</thinking>") == "b"
+
+
+def test_list_overdue_aggregates_by_buyer(tenant):
+    from app.tools.invoices import invoice_tools
+    t = next(x for x in invoice_tools(tenant) if x.tool_name == "list_overdue")
+    out = t()
+    top = out["by_buyer"][0]
+    assert top["total"] == max(b["total"] for b in out["by_buyer"])
+    assert f"Most owed by: {top['buyer']}" in out["reply"]
+    assert sum(b["total"] for b in out["by_buyer"]) == out["total"]
+
+
+def test_money_tool_carries_owner_payment_notes(tenant):
+    from app import deps
+    from app.tools.invoices import invoice_tools
+    deps.store.put_memory(tenant, {"id": "m-slow", "text": "Joshi Builders is a slow payer", "source": "owner"})
+    out = next(x for x in invoice_tools(tenant) if x.tool_name == "list_overdue")()
+    assert "Joshi Builders is a slow payer" in out["owner_notes"] and "Joshi" in out["reply"]

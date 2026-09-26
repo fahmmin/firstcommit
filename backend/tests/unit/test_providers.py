@@ -180,3 +180,9 @@ def test_budget_cap_blocks_chat_and_one_shot_calls(monkeypatch):
     with pytest.raises(providers.ProviderUnavailable, match="BUDGET"):
         tracing.charge("gpt-4o-mini", 10**7, 0)
         providers._post("https://example.invalid", {})
+
+
+def test_reasoning_models_drop_temperature():
+    assert providers.openai_params("gpt-5-mini") == {"reasoning_effort": "minimal"}
+    assert providers.openai_params("gpt-4o-mini") == {"temperature": 0}
+    assert tracing.price_for("gpt-5-mini") == (0.25, 2.0)

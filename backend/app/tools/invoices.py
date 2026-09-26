@@ -149,18 +149,33 @@ def invoice_tools(tenant_id: str) -> list:
 
     @tool
     def list_overdue() -> dict:
-        """List all overdue invoices: buyer, invoice number, amount, days overdue."""
+        """List all overdue invoices (buyer, invoice number, amount, days overdue) plus
+        per-buyer totals — use `by_buyer` for "who owes the most"; `oldest` is the
+        longest-unpaid invoice, which is NOT the same thing."""
         rows = deps.store.list_invoices(tenant_id, status="overdue")
         rows.sort(key=lambda r: r.get("days_overdue", 0), reverse=True)
         total = sum(r.get("amount", 0) for r in rows)
+        # aggregate in code — models reliably mix up "oldest" and "largest"
+        agg: dict[str, dict] = {}
+        for r in rows:
+            b = agg.setdefault(r["buyer"], {"buyer": r["buyer"], "total": 0, "invoices": 0, "oldest_days": 0})
+            b["total"] += r.get("amount", 0)
+            b["invoices"] += 1
+            b["oldest_days"] = max(b["oldest_days"], r.get("days_overdue", 0))
+        by_buyer = sorted(agg.values(), key=lambda b: b["total"], reverse=True)
         deps.record_action("invoices_listed", {"count": len(rows), "total": total})
-        return {
-            "overdue": rows,
-            "count": len(rows),
-            "total": total,
-            "reply": f"You have {len(rows)} overdue invoices totalling ₹{total:,}. "
-                     + (f"Oldest: {rows[0]['invoice_no']} from {rows[0]['buyer']} — {rows[0]['days_overdue']} days overdue." if rows else ""),
-        }
+        reply = f"You have {len(rows)} overdue invoices totalling ₹{total:,}."
+        if rows:
+            top = by_buyer[0]
+            reply += (f" Most owed by: {top['buyer']} — ₹{top['total']:,} across {top['invoices']} "
+                      f"invoice{'s' if top['invoices'] > 1 else ''}. Oldest: {rows[0]['invoice_no']} "
+                      f"from {rows[0]['buyer']} — {rows[0]['days_overdue']} days overdue.")
+        from .context import payment_notes
+        notes = payment_notes(tenant_id)
+        if notes:
+            reply += " Owner's notes on payers: " + " | ".join(notes)
+        return {"overdue": rows, "count": len(rows), "total": total,
+                "by_buyer": by_buyer, "owner_notes": notes, "reply": reply}
 
     @tool
     def aging_report() -> dict:
@@ -175,9 +190,15 @@ def invoice_tools(tenant_id: str) -> list:
             elif d <= 90: buckets["61-90"] += amt
             else: buckets["90+"] += amt
             detail.append({"buyer": r["buyer"], "amount": amt, "days_overdue": d})
+        by_buyer: dict[str, float] = {}
+        for x in detail:
+            by_buyer[x["buyer"]] = by_buyer.get(x["buyer"], 0) + x["amount"]
+        ranked = [{"buyer": b, "overdue_total": t} for b, t in sorted(by_buyer.items(), key=lambda kv: -kv[1])]
         deps.record_action("invoices_listed", {"buckets": buckets})
-        return {"buckets": buckets, "detail": detail,
-                "reply": "Aging: " + ", ".join(f"{k}d: ₹{int(v):,}" for k, v in buckets.items())}
+        return {"buckets": buckets, "detail": detail, "overdue_by_buyer": ranked,
+                "reply": "Aging: " + ", ".join(f"{k}d: ₹{int(v):,}" for k, v in buckets.items())
+                         + (". Overdue by customer: " + ", ".join(f"{x['buyer']} ₹{int(x['overdue_total']):,}"
+                                                                   for x in ranked) if ranked else "")}
 
     @tool
     def create_invoice(buyer: str, amount: float, due_date: str, items: str = "", invoice_no: str = "") -> dict:

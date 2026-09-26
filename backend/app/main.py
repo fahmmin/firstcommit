@@ -143,13 +143,26 @@ def _clean_reply(raw: str) -> str:
     return out.strip() or raw.strip()
 
 
+_TRANSIENT = ("APIConnectionError", "APITimeoutError", "RateLimitError", "ConnectError",
+              "ReadTimeout", "ThrottlingException", "ServiceUnavailable", "InternalServerError")
+
+
 def _invoke(agent, text: str):
-    """Nova occasionally emits an invalid ToolUse stream — one retry absorbs it."""
+    """One retry absorbs Nova's occasional invalid ToolUse stream and transient
+    provider/network errors; a provider that stays down becomes a clean 503."""
     try:
         return agent(text)
     except Exception as e:
-        if "ToolUse" in str(e) or "modelStreamError" in type(e).__name__:
-            return agent(text)
+        name = type(e).__name__
+        if "ToolUse" in str(e) or "modelStreamError" in name or name in _TRANSIENT:
+            import time as _t
+            _t.sleep(1.5)
+            try:
+                return agent(text)
+            except Exception as e2:
+                if type(e2).__name__ in _TRANSIENT:
+                    raise HTTPException(503, f"model provider unreachable ({type(e2).__name__}) — try again")
+                raise
         raise
 
 
@@ -166,6 +179,7 @@ def chat(req: ChatReq):
                 f"web_search tool{' with deep=True' if req.mode == 'deep' else ''}] " + text)
     actions: list[dict] = []
     token = deps.current_actions.set(actions)
+    text_token = deps.current_user_text.set(req.text)
     from .tracing import record_run, run_metrics, timer
     _t = timer().__enter__()
     from .mcp.client import mcp_tools_for
@@ -180,6 +194,12 @@ def chat(req: ChatReq):
             else:
                 agent = registry.orchestrator(only=req.scope, extra_tools=mcp_tools)
                 result = _invoke(agent, text)
+                # grounding guard: the front desk must route, not answer from memory.
+                # A reply with zero tool calls gets one nudge to use a specialist.
+                used = list(result.metrics.tool_metrics.keys()) if result.metrics else []
+                if not used and len(req.text.split()) > 3:
+                    result = _invoke(agent, "[Route this to the right specialist tool — do not "
+                                            "reuse figures from earlier replies.] " + text)
         if req.agent_id:
             agent_name = req.agent_id
             registry.bump_stats(req.agent_id)
@@ -194,6 +214,7 @@ def chat(req: ChatReq):
                 registry.bump_stats(agent_name)
     finally:
         deps.current_actions.reset(token)
+        deps.current_user_text.reset(text_token)
 
     _t.__exit__()
     spec = registry.get_spec(agent_name) or {}
@@ -662,8 +683,13 @@ def run_task(task_id: str, tenant_id: str = "ramesh_auto"):
     agent = registry.orchestrator() if agent_id == "sahayak" else registry.get_agent(agent_id)
     if not agent:
         raise HTTPException(404, f"unknown agent {agent_id}")
+    from .providers import model_id
+    from .tracing import _save, budget, budget_exceeded, record_run, run_metrics, spent, timer
+    if budget_exceeded():
+        raise HTTPException(402, f"Model budget reached (${spent():.4f} of ${budget():.2f})")
     actions: list[dict] = []
     token = deps.current_actions.set(actions)
+    _t = timer().__enter__()
     try:
         prompt = f"Task for you: {t['title']}."
         if t.get("details"):
@@ -672,11 +698,17 @@ def run_task(task_id: str, tenant_id: str = "ramesh_auto"):
         reply = _clean_reply(str(result))
     finally:
         deps.current_actions.reset(token)
+    _t.__exit__()
+    # task runs are model calls too — traced + counted toward MODEL_BUDGET_USD
+    usage = run_metrics(result, _t.ms, model_id("orchestrator" if agent_id == "sahayak" else "worker"))
+    record_run(tenant_id, agent_id, usage)
+    if usage.get("cost_usd"):
+        _save(spent() + usage["cost_usd"])
     deps.store.update_task(tenant_id, task_id, status="done", result=reply)
     registry.bump_stats(agent_id)
     deps.log_activity(tenant_id, "task_completed", f"{agent_id} finished '{t['title']}'")
     return {"task_id": task_id, "status": "done", "agent_name": agent_id,
-            "result": reply, "actions": actions}
+            "result": reply, "actions": actions, "usage": usage}
 
 
 @app.get("/agents/{agent_id}")

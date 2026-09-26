@@ -20,11 +20,29 @@ def build_memory_suffix(tenant_id: str) -> str:
     mems = deps.store.list_memories(tenant_id)
     if mems:
         lines = "\n".join(f"- {m['text']}" for m in mems)
-        suffix += ("\n\nWhat the owner told you about their business "
-                   "(honor these in every answer):\n" + lines)
+        suffix += ("\n\nWhat the owner told you about their business — authoritative facts "
+                   "that are NOT in the ledger, so your tools won't return them. Honor them in "
+                   "every answer, and when the owner asks about something they cover (a named "
+                   "buyer, supplier, slow payer, rule), answer from these directly — even if "
+                   "your tools show nothing for it, these notes are still true (or call "
+                   "recall_context):\n" + lines)
     from .documents import build_context_suffix
     suffix += build_context_suffix(tenant_id)
     return suffix
+
+
+_PAYMENT_WORDS = ("slow payer", "pays late", "late payer", "cash-only", "cash only", "credit",
+                  "defaulter", "pays", "payment", "udhaar", "follow up")
+
+
+def payment_notes(tenant_id: str) -> list[str]:
+    """Owner notes about how customers pay — attached to money-tool results so a
+    model can't answer 'no slow payers' from an empty ledger while the owner has
+    told us otherwise (real models otherwise trust the tool over the prompt)."""
+    if deps.store is None:
+        return []
+    return [m["text"] for m in deps.store.list_memories(tenant_id)
+            if any(w in m["text"].lower() for w in _PAYMENT_WORDS)][:5]
 
 
 def memory_tools(tenant_id: str) -> list:

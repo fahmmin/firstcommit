@@ -1,0 +1,508 @@
+{
+  "when": "2026-09-26T14:18:14.677925+00:00",
+  "health": {
+    "status": "ok",
+    "use_aws": false,
+    "model": "openai",
+    "provider": "openai",
+    "orchestrator_model": "gpt-4o-mini",
+    "worker_model": "gpt-4o-mini",
+    "embed_provider": "openai",
+    "embed_model": "text-embedding-3-small"
+  },
+  "jobs": [
+    {
+      "flow": "Routing",
+      "job": "Overdue invoices → Vasool",
+      "pass": true,
+      "expect": "vasool + rupee figures",
+      "error": null,
+      "agent": "vasool",
+      "tools": [
+        "vasool"
+      ],
+      "input_tokens": 2284,
+      "output_tokens": 389,
+      "total_tokens": 2673,
+      "cost_usd": 0.000576,
+      "latency_ms": 12557,
+      "output": "You have 7 overdue invoices totalling ₹351,000. Here's the breakdown:\n\n1. **Om Sai Electric Works**\n   - Invoice No: INV-1026\n   - Amount: ₹28,700\n   - Days Overdue: 118\n\n2. **Sharma Constructions**\n   - Invoice No: INV-1029\n   - Amount: ₹36,200\n   - Days Overdue: 44\n\n3. **Patel Furniture House**\n   - Invoice No: INV-1033\n   - Amount: ₹78,800\n   - Days Overdue: 17\n\n4. **Sharma Constructions**\n   - Invoice No: INV-1037\n   - Amount: ₹71,300\n   - Days Overdue: 11\n\n5. **Sharma Constructions**\n   - Invoice No: INV-1031\n   - Amount: ₹45,200\n   - Days Overdue: 8\n\n6. **Verma Interiors**\n   - Invoice N"
+    },
+    {
+      "flow": "Routing",
+      "job": "Hinglish money question",
+      "pass": true,
+      "expect": "vasool",
+      "error": null,
+      "agent": "vasool",
+      "tools": [
+        "vasool"
+      ],
+      "input_tokens": 4021,
+      "output_tokens": 466,
+      "total_tokens": 4487,
+      "cost_usd": 0.000883,
+      "latency_ms": 1650,
+      "output": "Sabse purana udhaar Om Sai Electric Works ka hai — Invoice No: INV-1026, jo 118 din se overdue hai. Amount ₹28,700 hai. \n\nSharma Constructions ka udhaar bhi hai, lekin wo 44 din se overdue hai. \n\nAgar aap reminders bhejna chahte hain, toh mujhe bataiye!"
+    },
+    {
+      "flow": "Routing",
+      "job": "Cheapest supplier → Sourcer",
+      "pass": true,
+      "expect": "sourcer",
+      "error": null,
+      "agent": "sourcer",
+      "tools": [
+        "vasool",
+        "sourcer"
+      ],
+      "input_tokens": 7900,
+      "output_tokens": 674,
+      "total_tokens": 8574,
+      "cost_usd": 0.001589,
+      "latency_ms": 8194,
+      "output": "Here are the cheapest suppliers for MCB switches:\n\n1. **Rathi Copper House** — ₹2.1/unit (MOQ 2000, trust score 3.9)\n2. **Bharat Bolts** — ₹2.8/unit (MOQ 2000, trust score 3.3)\n3. **National Fastener Co** — ₹3.2/unit (MOQ 1000, trust score 4.7)\n4. **Vishnu Packaging** — ₹8.5/unit (MOQ 500, trust score 4.3)\n5. **Metro Spring Industries** — ₹18/unit (MOQ 400, trust score 4.4)\n\nPlease note that the cheapest option, Rathi Copper House, has a trust score of 3.9. It's important to consider trustworthiness along with price. Let me know if you need more information!"
+    },
+    {
+      "flow": "Routing",
+      "job": "90-day terms → Khata",
+      "pass": true,
+      "expect": "khata",
+      "error": null,
+      "agent": "khata",
+      "tools": [
+        "vasool",
+        "sourcer",
+        "khata"
+      ],
+      "input_tokens": 10981,
+      "output_tokens": 780,
+      "total_tokens": 11761,
+      "cost_usd": 0.002115,
+      "latency_ms": 9744,
+      "output": "Taking the 90-day credit on a ₹2,00,000 order is **WORTH IT**. \n\n- **Margin**: ₹40,000 (20% margin)\n- **Cost of financing the gap**: ~₹7,101 (assuming an 18% short-term borrowing rate)\n- **Net gain**: ₹32,899\n\nYou can proceed with the order!"
+    },
+    {
+      "flow": "Routing",
+      "job": "Aging report tool",
+      "pass": true,
+      "expect": "aging_report tool",
+      "error": null,
+      "agent": "vasool",
+      "tools": [
+        "list_overdue",
+        "aging_report"
+      ],
+      "input_tokens": 7962,
+      "output_tokens": 533,
+      "total_tokens": 8495,
+      "cost_usd": 0.001514,
+      "latency_ms": 3553,
+      "output": "Here's the receivables aging report:\n\n- **0-30 days overdue:** ₹286,100\n- **31-60 days overdue:** ₹36,200\n- **61-90 days overdue:** ₹0\n- **90+ days overdue:** ₹28,700\n\n**Overdue by customer:**\n1. **Sharma Constructions:** ₹152,700\n2. **Patel Furniture House:** ₹78,800\n3. **Khanna Builders:** ₹56,000\n4. **Verma Interiors:** ₹34,800\n5. **Om Sai Electric Works:** ₹28,700\n\nLet me know if you need any further actions or reminders!"
+    },
+    {
+      "flow": "Accuracy",
+      "job": "Top debtor: bhai sabse zyada paisa kis customer pe a",
+      "pass": true,
+      "expect": "Sharma Constructions ₹152,700 (ledger truth)",
+      "error": null,
+      "agent": "khata",
+      "tools": [
+        "vasool",
+        "sourcer",
+        "khata"
+      ],
+      "input_tokens": 14333,
+      "output_tokens": 852,
+      "total_tokens": 15185,
+      "cost_usd": 0.002661,
+      "latency_ms": 4123,
+      "output": "Sabse zyada paisa Sharma Constructions pe atka hai, with a total overdue of **₹152,700**. \n\nAgar aap kisi specific customer ke liye reminder draft karna chahte hain, toh mujhe bataiye!"
+    },
+    {
+      "flow": "Accuracy",
+      "job": "Top debtor: which customer owes me the most money in",
+      "pass": true,
+      "expect": "Sharma Constructions ₹152,700 (ledger truth)",
+      "error": null,
+      "agent": "khata",
+      "tools": [
+        "vasool",
+        "sourcer",
+        "khata"
+      ],
+      "input_tokens": 17261,
+      "output_tokens": 920,
+      "total_tokens": 18181,
+      "cost_usd": 0.003141,
+      "latency_ms": 5325,
+      "output": "Sharma Constructions owes you the most money, with a total outstanding amount of **₹152,700**. \n\nAgar aap in amounts ke liye koi action lena chahte hain, toh mujhe bataiye!"
+    },
+    {
+      "flow": "Accuracy",
+      "job": "Top debtor: rank my customers by how much overdue mo",
+      "pass": true,
+      "expect": "Sharma Constructions ₹152,700 (ledger truth)",
+      "error": null,
+      "agent": "khata",
+      "tools": [
+        "vasool",
+        "sourcer",
+        "khata"
+      ],
+      "input_tokens": 20075,
+      "output_tokens": 1054,
+      "total_tokens": 21129,
+      "cost_usd": 0.003644,
+      "latency_ms": 6009,
+      "output": "Aapke customers ko overdue money ke hisaab se rank kiya gaya hai:\n\n1. **Sharma Constructions:** ₹152,700\n2. **Patel Furniture House:** ₹78,800\n3. **Khanna Builders:** ₹56,000\n4. **Verma Interiors:** ₹34,800\n5. **Om Sai Electric Works:** ₹28,700\n\nAgar aap kisi customer ke liye reminder draft karna chahte hain ya koi aur action lena chahte hain, toh mujhe bataiye!"
+    },
+    {
+      "flow": "Factory",
+      "job": "Problem → hiring preview",
+      "pass": true,
+      "expect": "nirmata previews a hire",
+      "error": null,
+      "agent": "nirmata",
+      "tools": [
+        "vasool",
+        "sourcer",
+        "khata",
+        "nirmata"
+      ],
+      "input_tokens": 22942,
+      "output_tokens": 1153,
+      "total_tokens": 24095,
+      "cost_usd": 0.004133,
+      "latency_ms": 7145,
+      "output": "Maine ek logistics specialist hire karne ka plan banaya hai:\n\n**Logistics Agent**  \nKaam: Backup transport dhoondhna aur scheduled carriers ke nahi aane par pickups book karna.  \n\nAgar aap isko hire karna chahte hain, toh 'haan' ya 'yes' karke confirm karein!"
+    },
+    {
+      "flow": "Factory",
+      "job": "'haan' → agent hired",
+      "pass": true,
+      "expect": "agent_created",
+      "error": null,
+      "agent": "nirmata",
+      "tools": [
+        "vasool",
+        "sourcer",
+        "khata",
+        "nirmata"
+      ],
+      "input_tokens": 25790,
+      "output_tokens": 1218,
+      "total_tokens": 27008,
+      "cost_usd": 0.004599,
+      "latency_ms": 4637,
+      "output": "Logistics Agent hire ho gaya hai aur aapke dashboard par ready hai. Yeh backup transport dhoondh kar aapke stranded order ke liye pickups book karega."
+    },
+    {
+      "flow": "Factory",
+      "job": "New hire answers",
+      "pass": true,
+      "expect": "carrier quote",
+      "error": null,
+      "agent": "agent-1bad44",
+      "tools": [
+        "quote_pickup"
+      ],
+      "input_tokens": 1996,
+      "output_tokens": 90,
+      "total_tokens": 2086,
+      "cost_usd": 0.000353,
+      "latency_ms": 3083,
+      "output": "Cheapest reliable option for pickup to Ludhiana tomorrow for 500 kg is SafeRoad Carriers at ₹3.9/kg, which totals around ₹1,950. Pickup is scheduled for tomorrow at 2:00 PM (reliability rating 3.8/5). Would you like to book this pickup?"
+    },
+    {
+      "flow": "Factory",
+      "job": "Multi-role ask → team preview",
+      "pass": true,
+      "expect": "preview_team",
+      "error": null,
+      "agent": "nirmata",
+      "tools": [
+        "nirmata"
+      ],
+      "input_tokens": 2793,
+      "output_tokens": 130,
+      "total_tokens": 2923,
+      "cost_usd": 0.000497,
+      "latency_ms": 5871,
+      "output": "Maine do specialists hire karne ka plan banaya hai:\n\n1. **Compliance Agent**  \n   Kaam: GST/TDS filing deadlines track karna aur due dates se pehle yaad dilana.\n\n2. **Digital Presence Agent**  \n   Kaam: Aapke products ko online IndiaMART par list karna.\n\nAgar aap inhe hire karna chahte hain, toh 'haan' ya 'yes' karke confirm karein!"
+    },
+    {
+      "flow": "Factory",
+      "job": "'yes' → team hired",
+      "pass": true,
+      "expect": ">=2 agents, no false 'processing'",
+      "error": null,
+      "agent": "nirmata",
+      "tools": [
+        "nirmata"
+      ],
+      "input_tokens": 5630,
+      "output_tokens": 214,
+      "total_tokens": 5844,
+      "cost_usd": 0.000973,
+      "latency_ms": 6664,
+      "output": "**Compliance Agent** aur **Digital Presence Agent** hire ho gaye hain aur aapke dashboard par ready hain. Yeh GST filing deadlines ka dhyan rakhenge aur aapke products ko IndiaMART par online list karenge.  | hired: ['Compliance Agent/compliance', 'Digital Presence Agent/digital_presence']"
+    },
+    {
+      "flow": "Approvals",
+      "job": "Create invoice from free text → queued",
+      "pass": true,
+      "expect": "queued, nothing written",
+      "error": null,
+      "agent": "vasool",
+      "tools": [
+        "list_overdue",
+        "aging_report",
+        "create_invoice"
+      ],
+      "input_tokens": 26506,
+      "output_tokens": 922,
+      "total_tokens": 27428,
+      "cost_usd": 0.004529,
+      "latency_ms": 2856,
+      "output": "The invoice for Kapoor Hardware Stores for ₹18,500 (50 MCB boxes) has been queued for your approval. Please check the Approvals section to approve it. Let me know if you need anything else!  | ledger: Invoice ₹18,500 to Kapoor Hardware Stores, due 2026-11-10 — 50 MCB boxes"
+    },
+    {
+      "flow": "Approvals",
+      "job": "Owner approves → invoice written",
+      "pass": true,
+      "expect": "executed, +1 invoice",
+      "error": null,
+      "agent": "",
+      "tools": [],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 6,
+      "output": "executed → {'kind': 'invoice', 'id': 'inv-9c8348', 'label': 'INV-4FB0'}; invoices 16→17; buyer=Kapoor Hardware Stores"
+    },
+    {
+      "flow": "Approvals",
+      "job": "Schedule a reminder → queued",
+      "pass": true,
+      "expect": "schedule_alert queued",
+      "error": null,
+      "agent": "vasool",
+      "tools": [
+        "list_overdue",
+        "aging_report",
+        "create_invoice",
+        "schedule_alert"
+      ],
+      "input_tokens": 31556,
+      "output_tokens": 1008,
+      "total_tokens": 32564,
+      "cost_usd": 0.005338,
+      "latency_ms": 4778,
+      "output": "The reminder to call Sharma Constructions about INV-1029 on 2026-10-01 has been queued for your approval. Please check the Approvals section to approve it. Let me know if you need anything else!"
+    },
+    {
+      "flow": "Approvals",
+      "job": "Draft a payment reminder (draft only)",
+      "pass": true,
+      "expect": "draft_reminder",
+      "error": null,
+      "agent": "vasool",
+      "tools": [
+        "list_overdue",
+        "aging_report",
+        "create_invoice",
+        "schedule_alert",
+        "draft_reminder"
+      ],
+      "input_tokens": 38156,
+      "output_tokens": 1166,
+      "total_tokens": 39322,
+      "cost_usd": 0.006423,
+      "latency_ms": 4423,
+      "output": "I've drafted a polite WhatsApp reminder for the oldest overdue invoice (INV-1026) for Om Sai Electric Works. Here are the details:\n\n**Message:**\n```\nNamaste Om Sai Electric Works ji,\n\nThis is a gentle reminder that invoice INV-1026 for ₹28,700 was due on 2026-05-31 (118 days ago).\n\nKindly release the payment at your earliest convenience.\n— Ramesh Hardware & Electricals\n```\n\nThe reminder is pending your approval. Please check the Alerts section to approve it. Let me know if you need anything else!"
+    },
+    {
+      "flow": "Memory",
+      "job": "Agent uses owner memory",
+      "pass": true,
+      "expect": "mentions cash-only",
+      "error": null,
+      "agent": "nirmata",
+      "tools": [
+        "nirmata"
+      ],
+      "input_tokens": 4323,
+      "output_tokens": 122,
+      "total_tokens": 4445,
+      "cost_usd": 0.000722,
+      "latency_ms": 5789,
+      "output": "Falcon Traders cash-only buyer hain, isliye unhe credit extend nahi karna chahiye. Aapko unhe advance payment ki zaroorat batani chahiye. Kya aap unhe response draft karne mein madad chahenge?"
+    },
+    {
+      "flow": "Context",
+      "job": "Upload note → model auto-tag + embed",
+      "pass": true,
+      "expect": "tags",
+      "error": null,
+      "agent": "",
+      "tools": [],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 3.9e-05,
+      "latency_ms": 1914,
+      "output": "tags=['procurement', 'general'] summary='This document outlines the rate card for TMT bars and binding wire from Balaji Steel.'"
+    },
+    {
+      "flow": "Context",
+      "job": "Semantic search (no keyword overlap)",
+      "pass": true,
+      "expect": "finds TMT note via vectors",
+      "error": null,
+      "agent": "",
+      "tools": [],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 710,
+      "output": "mode=hybrid top=['note.txt']"
+    },
+    {
+      "flow": "Context",
+      "job": "Agent answers from documents",
+      "pass": true,
+      "expect": "₹58/kg from the note",
+      "error": null,
+      "agent": "sourcer",
+      "tools": [
+        "recall_context"
+      ],
+      "input_tokens": 3568,
+      "output_tokens": 76,
+      "total_tokens": 3644,
+      "cost_usd": 0.000581,
+      "latency_ms": 4875,
+      "output": "Balaji Steel's rate for TMT bars (Fe500) is ₹58/kg, with a minimum order quantity (MOQ) of 2 tonnes. The delivery time to Faridabad is 4 days, and this rate is valid until Diwali."
+    },
+    {
+      "flow": "Vision",
+      "job": "Invoice photo → structured fields",
+      "pass": true,
+      "expect": "Kapoor / 49,560",
+      "error": null,
+      "agent": "",
+      "tools": [],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.005599,
+      "latency_ms": 3080,
+      "output": "parsed buyer='Kapoor Hardware Stores, Ludhiana' amount=49560 no=INV-7781 due=2026-10-20"
+    },
+    {
+      "flow": "Artifacts",
+      "job": "Ask for a shareable tracking page → queued",
+      "pass": true,
+      "expect": "create_artifact gated",
+      "error": null,
+      "agent": "vasool",
+      "tools": [
+        "create_artifact"
+      ],
+      "input_tokens": 5513,
+      "output_tokens": 122,
+      "total_tokens": 5635,
+      "cost_usd": 0.0009,
+      "latency_ms": 3021,
+      "output": "The shareable tracking page for order ORD-1042 going to Ludhiana with SafeRoad has been queued for your approval. Please check the Approvals section to approve it. Let me know if you need anything else!"
+    },
+    {
+      "flow": "Tasks",
+      "job": "Run a kanban task with its agent",
+      "pass": true,
+      "expect": "done + result",
+      "error": null,
+      "agent": "sourcer",
+      "tools": [],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 3308,
+      "output": "sourcer: Here are the quotes for 2\" GI pipes under ₹62/kg:\n\n1. **Khurana Metals** — ₹58/kg (MOQ 1000, trust score 3.6)\n2. **Balaji Steel Traders** — ₹62/kg (MOQ 500, trust score 4.2)\n\nPlease note that the cheapest option isn't always the best, so consider the trust scores when making your decision."
+    },
+    {
+      "flow": "Web",
+      "job": "Web mode without Tavily key → honest",
+      "pass": true,
+      "expect": "says not configured, hires nobody",
+      "error": null,
+      "agent": "sahayak",
+      "tools": [
+        "web_search"
+      ],
+      "input_tokens": 4417,
+      "output_tokens": 66,
+      "total_tokens": 4483,
+      "cost_usd": 0.000702,
+      "latency_ms": 4628,
+      "output": "Web search tool abhi configured nahi hai, isliye main aaj ke steel price Delhi mein nahi de sakta."
+    },
+    {
+      "flow": "MCP",
+      "job": "Handshake",
+      "pass": true,
+      "expect": "connected",
+      "error": null,
+      "agent": "",
+      "tools": [],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 31,
+      "output": "connected"
+    },
+    {
+      "flow": "MCP",
+      "job": "Model picks an MCP tool by itself",
+      "pass": true,
+      "expect": "mcp_ledger_* tool used",
+      "error": null,
+      "agent": "khata",
+      "tools": [
+        "mcp_ledger_cashflow_summary"
+      ],
+      "input_tokens": 3086,
+      "output_tokens": 84,
+      "total_tokens": 3170,
+      "cost_usd": 0.000513,
+      "latency_ms": 3271,
+      "output": "Your cash flow summary is as follows:\n\n- **Expected In**: ₹9,22,760\n- **Owed Out**: ₹1,81,800\n- **Net Cash Flow**: ₹7,40,960\n\nThis indicates a healthy cash position, with a significant amount expected in compared to what you owe."
+    },
+    {
+      "flow": "Onboarding",
+      "job": "New tenant: wizard → auto-hire → memory used",
+      "pass": true,
+      "expect": "2 agents + mentions Joshi",
+      "error": null,
+      "agent": "",
+      "tools": [
+        "nirmata"
+      ],
+      "input_tokens": 2968,
+      "output_tokens": 69,
+      "total_tokens": 3037,
+      "cost_usd": 0.000487,
+      "latency_ms": 6400,
+      "output": "tenant=919890432288 hired=['Collections Agent', 'Compliance Agent'] memories=1 | chat: Your slow payer is Joshi Builders. If you need assistance in managing follow-ups or reminders for them, please let me know!"
+    }
+  ],
+  "passed": 28,
+  "total_jobs": 28,
+  "total_cost_usd": 0.05251,
+  "spend_counter_usd": 0.469548
+}
