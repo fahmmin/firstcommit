@@ -26,6 +26,22 @@ workflows on the local hardening build (with B1 retrieval, A1 approvals, D1 mult
 - **P3 — Mock create_invoice args are fixed** ("New Buyer" ₹10,000) — offline can't extract the buyer name from free text; real Nova does. Cosmetic for offline.
 - **Note — `/context` is empty after a plain `demo/reset` offline** (the 10 demo docs are generated/ingested by `seed_hardware.py` on the AWS path; offline the Context page shows its placeholder library). Not a regression.
 
+## Round 2 (after B1/A1/D1/P1/C1/D2) — final battery
+| Suite | Local | Live AWS |
+|---|---|---|
+| pytest | **151 passed** | 57 unit+parity passed |
+| simulate_demo | **28/28** | **28/28** |
+| evals scorecard | **8/8** | **8/8** |
+| edge-case probe | **28/28** | 26/27 (only miss = Nova choosing not to call a tool) |
+| frontend build | clean | — |
+
+Bugs found **and fixed** this round:
+1. **DynamoStore upsert-on-update** — updating an unknown id created a ghost row → `PATCH /tasks/BAD`, `/approvals/BAD/deny` returned 200 on AWS (404 locally). Fixed with a ConditionExpression; parity-locked.
+2. **Fabricated brief item** — `Digest` always showed "Shipments on the move" even for empty tenants. Now sourced from the backend brief.
+3. **Hardcoded identity** — header "Ramesh Auto Components · Faridabad" and "Good …, Ramesh" shown to every tenant; now tenant-driven.
+4. **Demo Google login landed on an empty tenant** (after D1) — owner-email now resolves to its workspace; stale `rameshauto.in` identity aligned with the rebranded seed.
+5. Offline routing for the factory moment was already fixed by P1 (12/12 on Bedrock).
+
 ## Verdict
 Every core workflow works end-to-end and the whole automated suite is green in both
 modes; **B1/A1/D1 are verified live** (hybrid search + citations, approval queue→approve→execute,
